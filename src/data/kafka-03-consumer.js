@@ -10,6 +10,17 @@ SS.addQuestions('kafka', [
     '`poll()` vừa lấy dữ liệu vừa "giữ chỗ" trong group. Xử lý một lô lâu hơn `max.poll.interval.ms` = tự bị đá ra. Giảm `max.poll.records` hoặc tăng interval khi xử lý nặng.',
   example:
     'Mỗi record gọi API mất 2s, `max.poll.records=500` → một lô mất ~1000s ≫ 300s → rebalance liên tục, không tiến được. Sửa: `max.poll.records=20` (lô ~40s) hoặc đẩy xử lý sang thread pool và pause partition.',
+  viz: {
+    type: 'flow',
+    title: 'Vòng lặp poll — poll() cũng "giữ chỗ" trong group',
+    nodes: ['poll(timeout)', 'nhận ≤ max.poll.records', 'xử lý lô', 'commit offset', 'lặp lại'],
+    steps: [
+      { to: 0, label: 'poll() còn gửi heartbeat + tham gia rebalance — phải gọi đều đặn' },
+      { to: 1, label: 'mặc định 500 record' },
+      { to: 2, label: 'xử lý lâu hơn max.poll.interval.ms (5 phút) → broker coi consumer chết → rebalance' },
+      { to: 3, label: 'giảm max.poll.records hoặc tăng interval khi xử lý nặng' },
+    ],
+  },
 },
 {
   cat: 'Rebalancing',
@@ -25,6 +36,19 @@ SS.addQuestions('kafka', [
     'Rebalance là cách group tự cân bằng khi thành viên/partition thay đổi. Nó cần thiết nhưng tốn kém — mục tiêu vận hành là làm nó **hiếm** và **nhanh**.',
   example:
     'Deploy rolling 6 pod lần lượt restart → 6 lần rebalance, mỗi lần vài giây không xử lý → lag tăng vọt. Giảm tác động bằng static membership + cooperative rebalancing + `group.initial.rebalance.delay.ms`.',
+  viz: {
+    type: 'tree',
+    title: 'Rebalance — mục tiêu vận hành: làm nó HIẾM và NHANH',
+    root: {
+      label: 'Group coordinator phân bổ lại partition khi:',
+      children: [
+        { label: 'Consumer join', note: 'scale up, khởi động' },
+        { label: 'Consumer leave / bị coi là chết', note: 'miss heartbeat hoặc vượt max.poll.interval.ms' },
+        { label: 'Số partition topic thay đổi / subscribe pattern khớp topic mới' },
+        { label: 'Eager protocol', note: 'toàn group "stop-the-world" trong lúc rebalance' },
+      ],
+    },
+  },
 },
 {
   cat: 'Rebalancing',
@@ -36,6 +60,16 @@ SS.addQuestions('kafka', [
     'Eager: "buông hết, chia lại". Cooperative: "chỉ trao đổi phần chênh lệch". Cooperative giảm mạnh thời gian gián đoạn khi scale/deploy.',
   example:
     'Group 10 consumer, thêm 1 consumer thứ 11: eager → cả 10 dừng, chia lại 100% partition. Cooperative → chỉ ~1/11 partition được chuyển sang consumer mới, 90%+ luồng xử lý không bị gián đoạn.',
+  viz: {
+    type: 'compare',
+    cols: ['Eager (Range, RoundRobin)', 'Cooperative (CooperativeSticky)'],
+    rows: [
+      ['Khi rebalance', 'revoke TẤT CẢ partition', 'chỉ revoke partition cần chuyển chủ'],
+      ['Xử lý trong lúc rebalance', 'toàn group dừng', 'partition khác vẫn chạy'],
+      ['Số vòng', 'một lần', 'nhiều vòng nhỏ'],
+      ['Thêm 1 consumer vào group 10', 'cả 10 dừng, chia lại 100%', 'chỉ ~1/11 partition chuyển'],
+    ],
+  },
 },
 {
   cat: 'Rebalancing',
@@ -49,6 +83,15 @@ SS.addQuestions('kafka', [
     'Trục đánh đổi: cân bằng tải ↔ ổn định (ít chuyển partition). Sticky/cooperative tối ưu cả hai và giảm chi phí "khởi động lại state" mỗi lần rebalance.',
   example:
     'Consumer có state cục bộ theo partition (cache, bộ đếm): dùng `CooperativeStickyAssignor` để sau rebalance phần lớn partition vẫn ở consumer cũ → không phải nạp lại cache.',
+  viz: {
+    type: 'compare',
+    cols: ['RangeAssignor', 'RoundRobinAssignor', 'StickyAssignor', 'CooperativeStickyAssignor'],
+    rows: [
+      ['Cân bằng tải', 'dễ lệch (nhiều topic ít partition)', 'tốt hơn', 'tốt', 'tốt'],
+      ['Ổn định khi rebalance', 'thấp', 'thấp', 'giữ phân bổ cũ nhiều nhất', 'sticky + cooperative'],
+      ['Khuyến nghị', '—', '—', '—', 'hiện nay'],
+    ],
+  },
 },
 {
   cat: 'Offset',
@@ -61,6 +104,15 @@ SS.addQuestions('kafka', [
     'Commit thủ công **sau khi xử lý** biến "đọc tới đâu" thành "đã làm xong tới đâu" — điều kiện cần cho at-least-once đáng tin.',
   example:
     'Consumer ghi vào DB: `for (rec : records) upsert(rec); consumer.commitSync(offsetsOf(records));`. Crash sau khi ghi DB nhưng trước commit → lô đó chạy lại; nếu `upsert` idempotent thì kết quả vẫn đúng.',
+  viz: {
+    type: 'compare',
+    cols: ['auto-commit', 'commitSync()', 'commitAsync()'],
+    rows: [
+      ['Khi nào commit', 'định kỳ auto.commit.interval.ms (5s)', 'ngay, chặn, retry', 'ngay, không chặn, không retry'],
+      ['Rủi ro', 'commit trước khi xử lý xong → mất; hoặc xử lý lại khi rebalance', 'chậm hơn', 'commit có thể "tụt" nếu lỗi'],
+      ['Dùng', 'đơn giản, chấp nhận at-most/at-least tuỳ timing', 'shutdown / sau lô / finally', 'trong vòng lặp (throughput)'],
+    ],
+  },
 },
 {
   cat: 'Offset',
@@ -74,6 +126,14 @@ SS.addQuestions('kafka', [
     'Đây là chính sách "bắt đầu từ đâu khi lạc mất vị trí". `latest` cho streaming realtime; `earliest` cho pipeline cần đầy đủ dữ liệu (ETL, dựng lại state).',
   example:
     'Service analytics mới lên: `earliest` để backfill toàn bộ sự kiện có trong retention. Service gửi notification realtime: `latest` — không ai muốn nhận lại thông báo của 3 ngày trước khi service vừa deploy.',
+  viz: {
+    type: 'compare',
+    cols: ['earliest', 'latest (mặc định)', 'none'],
+    rows: [
+      ['Khi không có offset commit', 'đọc từ đầu partition', 'đọc từ message mới kể từ lúc join', 'ném exception'],
+      ['Dùng cho', 'ETL, backfill, dựng lại state', 'streaming realtime', 'buộc xử lý tường minh'],
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -86,6 +146,16 @@ SS.addQuestions('kafka', [
     'Lag là thước đo "consumer có theo kịp producer không" và là chỉ số cảnh báo quan trọng nhất của một pipeline. Lag tăng đều = throughput tiêu thụ < throughput sản xuất.',
   example:
     'Alert: lag group `payments` > 100k và đang tăng → producer đang spike hoặc consumer chậm. Scale consumer từ 4 → 8 pod (topic 12 partition) → tiêu thụ tăng gần 2x, lag rút về 0 trong 10 phút.',
+  viz: {
+    type: 'flow',
+    title: 'Consumer lag = log-end-offset − committed-offset',
+    nodes: ['đo lag (JMX, exporter → Prometheus)', 'lag tăng đều', 'throughput tiêu thụ < sản xuất', 'thêm consumer (≤ số partition) / tối ưu / tăng partition'],
+    steps: [
+      { to: 1, label: 'chỉ số cảnh báo quan trọng nhất của pipeline' },
+      { to: 2, label: 'producer spike hoặc consumer chậm' },
+      { to: 3, label: 'scale 4→8 pod (topic 12 partition) → tiêu thụ ~2x, lag rút về 0' },
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -99,6 +169,16 @@ SS.addQuestions('kafka', [
     '`session.timeout.ms` phát hiện **process chết / mạng đứt** (qua heartbeat). `max.poll.interval.ms` phát hiện **xử lý bị treo** (qua nhịp poll). Hai cơ chế bổ sung nhau.',
   example:
     'Mạng chập chờn gây rebalance giả: tăng `session.timeout.ms` lên 60s (và `heartbeat.interval.ms` 20s) để chịu được gián đoạn ngắn mà không kích hoạt rebalance.',
+  viz: {
+    type: 'compare',
+    cols: ['session.timeout.ms (+ heartbeat.interval.ms)', 'max.poll.interval.ms'],
+    rows: [
+      ['Phát hiện', 'process chết / mạng đứt', 'xử lý bị treo'],
+      ['Qua cơ chế', 'heartbeat thread riêng (mỗi 3s)', 'nhịp gọi poll()'],
+      ['Mặc định', '45s (heartbeat ≈ 1/3)', '5 phút'],
+      ['Consumer heartbeat ok nhưng lô lâu', '→ vẫn "còn sống"', '→ vẫn bị đá'],
+    ],
+  },
 },
 {
   cat: 'Rebalancing',
@@ -111,6 +191,16 @@ SS.addQuestions('kafka', [
     'Static membership tách "restart tạm thời" khỏi "rời group vĩnh viễn". Deploy/restart pod không còn gây rebalance nếu hoàn tất trong session timeout.',
   example:
     'K8s StatefulSet: `group.instance.id=$(POD_NAME)`, `session.timeout.ms=120s`. Rolling update mỗi pod restart trong ~30s → 0 rebalance, consumer nhận lại đúng partition cũ, state cache còn nguyên.',
+  viz: {
+    type: 'flow',
+    title: 'Static membership (group.instance.id)',
+    nodes: ['consumer restart', 'join lại trong session.timeout.ms', 'coordinator giữ nguyên phân bổ cho id đó', 'KHÔNG rebalance'],
+    steps: [
+      { to: 1, label: 'group.instance.id cố định → thành viên tĩnh' },
+      { to: 3, label: 'bình thường restart = 2 rebalance; static = 0 nếu hoàn tất trong session timeout' },
+      { to: 3, label: 'hợp K8s StatefulSet: group.instance.id=$(POD_NAME), session.timeout.ms=120s' },
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -125,6 +215,18 @@ SS.addQuestions('kafka', [
     'Đừng cố làm Kafka "không bao giờ trùng"; hãy làm **consumer chịu được trùng**. Idempotency ở phía xử lý là giải pháp bền vững nhất.',
   example:
     'Consumer cập nhật số dư: thay vì `balance += amount` (sai khi lặp), lưu `processed_event_ids` và chỉ apply nếu `eventId` chưa có, trong cùng transaction DB với việc cập nhật số dư.',
+  viz: {
+    type: 'tree',
+    title: 'Đừng làm Kafka "không trùng" — làm consumer CHỊU ĐƯỢC trùng',
+    root: {
+      label: 'Mặc định at-least-once: trùng khi xử lý xong nhưng crash trước commit',
+      children: [
+        { label: 'Idempotent consumer', note: 'UPSERT theo business key, SET thay vì INCREMENT' },
+        { label: 'Dedup store', note: 'lưu id message đã xử lý (Redis/DB có TTL)' },
+        { label: 'Transactional (EOS)', note: 'cho pipeline consume-transform-produce' },
+      ],
+    },
+  },
 },
 {
   cat: 'Rebalancing',
@@ -138,6 +240,16 @@ SS.addQuestions('kafka', [
     'Listener là hook để bàn giao partition sạch sẽ: bên nhả thì lưu tiến độ, bên nhận thì khôi phục ngữ cảnh. Bắt buộc nếu bạn quản lý offset/state ngoài Kafka.',
   example:
     'Consumer lưu offset trong DB cùng dữ liệu nghiệp vụ (exactly-once thủ công): `onPartitionsRevoked` → commit transaction cuối; `onPartitionsAssigned` → đọc offset từ DB và `consumer.seek(partition, offset)` để tiếp tục đúng chỗ.',
+  viz: {
+    type: 'flow',
+    title: 'ConsumerRebalanceListener — bàn giao partition sạch',
+    nodes: ['onPartitionsRevoked', 'rebalance', 'onPartitionsAssigned', '(onPartitionsLost)'],
+    steps: [
+      { to: 0, label: 'TRƯỚC khi mất partition: commit offset cuối, flush state/buffer' },
+      { to: 2, label: 'SAU khi nhận partition mới: nạp state, seek tới offset lưu ở nơi khác, warm cache' },
+      { to: 3, label: 'cooperative: mất partition bất thường, không kịp commit' },
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -149,6 +261,18 @@ SS.addQuestions('kafka', [
     '`pause/resume` là van điều tiết luồng để giữ nhịp poll mà không nhận thêm dữ liệu. `seek` là điều khiển thủ công con trỏ đọc — nền tảng của replay và offset-ngoài-Kafka.',
   example:
     'Bug xử lý sai từ 09:00 hôm qua: tìm offset tương ứng timestamp (`offsetsForTimes`), `seek` group về đó, cho chạy lại. Backpressure: khi DB connection pool cạn, `pause` các partition, `poll` vẫn chạy để không bị rebalance, khi pool rảnh thì `resume`.',
+  viz: {
+    type: 'tree',
+    title: 'pause/resume vs seek',
+    root: {
+      label: 'Điều khiển thủ công luồng đọc',
+      children: [
+        { label: 'pause(partitions) / resume()', note: 'ngừng nhận record nhưng vẫn heartbeat, vẫn giữ partition — van backpressure' },
+        { label: 'seek(partition, offset)', note: 'replay xử lý sự kiện, bỏ qua message lỗi, khôi phục từ offset lưu ngoài' },
+        { label: 'seekToBeginning / seekToEnd', note: 'đặt lại về đầu/cuối partition' },
+      ],
+    },
+  },
 },
 {
   cat: 'Consumer',
@@ -162,6 +286,16 @@ SS.addQuestions('kafka', [
     'Song song "an toàn" nhất là nhiều consumer instance. Dùng thread pool để tăng throughput đòi hỏi tự xử lý offset commit và mất bảo đảm thứ tự nếu không phân vùng theo key.',
   example:
     'Xử lý mỗi message tốn 50ms I/O, topic 12 partition: chạy 12 consumer thread (1 instance/thread). Nếu cần hơn 12x mà không tăng partition: 1 consumer poll + pool 100 worker, phân record theo `key.hashCode() % 100` để mỗi key vẫn tuần tự, `pause` khi pool đầy.',
+  viz: {
+    type: 'compare',
+    cols: ['N consumer, mỗi cái 1 thread', '1 consumer + thread pool xử lý'],
+    rows: [
+      ['Song song tối đa', '= số partition', 'nhiều hơn số partition'],
+      ['Commit offset', 'tự nhiên', 'phải tự quản lý'],
+      ['Thứ tự', 'giữ theo partition', 'mất, trừ khi phân worker theo key'],
+      ['Độ phức tạp', 'thấp — an toàn nhất', 'cao'],
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -175,6 +309,16 @@ SS.addQuestions('kafka', [
     'Đây là "batching phía đọc": gom nhiều dữ liệu vào một fetch response. Đánh đổi latency ↔ hiệu quả giống `linger.ms` bên producer.',
   example:
     'Consumer analytics không nhạy latency: `fetch.min.bytes=1048576`, `fetch.max.wait.ms=1000` → mỗi fetch mang ~1MB, giảm mạnh số request tới broker. Consumer realtime alerting: giữ mặc định để nhận message ngay.',
+  viz: {
+    type: 'compare',
+    cols: ['Mặc định (fetch.min.bytes=1)', 'Tăng fetch.min.bytes (64KB–1MB)'],
+    rows: [
+      ['Broker trả fetch khi', 'có bất kỳ dữ liệu nào', 'đủ byte HOẶC hết fetch.max.wait.ms (500ms)'],
+      ['Số request', 'nhiều', 'ít'],
+      ['Latency', 'thấp', 'tối đa = fetch.max.wait.ms'],
+      ['Dùng cho', 'realtime alerting', 'analytics throughput cao'],
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -190,6 +334,16 @@ SS.addQuestions('kafka', [
     'Tách "message độc" ra khỏi luồng chính để một record hỏng không làm nghẽn cả partition. Retry topic cho lỗi tạm, DLQ cho lỗi cần con người.',
   example:
     'Message có JSON sai schema: consumer chính bắt `DeserializationException` → đẩy nguyên bytes sang `orders.dlt` với header `exception-message`, `original-offset`. Partition tiếp tục chạy. Team data xem DLQ, sửa producer, replay.',
+  viz: {
+    type: 'flow',
+    title: 'Non-blocking retry — đừng chặn partition vì 1 message xấu',
+    nodes: ['thử xử lý', 'lỗi tạm → retry topic (delay tăng dần)', 'consumer riêng đọc retry topic', 'hết retry / lỗi vĩnh viễn → DLQ + alert'],
+    steps: [
+      { to: 1, label: 'publish sang orders.retry.5s, orders.retry.1m… — partition chính không nghẽn' },
+      { to: 3, label: 'DLQ kèm header lý do, stack trace, offset gốc — cần con người' },
+      { to: 3, label: 'Spring Kafka: RetryableTopic + DeadLetterPublishingRecoverer' },
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -201,6 +355,15 @@ SS.addQuestions('kafka', [
     'Bắt buộc đặt `read_committed` nếu upstream dùng transactional producer, nếu không bạn xử lý cả những message "chưa chắc chắn" rồi phải rollback.',
   example:
     'Pipeline EOS: producer transaction ghi `ledger`. Consumer của `ledger` phải `read_committed` — nếu để mặc định, một transaction rollback (do lỗi) vẫn khiến consumer ghi bút toán sai vào sổ cái.',
+  viz: {
+    type: 'compare',
+    cols: ['read_uncommitted (mặc định)', 'read_committed'],
+    rows: [
+      ['Thấy message', 'mọi message, kể cả tx chưa commit / đã abort', 'chỉ tx đã commit + message không giao dịch'],
+      ['Đọc tới', 'high watermark', 'Last Stable Offset (LSO) — có thể chờ nếu tx đang mở'],
+      ['Bắt buộc khi', '—', 'upstream dùng transactional producer'],
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -213,6 +376,14 @@ SS.addQuestions('kafka', [
     'Partition là "làn xe" — thêm bao nhiêu xe (consumer) cũng không vượt số làn. Lập kế hoạch partition với dự phòng cho tăng trưởng consumer.',
   example:
     'Topic 8 partition, đang chạy 8 consumer, lag vẫn tăng vì mỗi message nặng. Thêm consumer thứ 9–16 → vô ích, chúng idle. Phải: tăng partition lên 24, hoặc xử lý song song bên trong consumer, hoặc tối ưu code xử lý.',
+  viz: {
+    type: 'compare',
+    cols: ['consumer < partition', 'consumer = partition', 'consumer > partition'],
+    rows: [
+      ['Phân bổ', 'một consumer nhiều partition', '1-1, song song tối đa', 'consumer thừa ngồi không (dự phòng nóng)'],
+      ['Hệ quả', 'chưa tận dụng hết', 'tối ưu', 'thêm consumer vô ích → phải tăng partition'],
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -225,6 +396,16 @@ SS.addQuestions('kafka', [
     'Compacted topic ≈ một bảng key-value được stream hoá. Đọc từ đầu = bootstrap trạng thái; tombstone = lệnh xoá.',
   example:
     'Topic `customer-profile` (compact). Service gợi ý mới deploy: đọc từ `earliest`, dựng `Map<customerId, Profile>` trong bộ nhớ/RocksDB, gặp tombstone thì xoá key. Sau khi bắt kịp, chuyển sang xử lý sự kiện realtime. Đây chính là KTable của Kafka Streams.',
+  viz: {
+    type: 'flow',
+    title: 'Đọc compacted topic từ earliest = bootstrap trạng thái',
+    nodes: ['seek earliest', 'nhận "ảnh chụp" (bản mới nhất mỗi key)', 'value = null → tombstone (key đã xoá)', 'dựng Map<key, value> / RocksDB', 'bắt kịp → chuyển realtime'],
+    steps: [
+      { to: 1, label: 'mỗi key xuất hiện ≥ 1 lần với giá trị mới nhất + vài bản lịch sử ở đuôi chưa nén' },
+      { to: 2, label: 'gặp tombstone → xoá key khỏi state' },
+      { to: 4, label: 'service mới dựng lại toàn bộ state mà không cần lịch sử đầy đủ — chính là KTable' },
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -237,6 +418,16 @@ SS.addQuestions('kafka', [
     'Follower fetching cắt lưu lượng đọc cross-AZ bằng cách cho consumer lấy dữ liệu từ bản sao gần nhất. Đổi lại consumer có thể đọc dữ liệu trễ hơn leader vài mili giây.',
   example:
     'Cụm trải 3 AZ, consumer analytics chạy ở AZ-c: đặt `client.rack=az-c` → consumer đọc từ follower ở az-c thay vì leader ở az-a → hoá đơn data transfer AWS giảm đáng kể cho pipeline throughput lớn.',
+  viz: {
+    type: 'flow',
+    title: 'Follower fetching (client.rack)',
+    nodes: ['mặc định: consumer đọc leader', 'leader ở AZ khác → phí cross-AZ + latency', 'set client.rack + RackAwareReplicaSelector', 'consumer đọc follower cùng rack'],
+    steps: [
+      { to: 2, label: 'consumer client.rack=az-c + broker replica.selector.class' },
+      { to: 3, label: 'follower vẫn chỉ replicate nhưng được phép phục vụ fetch' },
+      { to: 3, label: 'GHI vẫn luôn qua leader; chỉ ĐỌC định tuyến theo rack (trễ hơn leader vài ms)' },
+    ],
+  },
 },
 {
   cat: 'Consumer',
@@ -249,5 +440,15 @@ SS.addQuestions('kafka', [
     'Consumer cho logic nghiệp vụ tuỳ biến; Streams cho pipeline transform/aggregate có state; Connect cho di chuyển dữ liệu vào/ra Kafka mà không viết code.',
   example:
     'Đồng bộ Postgres → Kafka: Connect + Debezium (source). Tính "doanh thu 5 phút gần nhất theo cửa hàng": Kafka Streams windowed aggregation. Gửi email khi đơn hàng > 10 triệu: plain consumer trong service notification.',
+  viz: {
+    type: 'compare',
+    cols: ['Plain consumer', 'Kafka Streams', 'Kafka Connect'],
+    rows: [
+      ['Vai trò', 'logic nghiệp vụ tuỳ biến', 'transform/aggregate/join có state', 'di chuyển dữ liệu vào/ra Kafka'],
+      ['Bạn tự lo', 'threading, offset, retry, state', 'ít — thư viện quản lý state + changelog + EOS', 'gần như không (config)'],
+      ['Chạy như', 'trong service của bạn', 'app thường', 'cluster Connect riêng'],
+      ['Ví dụ', 'gửi email khi đơn > 10 triệu', 'doanh thu 5 phút theo cửa hàng', 'Postgres → Kafka (Debezium)'],
+    ],
+  },
 },
 ]);

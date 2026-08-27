@@ -11,6 +11,16 @@ SS.addQuestions('kafka', [
     'ISR là "danh sách replica đáng tin". Unclean election là lựa chọn availability-vs-durability khi danh sách đó cạn: chấp nhận mất dữ liệu để online, hay chờ.',
   example:
     'Dữ liệu tài chính: giữ `unclean.leader.election.enable=false`. Nếu cả ISR chết, chấp nhận partition offline vài phút và điều tra, hơn là mất giao dịch. Với topic log/metric có thể bật `true` để ưu tiên tính sẵn sàng.',
+  viz: {
+    type: 'compare',
+    cols: ['unclean.leader.election = false (mặc định)', '= true'],
+    rows: [
+      ['Khi ISR rỗng và leader chết', 'partition OFFLINE tới khi replica ISR quay lại', 'bầu replica ngoài ISR (tụt hậu) làm leader'],
+      ['Ưu tiên', 'không mất dữ liệu', 'tính sẵn sàng'],
+      ['Hệ quả', 'gián đoạn vài phút', 'partition online lại nhưng MẤT message replica đó chưa có'],
+      ['Dùng cho', 'dữ liệu tài chính', 'topic log / metric'],
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -26,6 +36,19 @@ SS.addQuestions('kafka', [
     'Durability là thuộc tính của cả pipeline, không của một tham số. RF cho bản sao, `min.insync` + `acks=all` cho "đã ghi nhiều nơi", commit-sau-xử-lý cho "không mất ở consumer".',
   example:
     'Audit: `RF=3, min.insync.replicas=2, acks=all, idempotence=true`. Chịu mất 1 broker vẫn ghi bình thường; mất 2 broker thì producer nhận lỗi (dừng ghi) thay vì mất âm thầm.',
+  viz: {
+    type: 'tree',
+    title: 'Durability là thuộc tính của CẢ pipeline — một mắt xích yếu là hỏng',
+    root: {
+      label: 'Phải khớp ở mọi tầng',
+      children: [
+        { label: 'Topic', note: 'replication.factor ≥ 3, min.insync.replicas = 2, unclean.leader.election = false' },
+        { label: 'Producer', note: 'acks = all, enable.idempotence = true, delivery.timeout.ms đủ dài' },
+        { label: 'Consumer', note: 'commit offset SAU khi xử lý (tắt auto-commit)' },
+        { label: 'Broker', note: 'để OS quản log.flush, dựa vào replication (không fsync mỗi message)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -38,6 +61,16 @@ SS.addQuestions('kafka', [
     'Mở rộng cụm = di chuyển replica sang broker mới, một thao tác nặng I/O có kiểm soát. Cruise Control tự động hoá việc lập kế hoạch và cân bằng liên tục.',
   example:
     'Thêm 2 broker vào cụm 6 broker: Cruise Control sinh plan chuyển ~25% replica sang node mới, throttle 50MB/s/broker, hoàn tất trong vài giờ mà p99 latency của app gần như không đổi.',
+  viz: {
+    type: 'flow',
+    title: 'Thêm broker + partition reassignment',
+    nodes: ['broker mới join', 'chỉ nhận partition topic tạo SAU đó', 'kafka-reassign-partitions (plan / Cruise Control)', 'replicate dữ liệu (--throttle)', 'bắt kịp → vào ISR → nhận leadership'],
+    steps: [
+      { to: 1, label: 'broker mới KHÔNG tự nhận partition cũ' },
+      { to: 3, label: 'thao tác nặng I/O inter-broker; --throttle để không bão hoà mạng' },
+      { to: 4, label: 'Cruise Control tự động hoá lập kế hoạch và cân bằng liên tục' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -50,6 +83,16 @@ SS.addQuestions('kafka', [
     'Tăng partition là thay đổi *phá vỡ* với mọi thứ dựa trên "key → partition ổn định". Lên kế hoạch số partition từ đầu; nếu buộc phải tăng, coi như một migration.',
   example:
     'Topic `orders` (key = orderId) tăng 12 → 24 partition. Sự kiện của order #555 trước đây ở partition 3, giờ event mới vào partition 9 → consumer xử lý theo thứ tự order có thể thấy update trước create. Giải pháp: tạo topic mới 24 partition, dùng dual-write/migration rồi cắt sang.',
+  viz: {
+    type: 'flow',
+    title: 'Tăng partition là thay đổi PHÁ VỠ',
+    nodes: ['alter --partitions N (chỉ tăng)', 'hash(key) % numPartitions đổi', 'cùng key ánh xạ partition khác', 'vỡ thứ tự per-key + compaction + consumer state'],
+    steps: [
+      { to: 1, label: 'dữ liệu cũ của một key ở partition cũ, dữ liệu mới ở partition mới' },
+      { to: 3, label: 'consumer có state theo key thấy "key nhảy partition"; Streams cần reset/reprocess' },
+      { to: 3, label: 'nếu buộc phải tăng → coi như một migration (topic mới + dual-write + cắt sang)' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -63,6 +106,18 @@ SS.addQuestions('kafka', [
     'delete = giới hạn tuổi/kích thước log. compact = giữ latest-per-key + quản lý tombstone. Tham số tinh chỉnh tần suất nén và độ trễ dữ liệu bị xoá thực sự.',
   example:
     'Topic `user-consents` (compact): `delete.retention.ms=7d` để consumer downtime tối đa 1 tuần vẫn nhận được tombstone (xoá consent). Nếu đặt quá ngắn, consumer offline cuối tuần bỏ lỡ lệnh xoá → giữ lại dữ liệu đã bị rút đồng ý.',
+  viz: {
+    type: 'tree',
+    title: 'cleanup.policy — tham số',
+    root: {
+      label: 'delete | compact | "compact,delete"',
+      children: [
+        { label: 'delete', note: 'retention.ms (thời gian), retention.bytes (dung lượng/partition) — xoá theo segment' },
+        { label: 'compact', note: 'min.cleanable.dirty.ratio (khi nào chạy nén), delete.retention.ms (giữ tombstone bao lâu)' },
+        { label: 'min/max.compaction.lag.ms', note: 'chặn dưới/trên thời gian một message có thể bị nén' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -77,6 +132,18 @@ SS.addQuestions('kafka', [
     'Vị trí đọc của consumer chính là dữ liệu trong một topic Kafka bình thường. Bảo vệ nó như topic quan trọng: RF cao, retention đủ dài cho consumer nghỉ lễ.',
   example:
     'Consumer batch chạy hàng tuần, nghỉ 8 ngày → offset đã bị xoá (retention 7 ngày) → lần chạy sau `auto.offset.reset=latest` bỏ qua một tuần dữ liệu. Sửa: tăng `offsets.retention.minutes`, hoặc consumer commit "giữ nhịp" định kỳ.',
+  viz: {
+    type: 'tree',
+    title: '__consumer_offsets (topic nội bộ compacted, 50 partition)',
+    root: {
+      label: 'Vị trí đọc của consumer = dữ liệu trong một topic Kafka bình thường',
+      children: [
+        { label: 'RF phải ≥ 3 ở production', note: 'cụm nhỏ lúc tạo dễ lỡ đặt RF=1 → mất offset khi broker chết' },
+        { label: 'key = (group, topic, partition)', note: 'value = offset + metadata + timestamp' },
+        { label: 'Group không hoạt động', note: 'offset bị xoá sau offsets.retention.minutes (7 ngày) → rơi vào auto.offset.reset' },
+      ],
+    },
+  },
 },
 {
   cat: 'Giám sát',
@@ -95,6 +162,19 @@ SS.addQuestions('kafka', [
     'Ba báo động đỏ: under-replicated partitions (durability), offline partitions (availability), consumer lag tăng (pipeline không theo kịp). Còn lại là chỉ số hiệu năng.',
   example:
     'Alert bậc 1: `OfflinePartitionsCount > 0` → page ngay. Bậc 2: `UnderReplicatedPartitions > 0` trong 5 phút → điều tra broker. Bậc 3: lag group X > ngưỡng và tăng 15 phút liên tục → scale consumer.',
+  viz: {
+    type: 'tree',
+    title: 'Ba báo động đỏ của Kafka',
+    root: {
+      label: 'Còn lại là chỉ số hiệu năng',
+      children: [
+        { label: 'UnderReplicatedPartitions > 0', note: 'durability — replica tụt hậu, rủi ro mất dữ liệu' },
+        { label: 'OfflinePartitionsCount > 0', note: 'availability — partition không có leader → outage → page ngay' },
+        { label: 'Consumer lag tăng đều', note: 'pipeline không theo kịp' },
+        { label: 'ActiveControllerCount phải = 1', note: 'trên toàn cụm' },
+      ],
+    },
+  },
 },
 {
   cat: 'Hệ sinh thái',
@@ -110,6 +190,20 @@ SS.addQuestions('kafka', [
     'Connect là "ETL streaming khai báo bằng JSON": bạn cấu hình connector thay vì viết consumer/producer. Scale và fault-tolerance do framework lo.',
   example:
     'Đồng bộ toàn bộ Postgres sang data lake: Debezium source (CDC) → topic → S3 sink connector (Parquet, phân vùng theo ngày). Thêm SMT `MaskField` cho cột PII. Không viết dòng code nào, chỉ 2 file config.',
+  viz: {
+    type: 'tree',
+    title: 'Kafka Connect — "ETL streaming khai báo bằng JSON"',
+    root: {
+      label: 'Cấu hình connector thay vì viết consumer/producer',
+      children: [
+        { label: 'Source connector', note: 'hệ ngoài → Kafka: Debezium CDC, JDBC, file' },
+        { label: 'Sink connector', note: 'Kafka → hệ ngoài: S3, Elasticsearch, JDBC, BigQuery' },
+        { label: 'Converter', note: '(de)serialize Kafka bytes ↔ Avro/JSON/Protobuf' },
+        { label: 'SMT', note: 'biến đổi nhẹ từng message: rename, mask, route topic' },
+        { label: 'Distributed mode', note: 'nhiều worker chia task, cân bằng + tự phục hồi qua REST + topic nội bộ' },
+      ],
+    },
+  },
 },
 {
   cat: 'Hệ sinh thái',
@@ -123,6 +217,16 @@ SS.addQuestions('kafka', [
     'KStream = sự kiện, KTable = trạng thái. State store cho phép xử lý có nhớ; changelog làm state đó chịu lỗi. Windowing đưa yếu tố thời gian vào aggregation.',
   example:
     '"Số đơn hàng và doanh thu mỗi cửa hàng trong cửa sổ 1 giờ, cập nhật mỗi 5 phút": `orders.groupBy(store).windowedBy(TimeWindows.ofSizeAndGrace(1h, 10m)).aggregate(...)` → phát ra topic `store-hourly-stats`. Instance crash → state khôi phục từ changelog trong vài giây.',
+  viz: {
+    type: 'compare',
+    cols: ['KStream', 'KTable'],
+    rows: [
+      ['Mỗi record là', 'một fact độc lập (sự kiện)', 'giá trị mới nhất của key (trạng thái)'],
+      ['Nền tảng', 'luồng bất tận', 'compacted topic'],
+      ['State', 'stateless mặc định', 'state store (RocksDB) + changelog topic (khôi phục khi chết)'],
+      ['Windowing', 'tumbling / hopping / sliding / session — grace period cho dữ liệu trễ', '—'],
+    ],
+  },
 },
 {
   cat: 'Hệ sinh thái',
@@ -136,6 +240,15 @@ SS.addQuestions('kafka', [
     'Compatibility mode là hợp đồng về thứ tự nâng cấp an toàn giữa producer và consumer. BACKWARD (phổ biến nhất) nghĩa là "consumer mới, dữ liệu cũ vẫn đọc được".',
   example:
     'Thêm `promoCode` (string, default "") vào `Order` với BACKWARD: deploy consumer mới trước (bỏ qua field nếu vắng), rồi producer mới. Registry từ chối nếu bạn cố thêm field **required** không default (phá consumer đọc dữ liệu cũ).',
+  viz: {
+    type: 'compare',
+    cols: ['BACKWARD (mặc định)', 'FORWARD', 'FULL'],
+    rows: [
+      ['Nghĩa', 'consumer mới đọc dữ liệu ghi bằng schema cũ', 'consumer cũ đọc dữ liệu ghi bằng schema mới', 'cả hai chiều'],
+      ['Cho phép', 'xoá field, thêm field optional/có default', 'thêm field, xoá field optional', 'giao của hai tập'],
+      ['Thứ tự nâng cấp', 'consumer TRƯỚC', 'producer TRƯỚC', 'tuỳ ý'],
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -148,6 +261,15 @@ SS.addQuestions('kafka', [
     'Ba lớp: TLS (không ai nghe lén), SASL (bạn là ai), ACL (bạn được làm gì). Thiếu ACL thì mọi client xác thực được có toàn quyền.',
   example:
     'App thanh toán: principal `svc-payment` được `Write` topic `payments`, `Read` group `payment-processor`. Không có quyền trên topic `hr-events`. Client dùng SASL/SCRAM over TLS, mật khẩu từ Vault.',
+  viz: {
+    type: 'layers',
+    title: 'Bảo mật Kafka — 3 lớp',
+    layers: [
+      { name: 'TLS — encryption in transit', tag: 'không ai nghe lén', note: 'listener SSL://, mã hoá client↔broker và broker↔broker' },
+      { name: 'SASL — authentication', tag: 'bạn là ai', note: 'PLAIN / SCRAM / GSSAPI (Kerberos) / OAUTHBEARER → principal' },
+      { name: 'ACL — authorization', tag: 'bạn được làm gì', note: 'Read/Write/Create/Describe trên topic/group/cluster; allow.everyone.if.no.acl.found=false' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -162,6 +284,16 @@ SS.addQuestions('kafka', [
     'Lag đo khoảng cách producer–consumer. Metric hữu ích nhất là "ước lượng thời gian để đuổi kịp" (lag / tốc độ tiêu thụ), không phải con số lag trần trụi.',
   example:
     'Grafana: panel `sum(kafka_consumergroup_lag) by (group)` + `deriv()` để thấy xu hướng. Alert: `lag > 100k AND deriv(lag) > 0 trong 10m` → tránh báo động giả khi có spike ngắn rồi tự hồi.',
+  viz: {
+    type: 'flow',
+    title: 'Consumer lag — nhìn xu hướng, không nhìn giá trị trần',
+    nodes: ['đo lag (kafka-lag-exporter / Burrow → Prometheus)', 'lag lớn nhưng đang giảm nhanh', 'lag nhỏ nhưng tăng đều 10 phút', 'alert: lag > X AND deriv(lag) > 0'],
+    steps: [
+      { to: 1, label: 'metric hữu ích nhất: lag / tốc độ tiêu thụ = "thời gian để đuổi kịp"' },
+      { to: 2, label: 'ổn — sắp bắt kịp' },
+      { to: 3, label: 'nguy — đặt alert theo xu hướng để tránh báo động giả khi spike ngắn' },
+    ],
+  },
 },
 {
   cat: 'Thiết kế',
@@ -177,6 +309,20 @@ SS.addQuestions('kafka', [
     'Bắt đầu từ throughput mục tiêu và SLA, suy ra partition và broker; luôn chừa headroom cho spike và cho việc rebalance/reassign. Đừng "đặt thật nhiều partition cho chắc".',
   example:
     'Mục tiêu 500 MB/s ghi, RF=3, retention 3 ngày: đĩa ≈ 500MB/s × 259200s × 3 ≈ 389 TB thô → ~15 broker với 30TB NVMe mỗi broker (kèm headroom). ~48 partition cho topic chính (10MB/s/partition).',
+  viz: {
+    type: 'tree',
+    title: 'Sizing — từ throughput mục tiêu suy ra partition + broker',
+    root: {
+      label: 'Luôn chừa headroom cho spike + rebalance/reassign',
+      children: [
+        { label: 'Tổng partition/broker', note: '~2000–4000 với ZooKeeper, nhiều hơn với KRaft' },
+        { label: 'Throughput/partition', note: 'đo thực tế, thường 10–50 MB/s' },
+        { label: 'Số partition topic', note: '≈ max(throughput mục tiêu / throughput/partition, số consumer song song)' },
+        { label: 'Đĩa', note: 'throughput ghi × retention × RF + headroom 30–40%' },
+        { label: 'Mạng', note: 'replication nhân đôi lưu lượng ghi' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -191,6 +337,16 @@ SS.addQuestions('kafka', [
     'MM2 là "sao lưu topic sang cụm khác" kèm dịch offset để consumer failover đúng chỗ. Bất đồng bộ nên luôn có độ trễ và RPO khác 0.',
   example:
     'DR: cụm `us-east` (primary) mirror sang `us-west`. Sự cố vùng: chuyển consumer sang `us-west`, dùng offset đã translate để tiếp tục gần đúng vị trí. Chấp nhận mất ~vài giây dữ liệu cuối cùng chưa mirror.',
+  viz: {
+    type: 'compare',
+    cols: ['Active-passive (DR)', 'Active-active'],
+    rows: [
+      ['Cụm phụ', 'nhận bản sao, failover khi thảm hoạ', 'hai vùng cùng ghi'],
+      ['Tránh vòng lặp', '—', 'tiền tố topic: us.orders, eu.orders'],
+      ['Replication', 'bất đồng bộ (RPO > 0)', 'bất đồng bộ'],
+      ['MM2 làm gì', 'sao chép dữ liệu + config + ACL + offset translation', 'như bên trái'],
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -202,6 +358,15 @@ SS.addQuestions('kafka', [
     'Kafka tự chịu được mất broker nhờ replication; việc của bạn là khôi phục ISR và không để đĩa đầy. Đĩa đầy là sự cố tự gây phổ biến nhất — quota + retention + alert.',
   example:
     'Broker 3 đầy đĩa lúc 2h sáng: `UnderReplicatedPartitions` tăng. Hành động nhanh: `kafka-configs.sh --alter --add-config retention.ms=43200000` cho topic ngốn dung lượng nhất → segment cũ bị xoá → đĩa thoáng → broker ghi lại → ISR hồi.',
+  viz: {
+    type: 'compare',
+    cols: ['Broker chết', 'Đầy đĩa'],
+    rows: [
+      ['Kafka tự làm gì', 'controller bầu leader mới từ ISR → gián đoạn ngắn', 'broker ngừng ghi, partition offline / under-replicated'],
+      ['Xử lý', 'chờ broker hồi (fetch phần thiếu); chết lâu → reassign', 'giảm retention topic lớn / thêm log.dirs / di chuyển partition'],
+      ['Phòng ngừa', 'replication (RF ≥ 3)', 'quota + retention + alert ở 75% disk'],
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -215,6 +380,16 @@ SS.addQuestions('kafka', [
     'Nguyên tắc: mỗi lúc chỉ một broker "ra khỏi vòng", và luôn chờ replication bắt kịp. Controlled shutdown biến việc tắt broker thành di chuyển leadership có trật tự.',
   example:
     'Cụm 6 broker, RF=3: script restart broker 1 → chờ `UnderReplicatedPartitions=0` (2–5 phút) → broker 2 → ... Toàn bộ upgrade mất ~30 phút, ứng dụng chỉ thấy vài `NotLeaderForPartition` được retry trong suốt.',
+  viz: {
+    type: 'flow',
+    title: 'Rolling upgrade an toàn — mỗi lúc chỉ MỘT broker ra khỏi vòng',
+    nodes: ['controlled shutdown (chuyển leadership đi trước)', 'restart broker', 'chờ UnderReplicatedPartitions về 0', 'broker tiếp theo'],
+    steps: [
+      { to: 0, label: 'controlled.shutdown.enable=true — tránh gián đoạn đột ngột' },
+      { to: 2, label: 'chờ replication bắt kịp mới làm broker tiếp theo' },
+      { to: 3, label: 'nâng version: bump inter.broker.protocol.version SAU khi mọi broker đã lên binary mới' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -228,6 +403,18 @@ SS.addQuestions('kafka', [
     'Quota là cách cô lập hiệu năng giữa các client dùng chung cụm — "noisy neighbor protection". Throttle mềm (chậm lại) thay vì từ chối cứng.',
   example:
     'Cụm multi-tenant: đặt `producer_byte_rate=10485760` (10MB/s) cho `client.id=analytics-backfill` để job backfill lịch sử không nuốt hết băng thông broker và làm chậm pipeline realtime của team khác.',
+  viz: {
+    type: 'tree',
+    title: 'Client quotas — "noisy neighbor protection"',
+    root: {
+      label: 'Đặt theo client.id, principal (user), hoặc cả hai',
+      children: [
+        { label: 'Network bandwidth quota', note: 'byte/s produce và fetch' },
+        { label: 'Request quota', note: '% thời gian request handler + network thread' },
+        { label: 'Khi vượt', note: 'broker THROTTLE (trì hoãn response) — mềm, không lỗi cứng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -240,6 +427,16 @@ SS.addQuestions('kafka', [
     'Leadership lệch = một số broker gánh mọi read/write, số khác nhàn. Preferred leader election trải đều tải bằng cách đưa leadership về vị trí "cân bằng theo thiết kế".',
   example:
     'Sau khi restart cả cụm theo thứ tự, broker 1 tình cờ làm leader cho 60% partition → CPU/network broker 1 cao. Chạy preferred leader election → leadership rải đều 6 broker, tải cân lại.',
+  viz: {
+    type: 'flow',
+    title: 'Preferred leader election',
+    nodes: ['broker chết rồi hồi', 'leadership dồn lệch (broker vừa hồi toàn follower)', 'auto.leader.rebalance.enable (mặc định)', 'controller chuyển leadership về preferred leader'],
+    steps: [
+      { to: 1, label: 'preferred leader = replica đầu tiên trong danh sách assignment' },
+      { to: 2, label: 'controller định kỳ kiểm tra nếu lệch quá leader.imbalance.per.broker.percentage' },
+      { to: 3, label: 'thủ công: kafka-leader-election.sh --election-type preferred' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -254,6 +451,20 @@ SS.addQuestions('kafka', [
     'Bộ CLI đi kèm Kafka đủ cho hầu hết thao tác vận hành: chẩn đoán lag, đổi config nóng, di chuyển partition, đọc thô một topic để debug.',
   example:
     'Consumer xử lý sai 1 giờ dữ liệu: `kafka-consumer-groups.sh --reset-offsets --group billing --topic invoices --to-datetime 2024-06-01T13:00:00 --execute` (khi consumer đã dừng) rồi khởi động lại để chạy lại từ mốc đó.',
+  viz: {
+    type: 'tree',
+    title: 'CLI Kafka hay dùng khi vận hành/debug',
+    root: {
+      label: 'Bộ CLI đi kèm đủ cho hầu hết thao tác',
+      children: [
+        { label: 'kafka-topics.sh', note: 'tạo/xoá/mô tả, tăng partition, xem replica & ISR' },
+        { label: 'kafka-consumer-groups.sh', note: 'xem lag, reset offset (--to-earliest, --to-datetime, --shift-by)' },
+        { label: 'kafka-console-producer/consumer.sh', note: 'bơm/đọc message thủ công để debug' },
+        { label: 'kafka-configs.sh', note: 'đổi config động topic/broker không cần restart' },
+        { label: 'kafka-reassign-partitions / leader-election / acls / dump-log' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -266,5 +477,15 @@ SS.addQuestions('kafka', [
     'Managed đổi tiền lấy thời gian vận hành và rủi ro. Self-managed (Strimzi) hợp lý khi bạn đã có năng lực platform và cần kiểm soát/đa cloud.',
   example:
     'Startup 3 backend engineer, chưa có team infra: Confluent Cloud/MSK để không ai phải thức đêm vì broker đầy đĩa. Tập đoàn có team platform 10 người, yêu cầu on-prem: Strimzi trên K8s.',
+  viz: {
+    type: 'compare',
+    cols: ['Self-managed (Strimzi trên K8s)', 'Managed (Confluent Cloud, MSK, Aiven)'],
+    rows: [
+      ['Ai lo broker/patch/scaling', 'team bạn', 'nhà cung cấp'],
+      ['Yêu cầu', 'hiểu Kafka sâu (đĩa, rebalance, tuning)', 'ít việc ops'],
+      ['Kiểm soát / đa cloud', 'cao', 'thấp'],
+      ['Chi phí', 'thấp hơn (nếu có năng lực)', 'cao hơn'],
+    ],
+  },
 },
 ]);

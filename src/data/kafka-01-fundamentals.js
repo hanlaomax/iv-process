@@ -13,6 +13,16 @@ SS.addQuestions('kafka', [
     'Kafka là "cuốn nhật ký sự kiện có thể tua lại", không phải hàng đợi tiêu thụ-rồi-mất. Consumer là người đọc log tại một vị trí, không phải người "nhận và xoá".',
   example:
     'Một sự kiện `OrderCreated` được: service kho đọc để trừ tồn, service email đọc để gửi mail, pipeline analytics đọc để nạp vào data lake — ba consumer group, cùng một topic, offset riêng. Với RabbitMQ bạn phải fan-out qua nhiều queue.',
+  viz: {
+    type: 'compare',
+    cols: ['Kafka (commit log)', 'RabbitMQ (message broker)'],
+    rows: [
+      ['Message sau khi đọc', 'vẫn còn theo retention', 'ack rồi là mất'],
+      ['Mô hình', 'pull — consumer tự kéo', 'push tới consumer'],
+      ['Nhiều consumer', 'mỗi group đọc độc lập, tua lại offset', 'phải fan-out nhiều queue'],
+      ['Thế mạnh', 'throughput, lưu trữ, stream processing', 'routing linh hoạt, per-message ack, TTL/priority'],
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -26,6 +36,18 @@ SS.addQuestions('kafka', [
     'Topic là khái niệm; partition là đơn vị vật lý + song song + thứ tự; offset là con trỏ đọc trong một partition. Mọi bảo đảm của Kafka đều gắn với partition.',
   example:
     'Topic `orders` 6 partition. Message key = `customerId` → mọi sự kiện của cùng một khách vào cùng partition, đọc lại đúng thứ tự. Consumer lag của partition 3 = latest offset (100) − committed offset (85) = 15 message chưa xử lý.',
+  viz: {
+    type: 'tree',
+    title: 'Topic → Partition → Offset',
+    root: {
+      label: 'Topic "orders" (tên logic của luồng sự kiện)',
+      children: [
+        { label: 'Partition 0', note: 'log append-only có thứ tự, trên đĩa 1 broker — đơn vị song song + nhân bản' },
+        { label: 'Partition 1 … N', note: 'không có offset toàn cục cho topic' },
+        { label: 'Offset', note: 'số thứ tự tăng dần, duy nhất TRONG một partition; consumer theo dõi "đọc tới đâu"' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nền tảng',
@@ -39,6 +61,16 @@ SS.addQuestions('kafka', [
     'Partition đổi "thứ tự toàn cục" lấy "throughput và song song". Bạn thiết kế key để nhóm những sự kiện *cần* thứ tự vào chung một partition.',
   example:
     'Sự kiện tài khoản ngân hàng: key = `accountId`. Nạp tiền rồi rút tiền của cùng tài khoản luôn cùng partition → consumer xử lý đúng thứ tự. Sự kiện của tài khoản khác nằm partition khác, xử lý song song.',
+  viz: {
+    type: 'compare',
+    cols: ['Không chia partition', 'Chia partition (theo key)'],
+    rows: [
+      ['Thứ tự', 'toàn topic', 'chỉ trong một partition'],
+      ['Throughput', 'giới hạn một máy', 'mở rộng ngang trên nhiều broker'],
+      ['Song song consumer', '1', 'tối đa = số partition'],
+      ['Giữ thứ tự cho 1 thực thể', '—', 'dùng cùng key → cùng partition'],
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -51,6 +83,16 @@ SS.addQuestions('kafka', [
     'Broker lưu dữ liệu; controller lưu "bản đồ" cụm. KRaft gộp vai trò của ZooKeeper vào chính Kafka, giảm một thành phần phải vận hành.',
   example:
     'Cụm cũ: 3 ZooKeeper + 5 Kafka broker. Cụm KRaft: 3 node "controller" (hoặc combined) + broker — ít hạ tầng, và khi controller đổi thì cụm phục hồi metadata trong vài giây thay vì đọc lại toàn bộ từ ZK.',
+  viz: {
+    type: 'compare',
+    cols: ['ZooKeeper (cũ)', 'KRaft (Kafka 3.3+, bắt buộc từ 4.0)'],
+    rows: [
+      ['Lưu metadata + bầu cử', 'cụm ZooKeeper riêng', 'Raft log nội bộ __cluster_metadata'],
+      ['Thành phần vận hành', 'ZK + Kafka broker', 'chỉ Kafka (controller/combined node)'],
+      ['Scale metadata', 'giới hạn', 'tốt hơn'],
+      ['Recovery khi đổi controller', 'đọc lại từ ZK', 'vài giây'],
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -76,6 +118,17 @@ SS.addQuestions('kafka', [
     'Leader partition là điểm truy cập duy nhất cho dữ liệu partition đó — đơn giản hoá tính nhất quán. Follower chỉ để dự phòng.',
   example:
     'Broker giữ leader partition 4 bị chết → controller bầu một follower trong ISR làm leader mới → producer/consumer nhận `NotLeaderForPartition`, refresh metadata, chuyển sang broker mới. Gián đoạn thường dưới một giây.',
+  viz: {
+    type: 'flow',
+    title: 'Read/write một partition đều qua leader',
+    nodes: ['client', 'metadata (bootstrap)', 'leader broker', 'follower (chỉ replicate)'],
+    steps: [
+      { to: 1, label: 'client lấy metadata: leader partition nằm ở broker nào' },
+      { to: 2, label: 'producer ghi + consumer fetch đều đi tới leader' },
+      { to: 3, label: 'follower fetch từ leader để bám theo — không phục vụ client (trừ follower fetching)' },
+      { to: 2, label: 'leader chết → controller bầu follower ISR làm leader → client refresh metadata' },
+    ],
+  },
 },
 {
   cat: 'Lưu trữ',
@@ -90,6 +143,16 @@ SS.addQuestions('kafka', [
     'delete = "log sự kiện có hạn sử dụng". compact = "bảng key→value phiên bản mới nhất, dạng log". Chọn theo việc bạn cần dòng sự kiện hay ảnh chụp trạng thái.',
   example:
     'Topic `user-events` (delete, 30 ngày) cho analytics. Topic `user-profile-snapshot` (compact) để service mới khởi động có thể đọc từ đầu và dựng lại profile hiện tại của mọi user mà không cần toàn bộ lịch sử. Đây là nền của Kafka Streams KTable.',
+  viz: {
+    type: 'compare',
+    cols: ['cleanup.policy = delete', 'cleanup.policy = compact'],
+    rows: [
+      ['Giữ gì', 'message mới hơn retention.ms / retention.bytes', 'message mới nhất cho MỖI key'],
+      ['Message key=null', 'giữ', 'bị bỏ'],
+      ['Ý nghĩa', 'log sự kiện có hạn sử dụng', 'bảng key→value phiên bản mới nhất (dạng log)'],
+      ['Dùng cho', 'analytics, audit theo thời gian', 'snapshot trạng thái, nền KTable'],
+    ],
+  },
 },
 {
   cat: 'Consumer group',
@@ -117,6 +180,18 @@ SS.addQuestions('kafka', [
     'Offset là trạng thái của *consumer*, không phải của broker; nó được lưu như một message compacted. "Đọc tới đâu" và "đã xử lý xong tới đâu" là hai thứ khác nhau — bạn kiểm soát bằng thời điểm commit.',
   example:
     'Auto-commit: consumer poll 100 message, sau 5s auto-commit offset 100, nhưng mới xử lý 60 thì crash → 40 message bị **mất** (at-most-once vô tình). Commit thủ công sau khi xử lý xong từng lô để đạt at-least-once.',
+  viz: {
+    type: 'flow',
+    title: 'Offset là trạng thái của consumer',
+    nodes: ['poll message', 'xử lý', 'commit offset', '__consumer_offsets (compacted)', 'restart / rebalance đọc lại'],
+    steps: [
+      { to: 1, label: 'consumer poll một lô message' },
+      { to: 2, label: '"đọc tới đâu" ≠ "đã xử lý xong tới đâu"' },
+      { to: 3, label: 'commit: auto (định kỳ) hoặc thủ công (commitSync sau khi xử lý)' },
+      { to: 3, label: 'lưu vào topic nội bộ __consumer_offsets, key=(group,topic,partition)' },
+      { to: 4, label: 'consumer khởi động lại đọc offset đã commit để biết bắt đầu từ đâu' },
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -131,6 +206,15 @@ SS.addQuestions('kafka', [
     'Key vừa là "khoá định tuyến partition" vừa là "khoá compaction". Thiết kế key = thiết kế mô hình thứ tự và trạng thái của bạn.',
   example:
     'IoT: key = `deviceId` → chuỗi telemetry của một thiết bị luôn theo thứ tự trên một partition. Nếu key = `null`, hai lần đo liên tiếp của cùng thiết bị có thể vào hai partition và bị xử lý lệch thứ tự.',
+  viz: {
+    type: 'compare',
+    cols: ['key = deviceId', 'key = null'],
+    rows: [
+      ['Partition đích', 'hash(key) % N → luôn cùng partition', 'xoay vòng / sticky theo batch'],
+      ['Thứ tự cho 1 thực thể', 'giữ (cùng partition)', 'không đảm bảo'],
+      ['Log compaction', 'giữ bản mới nhất theo key', 'không áp dụng'],
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -144,6 +228,19 @@ SS.addQuestions('kafka', [
     'Kafka nhanh không phải vì tránh đĩa mà vì dùng đĩa đúng cách (tuần tự) + để OS làm cache + loại bỏ copy thừa. Throughput bị giới hạn bởi NIC/đĩa, hiếm khi bởi CPU.',
   example:
     'Một broker thường trên NVMe + 10GbE đẩy hàng trăm MB/s mỗi partition. Nếu đặt `log.dirs` trên network storage có latency cao hoặc bật fsync mỗi message, throughput sụp — vì phá vỡ mô hình sequential + page cache.',
+  viz: {
+    type: 'tree',
+    title: 'Kafka nhanh vì dùng đĩa đúng cách',
+    root: {
+      label: 'Throughput bị giới hạn bởi NIC/đĩa, hiếm khi bởi CPU',
+      children: [
+        { label: 'Sequential I/O', note: 'chỉ append cuối file → tránh seek, gần bằng RAM ngẫu nhiên' },
+        { label: 'Page cache của OS', note: 'consumer đọc gần realtime lấy từ RAM; Kafka cố ý không cache trong JVM heap' },
+        { label: 'Zero-copy (sendfile)', note: 'page cache → socket, không qua user space' },
+        { label: 'Batching + compression', note: 'ít syscall, ít byte trên mạng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Lưu trữ',
@@ -156,6 +253,16 @@ SS.addQuestions('kafka', [
     'Chia segment để việc xoá dữ liệu cũ chỉ là xoá file, và tra cứu offset dùng index thưa (binary search) thay vì quét toàn bộ.',
   example:
     '`retention.ms=86400000` (1 ngày), `segment.ms=3600000` (1 giờ) → mỗi giờ một segment, sau 24 giờ segment cũ nhất bị xoá nguyên file. Đặt segment quá lớn khiến dữ liệu quá hạn vẫn nằm lại lâu vì segment chưa đóng.',
+  viz: {
+    type: 'flow',
+    title: 'Partition log = nhiều segment file',
+    nodes: ['append', 'active segment', 'đạt segment.bytes/ms', 'đóng, mở segment mới', 'retention xoá cả file'],
+    steps: [
+      { to: 1, label: 'chỉ append vào active segment (.log + .index + .timeindex)' },
+      { to: 3, label: 'đạt 1GB (mặc định) hoặc segment.ms → đóng, mở segment mới' },
+      { to: 4, label: 'retention/compaction thao tác ở mức segment — xoá nguyên file, rất rẻ' },
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -168,6 +275,16 @@ SS.addQuestions('kafka', [
     'Thứ tự = thuộc tính của partition + producer cấu hình đúng + consumer xử lý tuần tự trong partition. Vỡ ở bất kỳ mắt xích nào là mất thứ tự.',
   example:
     'Để an toàn thứ tự với throughput: bật `enable.idempotence=true` (cho phép `max.in.flight=5` mà vẫn giữ thứ tự khi retry). Ở consumer, nếu cần song song, chia theo key trong nội bộ để mỗi key vẫn tuần tự.',
+  viz: {
+    type: 'flow',
+    title: 'Thứ tự cần đúng ở cả 3 mắt xích',
+    nodes: ['partition', 'producer', 'consumer'],
+    steps: [
+      { to: 0, label: 'thứ tự chỉ đảm bảo TRONG một partition (offset nhỏ đọc trước)' },
+      { to: 1, label: 'retry + max.in.flight>1 không idempotence → có thể đảo thứ tự; bật enable.idempotence=true' },
+      { to: 2, label: 'xử lý tuần tự trong partition; dùng thread pool là tự phá thứ tự' },
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -180,6 +297,15 @@ SS.addQuestions('kafka', [
     'LEO là "đã viết tới đâu"; HW là "đã an toàn tới đâu". Consumer chỉ thấy dữ liệu an toàn → không bao giờ đọc message rồi sau đó nó biến mất do failover.',
   example:
     'Leader ở offset 1000, hai follower ISR ở 995 và 998 → HW = 995. Consumer đọc tối đa 994. Nếu leader chết, follower ở 998 lên leader; 5 message 995–999 chưa từng "committed" nên consumer chưa đọc → không có nghịch lý.',
+  viz: {
+    type: 'compare',
+    cols: ['Log End Offset (LEO)', 'High Watermark (HW)'],
+    rows: [
+      ['Nghĩa', 'offset message kế tiếp sẽ ghi (cuối log replica)', 'offset lớn nhất đã replicate tới TẤT CẢ replica ISR'],
+      ['Consumer đọc được', '—', 'chỉ tới HW − 1 ("committed")'],
+      ['Message giữa HW và LEO', '"đã viết" nhưng chưa an toàn', 'có thể bị truncate khi failover'],
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -192,6 +318,16 @@ SS.addQuestions('kafka', [
     'Kafka = tiêu chuẩn de-facto với hệ sinh thái mạnh. Kinesis = đổi tính linh hoạt lấy "không phải vận hành" trong AWS. Pulsar = kiến trúc tách tầng, linh hoạt mô hình tiêu thụ.',
   example:
     'Startup toàn AWS, tải vừa, muốn ít ops → Kinesis + Lambda. Công ty cần stream processing phức tạp, đa cloud, throughput lớn, đã có team platform → Kafka (MSK hoặc self-managed).',
+  viz: {
+    type: 'compare',
+    cols: ['Kafka', 'Kinesis', 'Pulsar'],
+    rows: [
+      ['Vận hành', 'tự / managed (MSK, Confluent)', 'fully managed AWS', 'tự — kiến trúc phức tạp'],
+      ['Đơn vị', 'partition', 'shard (1MB/s ghi, 2MB/s đọc)', 'partition, tách broker/BookKeeper'],
+      ['Retention', 'tuỳ (tiered storage)', 'tối đa 365 ngày', 'tuỳ'],
+      ['Điểm mạnh', 'hệ sinh thái Connect/Streams', 'tích hợp AWS, ít ops', 'queue + stream, multi-tenancy, geo-replication'],
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -204,6 +340,14 @@ SS.addQuestions('kafka', [
     'Tách "compute + hot data" khỏi "cold data lưu trữ lâu". Cho phép retention hàng tháng/năm với chi phí object storage, và co giãn cụm nhanh vì broker giữ ít dữ liệu local.',
   example:
     'Yêu cầu tuân thủ: giữ mọi giao dịch 2 năm. Không tiered storage: mỗi broker cần chục TB SSD. Có tiered storage: broker giữ 2 ngày local, phần còn lại trên S3 — chi phí giảm nhiều lần, replay lịch sử vẫn được.',
+  viz: {
+    type: 'layers',
+    title: 'Tiered storage (KIP-405)',
+    layers: [
+      { name: 'Hot data — đĩa local broker', tag: 'gần đây', note: 'compute + dữ liệu nóng; broker giữ ít → co giãn cụm nhanh' },
+      { name: 'Cold data — object storage (S3/GCS)', tag: 'segment cũ', note: 'rẻ hơn nhiều; retention hàng tháng/năm; consumer đọc trong suốt từ tier xa' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -216,6 +360,18 @@ SS.addQuestions('kafka', [
     'Rack awareness biến RF thành khả năng chịu lỗi *theo miền lỗi vật lý* (AZ), không chỉ theo số broker. Thiếu nó, RF=3 vẫn có thể chết cả 3 replica nếu cùng một AZ sập.',
   example:
     'Cụm 6 broker trên 3 AZ (`broker.rack=us-east-1a/1b/1c`), RF=3 → mỗi partition có đúng 1 replica mỗi AZ. AWS bảo trì AZ 1a → mọi partition vẫn có leader/ISR ở 1b, 1c.',
+  viz: {
+    type: 'tree',
+    title: 'Rack awareness (broker.rack = AZ)',
+    root: {
+      label: 'RF thành khả năng chịu lỗi theo miền lỗi vật lý (AZ)',
+      children: [
+        { label: 'Replica trải đều trên các rack/AZ', note: 'không dồn 3 replica vào 1 AZ' },
+        { label: 'Mất nguyên 1 AZ → còn ≥ 1 replica ở AZ khác', note: 'partition không offline' },
+        { label: 'Follower fetching cùng rack', note: 'replica.selector.class → giảm lưu lượng + chi phí cross-AZ' },
+      ],
+    },
+  },
 },
 {
   cat: 'Thiết kế',
@@ -230,6 +386,18 @@ SS.addQuestions('kafka', [
     'Partition = min(đủ throughput, đủ song song) nhưng đừng thừa. Tăng dễ, giảm không; và tăng phá vỡ tính "cùng key cùng partition" cho dữ liệu đã có.',
   example:
     'Cần 300 MB/s, mỗi partition ~30 MB/s, muốn dự phòng 2x consumer scale → ~20 partition. Đặt 500 partition "cho chắc" khiến cụm nhỏ khởi động chậm và p99 latency xấu.',
+  viz: {
+    type: 'tree',
+    title: 'Chọn số partition = min(đủ throughput, đủ song song), đừng thừa',
+    root: {
+      label: 'Tăng được sau này (nhưng key→partition đổi); KHÔNG giảm được',
+      children: [
+        { label: 'Throughput mục tiêu / throughput mỗi partition', note: 'benchmark ~10–50 MB/s mỗi partition' },
+        { label: 'Song song consumer tối đa mong muốn', note: 'không thể nhiều consumer hoạt động hơn số partition' },
+        { label: 'Quá nhiều partition', note: 'bầu lại leader lâu, nhiều file descriptor/memory, rebalance chậm, latency tăng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nền tảng',
@@ -242,6 +410,16 @@ SS.addQuestions('kafka', [
     '`bootstrap.servers` chỉ là "cửa vào" để lấy bản đồ cụm. Sau đó client tự định tuyến tới đúng leader partition, không đi qua một proxy trung tâm.',
   example:
     'Đặt `bootstrap.servers=kafka-0:9092,kafka-1:9092,kafka-2:9092`. Nếu chỉ ghi `kafka-0` và node đó đang bảo trì lúc app deploy → app không kết nối được dù cụm vẫn khoẻ.',
+  viz: {
+    type: 'flow',
+    title: 'bootstrap.servers chỉ là "cửa vào"',
+    nodes: ['client', 'kết nối 1 broker khởi đầu', 'metadata request', 'bản đồ cụm + leader map', 'kết nối leader trực tiếp'],
+    steps: [
+      { to: 1, label: 'bootstrap.servers = vài broker (nên ≥ 2–3 để chịu 1 node bảo trì)' },
+      { to: 3, label: 'nhận danh sách toàn bộ broker + leader của mỗi topic-partition' },
+      { to: 4, label: 'client định tuyến thẳng tới leader, không qua proxy trung tâm; NotLeaderForPartition → refresh' },
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -256,6 +434,20 @@ SS.addQuestions('kafka', [
     'Record = (key, value, timestamp, headers) do producer đặt + (topic, partition, offset) do broker gán. Timestamp là trục thời gian cho retention và stream processing.',
   example:
     'Replay sự kiện từ 14:00 hôm qua: `consumer.offsetsForTimes(Map.of(tp, ts))` trả offset đầu tiên có timestamp ≥ ts, rồi `seek` tới đó. Chỉ hoạt động đúng nếu producer dùng `CreateTime` hợp lý (không phải giờ lệch).',
+  viz: {
+    type: 'tree',
+    title: 'Một Kafka record',
+    root: {
+      label: 'Record = (producer đặt) + (broker gán)',
+      children: [
+        { label: 'key (nullable)', note: 'partitioning + compaction' },
+        { label: 'value (nullable)', note: 'null = tombstone khi compact' },
+        { label: 'timestamp', note: 'CreateTime (mặc định) hoặc LogAppendTime — dùng cho retention, offsetsForTimes, windowing' },
+        { label: 'headers', note: 'list String → byte[]' },
+        { label: 'topic, partition, offset', note: 'do broker gán' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nền tảng',
@@ -271,5 +463,20 @@ SS.addQuestions('kafka', [
     'Kafka là "hệ thần kinh trung ương" cho dữ liệu chuyển động: mọi thay đổi trở thành sự kiện, nhiều hệ tiêu thụ độc lập, có thể tua lại.',
   example:
     'CDC: đơn hàng ghi vào Postgres → Debezium phát `orders` topic → sink connector nạp vào Elasticsearch (tìm kiếm) + Snowflake (BI) + service gợi ý. Không service nào phải gọi trực tiếp DB của service khác.',
+  viz: {
+    type: 'tree',
+    title: 'Kafka — "hệ thần kinh trung ương" cho dữ liệu chuyển động',
+    root: {
+      label: 'Mọi thay đổi thành sự kiện; nhiều hệ tiêu thụ độc lập; tua lại được',
+      children: [
+        { label: 'Messaging / decoupling microservice' },
+        { label: 'Event sourcing', note: 'log là nguồn sự thật, replay dựng lại state' },
+        { label: 'CDC', note: 'Debezium đọc binlog DB → phát sự kiện thay đổi' },
+        { label: 'Stream processing', note: 'Kafka Streams / Flink realtime' },
+        { label: 'Log & metrics aggregation' },
+        { label: 'Data integration', note: 'Kafka Connect làm xương sống DB ↔ search ↔ data lake' },
+      ],
+    },
+  },
 },
 ]);

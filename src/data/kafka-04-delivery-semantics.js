@@ -10,6 +10,16 @@ SS.addQuestions('kafka', [
     'Ba mức là đánh đổi giữa "mất" và "trùng". Chọn thời điểm commit offset so với thời điểm xử lý quyết định bạn đang ở mức nào.',
   example:
     'Gửi SMS OTP: at-least-once chấp nhận được (thà gửi 2 lần còn hơn không gửi). Trừ tiền tài khoản: cần EOS hoặc consumer idempotent — trừ 2 lần là sự cố tài chính.',
+  viz: {
+    type: 'compare',
+    cols: ['At-most-once', 'At-least-once (mặc định)', 'Exactly-once (EOS)'],
+    rows: [
+      ['Xử lý', '0 hoặc 1 lần', '≥ 1 lần', 'hiệu ứng đúng 1 lần'],
+      ['Mất?', 'có thể', 'không', 'không'],
+      ['Trùng?', 'không', 'có thể', 'không'],
+      ['Cách đạt', 'commit offset TRƯỚC khi xử lý', 'commit SAU khi xử lý', 'idempotent producer + tx + read_committed, hoặc consumer idempotent/dedup'],
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -22,6 +32,18 @@ SS.addQuestions('kafka', [
     'Trùng lặp là cái giá của "không mất". Idempotent producer khử trùng do retry; trùng do consumer restart phải khử ở phía xử lý.',
   example:
     'Consumer ghi vào Elasticsearch bằng `index` với `_id = eventId` → ghi lại cùng doc là ghi đè, không tạo bản thứ hai. Đây là biến at-least-once thành hiệu ứng exactly-once mà không cần transaction.',
+  viz: {
+    type: 'tree',
+    title: 'Trùng lặp là cái giá của "không mất"',
+    root: {
+      label: 'Kafka ưu tiên không mất dữ liệu → at-least-once mặc định',
+      children: [
+        { label: 'Trùng từ producer', note: 'ack bị mất trên đường về → retry → message 2 lần (idempotent producer khắc phục)' },
+        { label: 'Trùng từ consumer', note: 'xử lý xong nhưng crash/rebalance trước commit → lô chạy lại' },
+        { label: 'Khử phía xử lý', note: 'ghi ES với _id = eventId → ghi đè, không tạo bản 2' },
+      ],
+    },
+  },
 },
 {
   cat: 'Exactly-once',
@@ -37,6 +59,19 @@ SS.addQuestions('kafka', [
     'Idempotence = đánh số thứ tự request phía producer + broker nhớ "đã thấy tới đâu". Nó dọn trùng do retry mạng, không dọn trùng do producer mới khởi tạo lại.',
   example:
     'Producer gửi seq 45, broker ghi nhưng timeout ack → retry seq 45 → broker thấy "đã ghi 45", chỉ ack. Log chỉ có một bản. Nếu producer process restart, nó xin PID mới, seq reset về 0 — broker không nhận ra liên hệ với batch cũ.',
+  viz: {
+    type: 'tree',
+    title: 'Broker so sánh sequence cho mỗi (PID, partition)',
+    root: {
+      label: 'Broker lưu sequence cao nhất đã ghi',
+      children: [
+        { label: 'sequence = kỳ vọng', note: 'ghi, tăng bộ đếm' },
+        { label: 'sequence ≤ đã ghi (retry)', note: 'BỎ QUA, ack lại — không tạo trùng' },
+        { label: 'sequence > kỳ vọng (nhảy cóc)', note: 'OutOfOrderSequenceException' },
+        { label: 'Producer restart', note: 'PID mới, seq reset 0 → chỉ khử trùng trong một session' },
+      ],
+    },
+  },
 },
 {
   cat: 'Exactly-once',
@@ -50,6 +85,16 @@ SS.addQuestions('kafka', [
     'Transaction = "hoặc tất cả message trong nhóm này hiển thị, hoặc không cái nào". Nó biến nhiều lần ghi rải rác thành một đơn vị nguyên tử mà consumer read_committed tôn trọng.',
   example:
     'Xử lý một sự kiện tạo ra 3 output: ghi `inventory-updated` + `shipping-requested` + cập nhật offset input — tất cả trong một transaction. Crash sau `send` thứ 2 → abort → consumer downstream không thấy `inventory-updated` mồ côi.',
+  viz: {
+    type: 'flow',
+    title: 'Kafka transaction — ghi nguyên tử đa partition',
+    nodes: ['initTransactions()', 'beginTransaction()', 'nhiều send() (nhiều topic/partition)', 'commitTransaction()', 'commit marker vào mỗi partition'],
+    steps: [
+      { to: 2, label: 'broker ghi message với marker "thuộc transaction X"' },
+      { to: 4, label: 'commit → ghi commit marker; consumer read_committed chỉ để lộ message khi thấy marker' },
+      { to: 4, label: 'abort → message bị bỏ qua. Transaction Coordinator quản lý trạng thái trong __transaction_state' },
+    ],
+  },
 },
 {
   cat: 'Exactly-once',
@@ -68,6 +113,16 @@ SS.addQuestions('kafka', [
     'Chìa khoá EOS của pipeline là offset commit trở thành một phần của transaction output. "Đã xử lý" và "đã ghi kết quả" không còn tách rời được nữa.',
   example:
     'Kafka Streams đặt `processing.guarantee=exactly_once_v2` làm chính xác việc này bên dưới: mỗi lần commit, nó atomically flush output + state changelog + offset. Người dùng không thấy chi tiết.',
+  viz: {
+    type: 'flow',
+    title: 'Consume–transform–produce với EOS',
+    nodes: ['beginTransaction()', 'send(outputRecords)', 'sendOffsetsToTransaction(inputOffsets)', 'commitTransaction()'],
+    steps: [
+      { to: 1, label: 'ghi output ra topic B' },
+      { to: 2, label: 'commit offset input trở thành MỘT PHẦN của transaction output' },
+      { to: 3, label: 'commit thành công → output đã ghi VÀ offset đã tiến, cùng nhau; abort/crash → cả hai không xảy ra, lô xử lý lại' },
+    ],
+  },
 },
 {
   cat: 'Exactly-once',
@@ -80,6 +135,17 @@ SS.addQuestions('kafka', [
     'Epoch là cơ chế "chỉ một chủ tại một thời điểm" cho `transactional.id`. Nó ngăn hai instance (do failover) cùng ghi và phá vỡ tính nguyên tử.',
   example:
     'Pod A treo GC 30s, K8s khởi động pod B với cùng `transactional.id`. B gọi `initTransactions()` → epoch tăng. A tỉnh dậy, thử `commitTransaction()` → `ProducerFencedException`, A tự thoát. Không có double-write.',
+  viz: {
+    type: 'sequence',
+    title: 'Zombie fencing bằng epoch',
+    actors: ['Producer A (zombie)', 'Coordinator', 'Producer B (mới)'],
+    messages: [
+      { from: 0, to: 1, label: 'đang treo GC 30s…', dashed: true },
+      { from: 2, to: 1, label: 'initTransactions() → epoch++' },
+      { from: 0, to: 1, label: 'commitTransaction() (epoch cũ)' },
+      { from: 1, to: 0, label: 'ProducerFencedException', dashed: true },
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -92,6 +158,16 @@ SS.addQuestions('kafka', [
     'Không ghi hai nơi cùng lúc. Ghi một nơi nguyên tử (DB), rồi để một cơ chế đáng tin chuyển tiếp sang nơi thứ hai. Outbox biến "2 write không nhất quán" thành "1 write + 1 relay".',
   example:
     '`@Transactional`: `orderRepo.save(order)` + `outboxRepo.save(new OutboxEvent("OrderCreated", payload))`. Debezium theo dõi bảng `outbox`, publish mỗi dòng mới lên topic `orders`. DB rollback → không có dòng outbox → không có sự kiện sai.',
+  viz: {
+    type: 'flow',
+    title: 'Outbox pattern — biến dual-write thành 1 write + 1 relay',
+    nodes: ['@Transactional', 'save(order) + save(outboxEvent)', 'commit DB (nguyên tử)', 'CDC/polling đọc outbox', 'publish Kafka + đánh dấu đã gửi'],
+    steps: [
+      { to: 1, label: 'cùng transaction DB: bản ghi nghiệp vụ + một dòng outbox' },
+      { to: 2, label: 'chỉ còn MỘT lần ghi nguyên tử (vào DB)' },
+      { to: 4, label: 'chuyển sang Kafka là at-least-once + idempotent; DB rollback → không có dòng outbox → không có sự kiện sai' },
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -107,6 +183,17 @@ SS.addQuestions('kafka', [
     'Dedup = "nhớ những gì đã làm, từ chối làm lại". Điểm mấu chốt: ghi khoá dedup và thực hiện side-effect phải **nguyên tử** với nhau, nếu không vẫn có kẽ hở.',
   example:
     'Consumer cộng điểm thưởng: `INSERT INTO processed(event_id) VALUES(?) ON CONFLICT DO NOTHING` — nếu insert được 1 dòng thì `UPDATE loyalty SET points = points + ?`; nếu 0 dòng thì message này đã xử lý, skip. Cả hai trong một transaction DB.',
+  viz: {
+    type: 'flow',
+    title: 'Idempotent consumer với dedup store',
+    nodes: ['message + khoá idempotency', 'transaction DB', 'khoá đã có trong dedup?', 'chưa: side-effect + ghi khoá', 'đã có: bỏ qua'],
+    steps: [
+      { to: 0, label: 'khoá = id nghiệp vụ, hoặc (topic, partition, offset), hoặc hash nội dung' },
+      { to: 1, label: 'kiểm tra + side-effect + ghi khoá phải NGUYÊN TỬ với nhau' },
+      { to: 3, label: 'INSERT ... ON CONFLICT DO NOTHING → nếu insert được thì apply' },
+      { to: 4, label: '0 dòng → đã xử lý rồi. Dedup store cần TTL > khoảng thời gian có thể replay' },
+    ],
+  },
 },
 {
   cat: 'Exactly-once',
@@ -121,6 +208,19 @@ SS.addQuestions('kafka', [
     'EOS đắt và giới hạn trong biên giới Kafka. Nếu bạn có thể làm consumer idempotent, đó thường là giải pháp đơn giản, rẻ và mạnh hơn.',
   example:
     'Pipeline Kafka Streams thuần (topic→aggregate→topic): bật EOS v2, đáng giá. Consumer nạp dữ liệu vào Postgres: đừng dùng Kafka transaction — dùng UPSERT theo business key + lưu offset trong cùng transaction DB.',
+  viz: {
+    type: 'tree',
+    title: 'EOS đắt và giới hạn trong biên giới Kafka',
+    root: {
+      label: 'Nếu consumer idempotent được → thường đơn giản, rẻ, mạnh hơn',
+      children: [
+        { label: 'Throughput/latency', note: 'marker, coordinator round-trip, read_committed chờ tới LSO' },
+        { label: 'Phức tạp vận hành', note: 'transactional.id, transaction.timeout.ms, ProducerFencedException, tx treo' },
+        { label: 'Chỉ Kafka-to-Kafka', note: 'không mở rộng ra DB/HTTP' },
+        { label: 'Không nên khi', note: 'consumer đã idempotent (UPSERT), hoặc side-effect ra hệ ngoài → outbox + dedup' },
+      ],
+    },
+  },
 },
 {
   cat: 'Exactly-once',
@@ -136,6 +236,16 @@ SS.addQuestions('kafka', [
     'Streams gói output + thay đổi state + offset vào một transaction. State (đếm, join, window) và stream ra ngoài luôn nhất quán với nhau kể cả khi lỗi.',
   example:
     'Đếm số đơn hàng theo cửa hàng: với at-least-once, replay sau crash đếm dư. Với EOS v2, sau khi khôi phục, `count` phản ánh đúng số đơn hàng distinct — không cộng lại những đơn đã tính.',
+  viz: {
+    type: 'flow',
+    title: 'Kafka Streams EOS (processing.guarantee = exactly_once_v2)',
+    nodes: ['chu kỳ commit', 'ghi record output', 'ghi cập nhật state store → changelog', 'commit offset input'],
+    steps: [
+      { to: 1, label: 'mỗi task Streams dùng một transactional producer — 3 bước ATOMICALLY' },
+      { to: 3, label: 'crash giữa chừng → abort, state khôi phục từ changelog về điểm commit trước, input xử lý lại' },
+      { to: 3, label: 'state (đếm, join, window) và stream ra ngoài luôn nhất quán; v2 = 1 producer/instance (nhẹ hơn v1)' },
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -149,6 +259,19 @@ SS.addQuestions('kafka', [
     'Ba yêu cầu này không mâu thuẫn nếu: idempotence bật, transaction ở mức lô, song song ở mức partition. Chúng chỉ xung đột khi bạn cố song song bên trong một partition.',
   example:
     'Pipeline sổ cái: 24 partition (key = accountId), idempotent + transactional producer, mỗi transaction commit một lô ~1000 record, consumer `read_committed` xử lý tuần tự mỗi partition. Thứ tự per-account đảm bảo, không trùng, ~vài trăm nghìn msg/s.',
+  viz: {
+    type: 'tree',
+    title: 'Thứ tự + EOS + throughput không mâu thuẫn nếu…',
+    root: {
+      label: 'Chỉ xung đột khi cố song song BÊN TRONG một partition',
+      children: [
+        { label: 'Thứ tự', note: 'enable.idempotence=true cho phép max.in.flight ≤ 5 không đảo thứ tự' },
+        { label: 'Exactly-once', note: 'transaction ở mức LÔ (không phải 1 message) + read_committed' },
+        { label: 'Throughput', note: 'batching, nén, đủ partition' },
+        { label: 'Song song', note: 'ở mức partition; nhiều partition, không thread pool trên 1 partition' },
+      ],
+    },
+  },
 },
 {
   cat: 'Exactly-once',
@@ -160,6 +283,16 @@ SS.addQuestions('kafka', [
     'Transaction chưa kết thúc là "rào chắn" với consumer read_committed. Timeout là van an toàn để rào chắn đó không tồn tại vĩnh viễn.',
   example:
     'Consumer lag của một pipeline EOS đột nhiên đứng im dù producer vẫn ghi: kiểm tra transaction treo (`kafka-transactions.sh --list`). Producer bị OOM giữa transaction → sau `transaction.timeout.ms` coordinator abort → consumer thông luồng trở lại.',
+  viz: {
+    type: 'flow',
+    title: 'Hanging transaction chặn consumer read_committed',
+    nodes: ['producer mở transaction', 'không commit/abort (chết đột ngột)', 'message nằm sau LSO', 'consumer read_committed bị chặn', 'coordinator abort sau transaction.timeout.ms'],
+    steps: [
+      { to: 2, label: 'transaction chưa kết thúc = "rào chắn" với consumer' },
+      { to: 3, label: 'consumer không đọc tiếp partition đó tới khi transaction được resolve' },
+      { to: 4, label: 'timeout (mặc định 60s) là van an toàn — hoặc producer mới cùng transactional.id epoch cao hơn' },
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -172,6 +305,16 @@ SS.addQuestions('kafka', [
     'Kafka EOS là "atomic trong một hệ thống" chứ không phải "atomic across hệ thống". Để nhất quán nhiều hệ thống, dùng saga/outbox + idempotency, không dùng transaction phân tán.',
   example:
     'Đặt hàng chạm cả payment service + inventory service + email: không có transaction toàn cục. Dùng saga: `OrderPlaced` → `PaymentProcessed` → `InventoryReserved`; nếu inventory fail thì phát `PaymentRefund` (bước bù trừ).',
+  viz: {
+    type: 'compare',
+    cols: ['Kafka EOS', '2PC / XA'],
+    rows: [
+      ['Phạm vi', 'chỉ trong Kafka (message + offset + changelog)', 'nhiều participant (DB, MQ…)'],
+      ['Cơ chế', 'marker + epoch fencing, không giữ khoá', 'prepare/commit, giữ khoá'],
+      ['Khi coordinator chết', 'timeout tự abort', 'participant chờ vô hạn (blocking)'],
+      ['Cho hệ đa thành phần', 'không — dùng saga / outbox', 'tránh trong hệ hiện đại'],
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -186,6 +329,15 @@ SS.addQuestions('kafka', [
     'Chọn key có ý nghĩa nghiệp vụ mở khoá "miễn phí" cả compaction lẫn dedup. Key vô nghĩa buộc bạn tự xây các cơ chế đó.',
   example:
     'Topic `account-balance` (compact), key = `accountId`, value = số dư mới nhất. Service mới đọc từ đầu có ngay số dư hiện tại mọi tài khoản. Consumer ghi vào cache dùng `accountId` làm key → replay là ghi đè, không cộng dồn.',
+  viz: {
+    type: 'compare',
+    cols: ['key = business id (orderId)', 'key ngẫu nhiên / UUID mỗi message'],
+    rows: [
+      ['Compaction', 'giữ trạng thái mới nhất mỗi thực thể', 'mất khả năng compaction'],
+      ['Khoá dedup', 'có sẵn (tự nhiên)', 'phải sinh khoá idempotency riêng'],
+      ['Ghi ra store idempotent', 'dùng key làm _id → replay là ghi đè', 'không'],
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -198,6 +350,16 @@ SS.addQuestions('kafka', [
     'Đừng abort transaction vì một record xấu. Biến "xử lý thất bại" thành "output hợp lệ = gửi vào DLQ", để offset vẫn tiến và EOS vẫn nguyên vẹn cho phần còn lại.',
   example:
     'Lô 500 record, record thứ 200 sai schema: catch `SerializationException`, `producer.send(dlqRecord)` trong cùng transaction, tiếp tục record 201–500, `commitTransaction`. Offset qua 200, pipeline không kẹt, record độc nằm ở DLQ chờ điều tra.',
+  viz: {
+    type: 'flow',
+    title: 'Poison message trong pipeline EOS — đừng abort transaction',
+    nodes: ['xử lý từng record', 'record độc → catch exception', 'send(dlqRecord) trong transaction đang mở', 'tiếp tục record còn lại', 'commitTransaction (offset qua record độc)'],
+    steps: [
+      { to: 1, label: 'bắt exception cho TỪNG record, không để hỏng cả transaction' },
+      { to: 2, label: '"xử lý thất bại" → "output hợp lệ = gửi DLQ"' },
+      { to: 4, label: 'offset vẫn tiến, EOS nguyên vẹn cho phần còn lại, pipeline không kẹt' },
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -210,6 +372,15 @@ SS.addQuestions('kafka', [
     'Không thể "gửi đúng một lần"; có thể "tác động đúng một lần". EOS của Kafka là về tính đúng đắn của kết quả cuối, không phải về đếm số lần chuyển giao vật lý.',
   example:
     'Đếm lượt xem video: dù sự kiện `view` được retry/replay, nhờ dedup theo `(userId, videoId, sessionId)` con số cuối cùng đúng bằng số lượt xem thật. "Delivery" có thể trùng, "count" thì không.',
+  viz: {
+    type: 'compare',
+    cols: ['"exactly-once delivery"', '"effectively-once processing"'],
+    rows: [
+      ['Có khả thi?', 'không (two generals problem)', 'có'],
+      ['Nói về', 'số lần message đi qua dây', 'hiệu ứng (state, output)'],
+      ['Kafka cung cấp', '—', 'message truyền nhiều lần, hiệu ứng 1 lần (idempotence + atomic commit)'],
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -222,6 +393,16 @@ SS.addQuestions('kafka', [
     'Saga thay "transaction phân tán nguyên tử" (bất khả thi/đắt) bằng "eventual consistency có bù trừ". Choreography phân tán quyết định qua sự kiện; orchestration tập trung quyết định vào một state machine.',
   example:
     'Đặt tour: `reserve-flight` → `reserve-hotel` → `charge-card`. Nếu `charge-card` fail: phát `PaymentFailed` → hotel service `cancel-hotel`, flight service `cancel-flight`. Orchestrator (Temporal/Camunda hoặc service tự viết) theo dõi trạng thái saga và retry/bù đúng thứ tự.',
+  viz: {
+    type: 'compare',
+    cols: ['Choreography', 'Orchestration'],
+    rows: [
+      ['Điều phối', 'không có trung tâm — mỗi service nghe sự kiện', 'saga orchestrator (state machine) điều khiển'],
+      ['Ưu', 'đơn giản với ít bước', 'dễ quan sát & sửa'],
+      ['Nhược', 'luồng khó nhìn tổng thể khi nhiều service', 'thêm một thành phần'],
+      ['Bù trừ', 'mỗi service tự quyết định', 'orchestrator quyết định thứ tự bù'],
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -237,6 +418,16 @@ SS.addQuestions('kafka', [
     'Idempotency key biến "gửi lại request giống hệt" thành vô hại — server nhận ra và trả kết quả cũ. Đây là "idempotent producer" phiên bản HTTP, do ứng dụng tự làm.',
   example:
     'Payment API: mobile app timeout sau 30s dù server đã charge thành công → app retry cùng `Idempotency-Key` → server trả lại `201` với payment id cũ, **không** charge lần hai. Stripe, PayPal đều dùng cơ chế này.',
+  viz: {
+    type: 'flow',
+    title: 'Idempotency-Key ở biên API (HTTP)',
+    nodes: ['client gửi Idempotency-Key: <uuid>', 'server tra key trong store (TTL)', 'chưa thấy: xử lý + lưu key + response', 'thấy, đã xong: trả response đã lưu', 'thấy, đang xử lý: 409/425'],
+    steps: [
+      { to: 0, label: 'cho request không an toàn (POST tạo tài nguyên / thanh toán)' },
+      { to: 2, label: 'lần đầu → xử lý thật, lưu (trạng thái + body)' },
+      { to: 3, label: 'retry / double-click / timeout-rồi-thử-lại → trả kết quả cũ, KHÔNG charge lần 2' },
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -249,6 +440,16 @@ SS.addQuestions('kafka', [
     'Cùng một pattern outbox, khác cơ chế "chuyển tiếp": polling đơn giản/độ trễ cao; CDC realtime/hạ tầng nặng hơn. Cả hai đều biến dual-write thành single-write + relay.',
   example:
     'Hệ nhỏ, vài sự kiện/giây, chấp nhận độ trễ 1–2s: polling publisher (một `@Scheduled`). Hệ nhiều service, cần sự kiện realtime, đã có Kafka Connect: Debezium đọc bảng `outbox`, `EventRouter` SMT tách message theo `aggregate_type` sang đúng topic.',
+  viz: {
+    type: 'compare',
+    cols: ['Polling publisher', 'CDC (Debezium)'],
+    rows: [
+      ['Cơ chế chuyển tiếp', 'job định kỳ SELECT ... WHERE published=false', 'đọc WAL/binlog của DB'],
+      ['Độ trễ', 'cao (polling interval)', 'thấp (~ms)'],
+      ['Tải DB', 'có (query)', 'không'],
+      ['Hạ tầng', 'không thêm (một @Scheduled)', 'Kafka Connect + Debezium'],
+    ],
+  },
 },
 {
   cat: 'Delivery semantics',
@@ -264,5 +465,18 @@ SS.addQuestions('kafka', [
     'Rebalance là điều bình thường; mục tiêu là (a) làm nó hiếm, (b) commit sát với xử lý, (c) đảm bảo xử lý lại không gây hại. Ba lớp bảo vệ chồng lên nhau.',
   example:
     'Deploy gây rebalance: `onPartitionsRevoked` commit ngay offset của các record đã ghi DB; consumer mới bắt đầu từ đó. Kết hợp UPSERT idempotent → kể cả nếu một vài record lọt qua khe hở, ghi lại cũng không sai.',
+  viz: {
+    type: 'tree',
+    title: 'Trùng do rebalance — 3 lớp bảo vệ chồng lên nhau',
+    root: {
+      label: 'Rebalance là bình thường; giảm số lần + commit sát xử lý + xử lý lại vô hại',
+      children: [
+        { label: 'Commit offset thường xuyên hơn', note: 'cửa sổ "đã làm nhưng chưa commit" hẹp lại' },
+        { label: 'onPartitionsRevoked → commit trước khi nhả partition' },
+        { label: 'Cooperative rebalancing + static membership', note: 'giảm số lần và phạm vi' },
+        { label: 'Consumer idempotent', note: 'xử lý lại vô hại — lớp cuối cùng' },
+      ],
+    },
+  },
 },
 ]);
