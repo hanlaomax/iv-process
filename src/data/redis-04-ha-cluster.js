@@ -56,6 +56,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  diagram: 'redis-cluster-slots',
   q: 'Redis Cluster: 16384 hash slot và sharding?',
   answer:
     'Cluster chia keyspace thành **16384 slot**. `slot = CRC16(key) % 16384`. Mỗi master node sở hữu một dải slot; key thuộc slot nào thì nằm ở node đó.\n\n' +

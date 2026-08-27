@@ -92,6 +92,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Auto Scaling',
+  diagram: 'autoscaling',
   q: 'Auto Scaling Group: scaling policy, health check, lifecycle hook?',
   answer:
     '**Scaling policies**:\n' +

@@ -40,6 +40,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  diagram: 'bean-lifecycle',
   q: 'Vòng đời của một Spring bean gồm những bước nào?',
   answer:
     'Khởi tạo: instantiate (constructor) → populate properties (DI) → `BeanNameAware`/`BeanFactoryAware`/`ApplicationContextAware` → `BeanPostProcessor.postProcessBeforeInitialization` → `@PostConstruct` → `InitializingBean.afterPropertiesSet()` → custom `initMethod` → `BeanPostProcessor.postProcessAfterInitialization` (nơi **AOP proxy** được tạo) → bean sẵn sàng.\n\n' +
@@ -91,6 +92,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring AOP',
+  diagram: 'spring-aop-proxy',
   q: 'Spring AOP hoạt động thế nào? JDK proxy vs CGLIB? Vấn đề self-invocation?',
   answer:
     'Spring AOP dựa trên **proxy runtime**. Nếu bean **implements interface** → mặc định JDK dynamic proxy (proxy theo interface). Nếu không → **CGLIB** (tạo subclass, ghi đè method). Spring Boot mặc định ép CGLIB (`proxyTargetClass=true`).\n\n' +

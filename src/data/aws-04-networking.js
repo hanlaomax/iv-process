@@ -1,6 +1,7 @@
 SS.addQuestions('aws', [
 {
   cat: 'VPC',
+  diagram: 'vpc-subnets',
   q: 'VPC, subnet (public/private) và route table hoạt động thế nào?',
   answer:
     '**VPC**: mạng ảo cô lập trong một region, bạn chọn dải CIDR (ví dụ `10.0.0.0/16`).\n\n' +

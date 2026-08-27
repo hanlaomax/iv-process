@@ -45,6 +45,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'MVCC',
+  diagram: 'mvcc-snapshot',
   q: 'MVCC (Multi-Version Concurrency Control) hoạt động thế nào?',
   answer:
     'Thay vì khoá khi đọc, DB giữ **nhiều phiên bản** của mỗi hàng. Mỗi transaction thấy một **snapshot** nhất quán (các version đã commit trước khi nó bắt đầu / trước câu lệnh).\n\n' +

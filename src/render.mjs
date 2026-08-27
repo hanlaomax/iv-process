@@ -56,12 +56,20 @@ function questionArticle(q, n) {
     <div class="qa-block qa-answer"><h4>Trả lời</h4>${fmt(q.answer)}</div>
     <div class="qa-block qa-essence"><h4>Bản chất</h4>${fmt(q.essence)}</div>
     <div class="qa-block qa-example"><h4>Ví dụ thực tế</h4>${fmt(q.example)}</div>
+    ${q.diagram ? diagramFigure(q.diagram) : ''}
   </div>
 </article>`;
 }
 
+function diagramFigure(id) {
+  return `<figure class="diagram" data-diagram="${esc(id)}">
+  <figcaption class="diagram-cap"><span class="diagram-badge">Hình minh hoạ</span></figcaption>
+  <noscript><p class="diagram-noscript">Bật JavaScript để xem hình minh hoạ động cho phần này.</p></noscript>
+</figure>`;
+}
+
 /* Trang chủ đề */
-export function renderTopicPage({ topic, list, topics, siteUrl }) {
+export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }) {
   const url = `${siteUrl}${topic.id}/`;
   const groups = groupByCat(list);
   const idx = topics.findIndex((t) => t.id === topic.id);
@@ -133,6 +141,7 @@ ${footer('../')}`;
 
   return page({
     root: '../',
+    scripts: hasDiagrams ? ['assets/diagrams/core.js', `assets/diagrams/${topic.id}.js`] : [],
     head: head({
       title: `${topic.name} — ${list.length} câu hỏi phỏng vấn (level Middle)`,
       description: desc,
@@ -196,6 +205,7 @@ export function renderHub({ topics, counts, total, siteUrl }) {
         <span><b>${topics.length}</b> chủ đề</span>
         <span><b>3</b> phần / câu</span>
       </div>
+      <p class="hero-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt xem</p>
     </div>
   </section>
   <section class="wrap topic-grid-section" aria-label="Chủ đề">

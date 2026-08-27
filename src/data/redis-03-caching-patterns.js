@@ -25,6 +25,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  diagram: 'cache-stampede',
   q: 'Cache stampede (thundering herd) là gì? Cách giảm thiểu?',
   answer:
     'Khi một key hot **hết hạn**, hàng nghìn request đồng thời miss cùng lúc → tất cả cùng lao xuống DB tính lại cùng một giá trị → DB quá tải (có thể sập).\n\n' +

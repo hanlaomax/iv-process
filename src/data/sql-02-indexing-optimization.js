@@ -1,6 +1,7 @@
 SS.addQuestions('sql', [
 {
   cat: 'Index',
+  diagram: 'btree-index',
   q: 'B-tree index hoạt động thế nào? Khi nào được dùng?',
   answer:
     'B-tree là cây cân bằng, các node lá liên kết nhau và chứa (key đã sắp xếp → con trỏ tới hàng). Tra cứu từ root xuống lá là O(log N).\n\n' +

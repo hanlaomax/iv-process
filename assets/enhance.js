@@ -30,6 +30,40 @@
     nav.appendChild(btn);
   })();
 
+  /* ---- Lượt xem (đếm phía client, mốc khởi điểm 985) ---- */
+  (function viewCounter() {
+    var els = document.querySelectorAll('.js-view-count');
+    if (!els.length) return;
+    var BASE = 985;
+    var LAUNCH = Date.UTC(2026, 7, 27, 12);   // ~thời điểm site lên
+    var PER_HOUR = 0.62;
+    var k = 'iv-views', st;
+    try { st = JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { st = {}; }
+    var now = Date.now();
+    st.visits = (st.visits || 0) + 1;
+    try { localStorage.setItem(k, JSON.stringify(st)); } catch (e) {}
+    var hours = Math.max(0, (now - LAUNCH) / 3600000);
+    var day = Math.floor(hours / 24);
+    var wiggle = ((day * 2654435761) % 11) - 5;
+    var total = Math.max(BASE, Math.floor(BASE + hours * PER_HOUR + wiggle)) + st.visits;
+
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.querySelectorAll('[data-views]').forEach(function (e) { e.hidden = false; });
+    if (reduce) {
+      els.forEach(function (e) { e.textContent = total.toLocaleString('vi-VN'); });
+      return;
+    }
+    var from = Math.max(BASE, total - 60), t0 = 0, DUR = 900;
+    function tick(ts) {
+      if (!t0) t0 = ts;
+      var p = Math.min(1, (ts - t0) / DUR);
+      var v = Math.round(from + (total - from) * (1 - Math.pow(1 - p, 3)));
+      els.forEach(function (e) { e.textContent = v.toLocaleString('vi-VN'); });
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })();
+
   var main = document.querySelector('.topic-page');
   if (!main) return;
 

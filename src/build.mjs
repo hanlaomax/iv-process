@@ -61,17 +61,28 @@ mkdirSync(join(DIST, 'assets'), { recursive: true });
 /* Trang chủ */
 writeFileSync(join(DIST, 'index.html'), renderHub({ topics, counts, total, siteUrl }));
 
+/* Có file hình minh hoạ cho chủ đề nào? */
+const diagramDir = join(ROOT, 'assets', 'diagrams');
+let diagramTopics = new Set();
+try {
+  diagramTopics = new Set(
+    readdirSync(diagramDir).filter((f) => f.endsWith('.js') && f !== 'core.js').map((f) => f.replace('.js', ''))
+  );
+} catch {}
+
 /* Trang từng chủ đề */
 for (const topic of topics) {
   const list = SS.q[topic.id];
   const dir = join(DIST, topic.id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'index.html'), renderTopicPage({ topic, list, topics, siteUrl }));
+  const hasDiagrams = diagramTopics.has(topic.id) && list.some((q) => q.diagram);
+  writeFileSync(join(dir, 'index.html'), renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }));
 }
 
 /* Tài nguyên tĩnh */
 cpSync(join(ROOT, 'assets', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 cpSync(join(ROOT, 'assets', 'enhance.js'), join(DIST, 'assets', 'enhance.js'));
+if (diagramTopics.size) cpSync(diagramDir, join(DIST, 'assets', 'diagrams'), { recursive: true });
 
 /* SEO phụ trợ */
 writeFileSync(join(DIST, 'sitemap.xml'), renderSitemap({ topics, siteUrl }));

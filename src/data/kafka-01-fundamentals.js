@@ -54,6 +54,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  diagram: 'kafka-replication',
   q: 'Replication factor, leader/follower và ISR là gì?',
   answer:
     '**Replication factor (RF)**: mỗi partition có RF bản sao trên RF broker khác nhau. RF=3 chịu được mất 2 broker.\n\n' +
@@ -92,6 +93,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer group',
+  diagram: 'kafka-consumer-groups',
   q: 'Consumer group là gì? Partition được gán cho consumer thế nào?',
   answer:
     'Một **consumer group** là tập consumer cùng `group.id` chia nhau đọc các partition của topic. Mỗi partition được gán cho **đúng một** consumer trong group tại một thời điểm.\n\n' +

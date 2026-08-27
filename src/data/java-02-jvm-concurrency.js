@@ -28,6 +28,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'JVM & Memory',
+  diagram: 'gc-generational',
   q: 'Garbage Collection hoạt động thế nào? Generational GC là gì?',
   answer:
     'GC xác định object "rác" bằng **reachability**: bắt đầu từ GC roots (biến static, biến cục bộ trên stack, JNI ref…), object nào không đến được coi là rác.\n\n' +

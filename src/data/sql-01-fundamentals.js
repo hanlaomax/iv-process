@@ -1,6 +1,7 @@
 SS.addQuestions('sql', [
 {
   cat: 'JOIN',
+  diagram: 'sql-joins',
   q: 'Các loại JOIN (INNER, LEFT/RIGHT, FULL, CROSS, SELF) khác nhau thế nào?',
   answer:
     '- **INNER JOIN**: chỉ giữ hàng có khớp ở **cả hai** bảng.\n' +

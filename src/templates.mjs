@@ -68,6 +68,7 @@ export function footer(root) {
   const year = new Date().getFullYear();
   return `<footer class="site-footer">
   <div class="wrap">
+    <p class="footer-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt xem</p>
     <p>Interview Vault — bộ câu hỏi phỏng vấn cấp độ Middle. Nội dung tiếng Việt, giữ nguyên thuật ngữ tiếng Anh.</p>
     <p class="muted">Cập nhật ${year}. Trang tĩnh, hoạt động không cần JavaScript.</p>
     <p><a href="${root}">Trang chủ</a> · <a href="${root}sitemap.xml">Sitemap</a></p>
@@ -76,7 +77,10 @@ export function footer(root) {
 }
 
 /* Lắp trang hoàn chỉnh — root là tiền tố tương đối ("" cho trang chủ, "../" cho trang chủ đề) */
-export function page({ head: h, body, root = '' }) {
+export function page({ head: h, body, root = '', scripts = [] }) {
+  const s = ['assets/enhance.js', ...scripts]
+    .map((src) => `<script src="${root}${src}" defer></script>`)
+    .join('\n');
   return `<!doctype html>
 <html lang="vi">
 <head>
@@ -84,7 +88,7 @@ ${h}
 </head>
 <body>
 ${body}
-<script src="${root}assets/enhance.js" defer></script>
+${s}
 </body>
 </html>
 `;
