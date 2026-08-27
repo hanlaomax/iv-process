@@ -13,6 +13,19 @@ SS.addQuestions('java', [
     'Chia theo tiêu chí chia sẻ: heap và metaspace dùng chung toàn JVM; stack, PC, native stack là riêng từng thread. Object luôn ở heap, tham chiếu tới nó có thể nằm ở stack.',
   example:
     'Tinh chỉnh container: `-Xms512m -Xmx512m` cố định heap tránh resize; `-XX:MaxMetaspaceSize=256m` chặn class loader rò rỉ làm phình native memory; số thread cao thì mỗi thread ~512KB–1MB stack (`-Xss`) cần tính vào RAM pod.',
+  viz: {
+    type: 'quadrant',
+    title: 'Vùng bộ nhớ JVM',
+    x: ['riêng mỗi thread', 'chia sẻ toàn JVM'],
+    y: ['không do GC', 'do GC quản lý'],
+    items: [
+      { label: 'Heap', qx: 1, qy: 1 },
+      { label: 'Metaspace', qx: 1, qy: 0 },
+      { label: 'Stack', qx: 0, qy: 0, jy: -1 },
+      { label: 'PC Register', qx: 0, qy: 0, jy: 1 },
+      { label: 'Native Method Stack', qx: 0, qy: 0, jx: 1, jy: 0 },
+    ],
+  },
 },
 {
   cat: 'JVM & Memory',
@@ -25,6 +38,17 @@ SS.addQuestions('java', [
     'Stack = bộ nhớ tạm bám theo lời gọi method, tự dọn. Heap = bộ nhớ chia sẻ cho dữ liệu sống lâu, GC dọn. Escape analysis là cầu nối tối ưu.',
   example:
     'Vòng lặp nóng tạo `new Point(x,y)` chỉ dùng trong method: JIT phát hiện `Point` "không thoát" khỏi method → cấp phát các field trực tiếp trên stack, loại bỏ áp lực GC. Đây là lý do đừng vội cache object nhỏ thủ công.',
+  viz: {
+    type: 'compare',
+    cols: ['Stack', 'Heap'],
+    rows: [
+      ['Cấp phát / thu hồi', 'LIFO khi vào / ra method — tự dọn', 'động khi new — GC dọn'],
+      ['Tốc độ', 'cực nhanh', 'chậm hơn + chi phí GC'],
+      ['Kích thước', 'nhỏ, cố định (-Xss)', 'lớn, linh hoạt (-Xmx)'],
+      ['Chứa gì', 'primitive cục bộ + reference', 'object và mảng'],
+      ['Phạm vi', 'riêng mỗi thread', 'chia sẻ giữa các thread'],
+    ],
+  },
 },
 {
   cat: 'JVM & Memory',
@@ -53,6 +77,18 @@ SS.addQuestions('java', [
     'Đánh đổi throughput ↔ latency ↔ footprint. Parallel tối đa throughput; G1 cân bằng; ZGC tối thiểu pause. Chọn theo SLA độ trễ và kích thước heap.',
   example:
     'API tài chính p99 < 50ms, heap 32GB: chuyển từ G1 sang ZGC (`-XX:+UseZGC`) loại bỏ các pause 200–500ms lúc Full GC. Ngược lại, job ETL chạy đêm thì Parallel GC xử lý xong nhanh hơn.',
+  viz: {
+    type: 'bars',
+    title: 'Pause điển hình (log scale, càng ngắn càng tốt)',
+    unit: 'ms',
+    scale: 'log',
+    items: [
+      { label: 'Parallel', value: 300, note: 'tối đa throughput, pause dài — hợp batch job' },
+      { label: 'Serial', value: 120, note: '1 thread, stop-the-world — app nhỏ, 1 CPU' },
+      { label: 'G1 (mặc định)', value: 50, note: 'chia region, nhắm MaxGCPauseMillis — cân bằng' },
+      { label: 'ZGC / Shenandoah', value: 1, note: 'gần như concurrent, pause < 1ms bất kể heap lớn' },
+    ],
+  },
 },
 {
   cat: 'JVM & Memory',
@@ -70,6 +106,21 @@ SS.addQuestions('java', [
     'Leak trong ngôn ngữ có GC là "leak logic": reference còn sống nhưng ý nghĩa nghiệp vụ đã chết. Phát hiện bằng heap dump + phân tích dominator tree.',
   example:
     'Một `@Component` giữ `Map<String, Session>` để "tối ưu", session hết hạn nhưng không bị xoá khỏi map. Sau vài ngày Old gen đầy → Full GC liên tục → OOM. Sửa: dùng `Caffeine`/`Guava Cache` có TTL + max size, hoặc `WeakHashMap` khi phù hợp.',
+  viz: {
+    type: 'tree',
+    title: 'Các dạng leak dù có GC',
+    root: {
+      label: 'Giữ reference tới object không còn cần',
+      children: [
+        { label: 'Collection static / singleton chỉ add', note: 'cache không giới hạn' },
+        { label: 'Listener / callback không huỷ đăng ký' },
+        { label: 'ThreadLocal không remove() trong pool' },
+        { label: 'Key HashMap mutable hoặc equals/hashCode sai' },
+        { label: 'ClassLoader leak khi redeploy', note: 'giữ cả class + static' },
+        { label: 'Inner class không static', note: 'giữ tham chiếu ngầm tới outer' },
+      ],
+    },
+  },
 },
 {
   cat: 'JVM & Memory',
@@ -84,6 +135,20 @@ SS.addQuestions('java', [
     'OOM không chỉ là "hết heap". Mỗi loại chỉ tới một vùng bộ nhớ hoặc tài nguyên OS khác nhau — đọc đúng message để tìm đúng nguyên nhân.',
   example:
     '"unable to create native thread" trên pod có `-Xmx` cao: heap chiếm gần hết RAM container, không còn chỗ cho thread stack. Giảm `-Xmx` hoặc dùng thread pool giới hạn thay vì tạo thread không kiểm soát.',
+  viz: {
+    type: 'tree',
+    title: 'Mỗi loại OOM trỏ tới một vùng khác nhau',
+    root: {
+      label: 'OutOfMemoryError',
+      children: [
+        { label: 'Java heap space', note: 'heap đầy: leak, cache lớn, hoặc -Xmx quá nhỏ' },
+        { label: 'GC overhead limit exceeded', note: '> 98% thời gian cho GC, thu lại < 2% heap' },
+        { label: 'Metaspace', note: 'quá nhiều class: leak class loader, proxy/CGLIB động' },
+        { label: 'unable to create new native thread', note: 'chạm giới hạn thread OS / hết native memory' },
+        { label: 'Direct buffer memory', note: 'allocateDirect / Netty vượt MaxDirectMemorySize' },
+      ],
+    },
+  },
 },
 {
   cat: 'Concurrency',
@@ -96,6 +161,18 @@ SS.addQuestions('java', [
     '`start()` mới tạo luồng thực thi mới; `run()` chỉ là nội dung công việc. Nhầm hai cái là mất toàn bộ tính đồng thời.',
   example:
     '`new Thread(task).run()` trong code review là red flag: toàn bộ task chạy tuần tự trên thread gọi. Đúng phải `.start()`, hoặc tốt hơn là submit vào `ExecutorService`.',
+  viz: {
+    type: 'states',
+    title: 'Vòng đời Thread',
+    states: ['NEW', 'RUNNABLE', 'WAITING', 'TERMINATED'],
+    start: 0,
+    transitions: [
+      { from: 0, to: 1, label: 'start()' },
+      { from: 1, to: 2, label: 'wait / join / sleep / park' },
+      { from: 2, to: 1, label: 'notify / hết timeout' },
+      { from: 1, to: 3, label: 'run() kết thúc' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -109,6 +186,16 @@ SS.addQuestions('java', [
     'Runnable = "làm việc này". Callable = "làm việc này và trả kết quả (có thể lỗi)". Future = "chỗ nhận kết quả sau này".',
   example:
     '`Future<Report> f = executor.submit(() -> buildReport(id));` rồi làm việc khác, sau đó `f.get(5, SECONDS)` để lấy report hoặc timeout. Nếu cần ghép nhiều lời gọi service song song thì `CompletableFuture.allOf(...)`.',
+  viz: {
+    type: 'compare',
+    cols: ['Runnable', 'Callable<V>', 'Future<V>'],
+    rows: [
+      ['Chữ ký', 'void run()', 'V call() throws Exception', '—'],
+      ['Trả về', 'không', 'có kết quả V', 'get() lấy kết quả sau'],
+      ['Ném checked exception', 'không', 'có', 'get() ném ExecutionException'],
+      ['Vai trò', 'làm việc này', 'làm việc này + trả kết quả', 'tay cầm cho kết quả async'],
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -123,6 +210,15 @@ SS.addQuestions('java', [
     'Khoá là trên object, không phải trên đoạn code. Muốn loại trừ lẫn nhau, các thread phải đồng bộ trên **cùng một** object.',
   example:
     'Hai method `synchronized` khoá `this` sẽ loại trừ nhau. Nhưng nếu một cái là `static synchronized`, nó khoá `Class` → hai method chạy song song, dữ liệu chung vẫn bị race. Lỗi hay gặp khi mix static/instance.',
+  viz: {
+    type: 'compare',
+    cols: ['synchronized method (instance)', 'static synchronized', 'synchronized(obj)'],
+    rows: [
+      ['Khoá trên', 'this', 'Class object', 'obj tường minh'],
+      ['Loại trừ nhau với', 'method instance khác cùng this', 'static method khác', 'ai khoá cùng obj'],
+      ['Lưu ý', 'reentrant', 'khác lock với instance method', 'kiểm soát hạt khoá'],
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -136,6 +232,16 @@ SS.addQuestions('java', [
     '`volatile` là cơ chế visibility/ordering nhẹ, không phải khoá. Dùng cho cờ trạng thái và mẫu publish an toàn, không dùng cho bộ đếm.',
   example:
     '`private volatile boolean running = true;` cho vòng lặp worker để thread khác `running = false` dừng nó — không cần lock. Nhưng `volatile long counter; counter++` dưới tải cao sẽ mất số đếm; phải dùng `AtomicLong` hoặc `LongAdder`.',
+  viz: {
+    type: 'compare',
+    cols: ['volatile ĐẢM BẢO', 'volatile KHÔNG đảm bảo'],
+    rows: [
+      ['Visibility', 'ghi flush ngay, đọc lấy giá trị mới nhất', '—'],
+      ['Ordering', 'chặn reorder quanh biến (memory barrier)', '—'],
+      ['Atomicity thao tác kép', '—', 'count++ (read-modify-write) vẫn race'],
+      ['Dùng cho', 'cờ trạng thái, publish an toàn', 'bộ đếm → dùng AtomicLong / LongAdder'],
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -152,6 +258,15 @@ SS.addQuestions('java', [
     'Happens-before là "hợp đồng nhìn thấy" giữa các thread. Không nằm trong chuỗi HB nào thì mọi giả định về thứ tự/giá trị đều không an toàn.',
   example:
     'Mẫu sai: thread A set `config` rồi set `ready=true` (không volatile); thread B thấy `ready==true` nhưng vẫn đọc `config==null` do reorder/visibility. Sửa: khai báo `ready` là `volatile` → tạo HB, B thấy cả `config` đã gán.',
+  viz: {
+    type: 'compare',
+    cols: ['Không happens-before', 'Có happens-before (volatile / synchronized / start-join / final)'],
+    rows: [
+      ['Compiler / CPU', 'tự do reorder + cache', 'chặn reorder tại điểm đồng bộ'],
+      ['Thread khác thấy', 'có thể là giá trị cũ', 'chắc chắn thấy mọi ghi trước điểm đó'],
+      ['Ví dụ ready+config', 'B thấy ready=true nhưng config=null', 'ready volatile → B thấy config đã gán'],
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -166,6 +281,18 @@ SS.addQuestions('java', [
     'wait/notify là giao thức trên monitor; giữ lock là điều kiện tiên quyết. `while` bảo vệ trước wakeup giả và race giành điều kiện.',
   example:
     'Bounded buffer: producer `while (buffer.isFull()) notFull.wait();` rồi thêm phần tử và `notEmpty.notifyAll()`. Dùng `if` thay `while` → khi hai consumer cùng tỉnh, cái thứ hai lấy từ buffer rỗng → lỗi. Thực tế nên dùng `BlockingQueue` có sẵn.',
+  viz: {
+    type: 'flow',
+    title: 'wait() trong vòng while',
+    nodes: ['giữ monitor', 'while điều kiện', 'wait()', 'được notify', 'giành lại lock', 'kiểm tra lại'],
+    steps: [
+      { to: 0, label: 'phải đang giữ monitor của obj, nếu không → IllegalMonitorStateException' },
+      { to: 2, label: 'điều kiện chưa thoả → wait(): nhả monitor cho thread khác' },
+      { to: 3, label: 'thread khác notify()/notifyAll() (hoặc spurious wakeup)' },
+      { to: 4, label: 'phải giành lại monitor mới chạy tiếp' },
+      { to: 5, label: 'quay lại while: kiểm tra lại vì có thể bị "cướp" điều kiện hoặc wakeup giả' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -181,6 +308,16 @@ SS.addQuestions('java', [
     'Deadlock cần vòng chờ vòng tròn. Áp một thứ tự tổng lên việc lấy khoá là cách phổ biến và hiệu quả nhất để loại bỏ vòng đó.',
   example:
     'Chuyển tiền giữa 2 tài khoản: `transfer(a,b)` khoá `a` rồi `b`; `transfer(b,a)` khoá `b` rồi `a` → deadlock. Sửa: sắp xếp theo `accountId`, luôn khoá id nhỏ trước. Phát hiện lúc chạy bằng `jstack` (tìm "Found one Java-level deadlock").',
+  viz: {
+    type: 'cycle',
+    title: 'Circular wait — vòng chờ tròn',
+    steps: [
+      { label: 'T1 khoá A', note: 'transfer(a, b): giữ lock A' },
+      { label: 'T1 chờ B', note: 'nhưng B đang bị T2 giữ' },
+      { label: 'T2 khoá B', note: 'transfer(b, a): giữ lock B' },
+      { label: 'T2 chờ A', note: 'nhưng A đang bị T1 giữ → deadlock. Phá vòng: luôn khoá theo id tăng dần' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -192,6 +329,19 @@ SS.addQuestions('java', [
     'ThreadLocal gắn dữ liệu vào vòng đời của thread. Trong pool, thread không chết nên bạn phải tự xoá — thường trong `finally`.',
   example:
     'Filter đặt `UserContext.set(user)` đầu request; nếu quên `UserContext.remove()` trong `finally`, request kế tiếp trên cùng thread pool có thể thấy user cũ → lỗ hổng bảo mật. Spring `RequestContextHolder` cũng dọn theo cơ chế này.',
+  viz: {
+    type: 'flow',
+    title: 'Vì sao ThreadLocal rò rỉ trong thread pool',
+    nodes: ['set(user)', 'xử lý request', 'quên remove()', 'trả về pool', 'request sau', 'đọc nhầm user'],
+    steps: [
+      { to: 1, label: 'đầu request đặt context vào Thread.threadLocals (value là strong ref)' },
+      { to: 2, label: 'controller/service đọc context không cần truyền tham số' },
+      { to: 3, label: 'nếu không remove() trong finally…' },
+      { to: 4, label: 'thread pool không huỷ thread → value không bao giờ bị dọn (leak)' },
+      { to: 5, label: 'request kế tiếp chạy trên đúng thread đó' },
+      { to: 5, label: 'thấy user của request trước → lỗ hổng bảo mật' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -205,6 +355,17 @@ SS.addQuestions('java', [
     'Hành vi phụ thuộc chủ yếu vào loại queue. Queue unbounded khiến maxPoolSize và rejection trở nên vô nghĩa. Tự tạo `ThreadPoolExecutor` với bounded queue để kiểm soát.',
   example:
     'Service gọi downstream: `new ThreadPoolExecutor(10, 20, 60s, new ArrayBlockingQueue<>(200), new CallerRunsPolicy())`. Khi downstream chậm, queue đầy → caller tự chạy → tự động giảm tốc nhận request thay vì sập.',
+  viz: {
+    type: 'flow',
+    title: 'ThreadPoolExecutor nhận một task mới',
+    nodes: ['task mới', '< core: tạo thread', 'vào queue', 'queue đầy: tới max', 'vượt max: reject'],
+    steps: [
+      { to: 1, label: 'số thread < core → tạo thread mới ngay' },
+      { to: 2, label: 'đủ core rồi → xếp vào queue' },
+      { to: 3, label: 'queue đầy → tạo thêm thread cho tới maximumPoolSize' },
+      { to: 4, label: 'vẫn không nhận nổi → handler: AbortPolicy (mặc định) / CallerRunsPolicy / Discard…' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -217,6 +378,16 @@ SS.addQuestions('java', [
     'CPU-bound bị giới hạn bởi số nhân. IO-bound bị giới hạn bởi tài nguyên phía sau (pool DB, rate limit API), không phải bởi CPU.',
   example:
     'Pool xử lý ảnh (resize) đặt = số vCPU của pod (ví dụ 4). Pool gọi API đối tác (mỗi call ~200ms chờ) đặt ~40, nhưng chặn ở HikariCP `maximumPoolSize=20` để không làm quá tải DB.',
+  viz: {
+    type: 'compare',
+    cols: ['CPU-bound', 'IO-bound'],
+    rows: [
+      ['Thread ≈', 'số nhân (hoặc +1)', 'cores × (1 + waitTime/computeTime)'],
+      ['Thêm thread nữa', 'chỉ tăng context switch', 'tăng thông lượng tới một mức'],
+      ['Bị giới hạn bởi', 'số nhân CPU', 'tài nguyên downstream (pool DB, rate limit)'],
+      ['Ví dụ', 'resize ảnh = 4 (số vCPU)', 'gọi API ~40, chặn ở HikariCP 20'],
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -232,6 +403,20 @@ SS.addQuestions('java', [
     '`CompletableFuture` là pipeline bất đồng bộ khai báo: `thenCompose` cho phụ thuộc tuần tự, `thenCombine`/`allOf` cho song song, `handle/exceptionally` cho lỗi — tất cả không blocking.',
   example:
     'Trang chi tiết đơn hàng cần user + inventory + pricing từ 3 service: `allOf(fUser, fInv, fPrice).thenApply(v -> assemble(fUser.join(), fInv.join(), fPrice.join()))`. Ba call chạy song song, tổng thời gian ≈ call chậm nhất thay vì tổng ba call.',
+  viz: {
+    type: 'sequence',
+    title: 'allOf: 3 service song song rồi assemble',
+    actors: ['Client', 'User', 'Inventory', 'Pricing'],
+    messages: [
+      { from: 0, to: 1, label: 'supplyAsync getUser' },
+      { from: 0, to: 2, label: 'supplyAsync getInventory' },
+      { from: 0, to: 3, label: 'supplyAsync getPricing' },
+      { from: 1, to: 0, label: 'user', dashed: true },
+      { from: 2, to: 0, label: 'inventory', dashed: true },
+      { from: 3, to: 0, label: 'pricing', dashed: true },
+      { from: 0, to: 0, label: 'allOf(...).thenApply(assemble)' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -244,6 +429,16 @@ SS.addQuestions('java', [
     'CAS thay khoá bằng "thử và lặp lại": không thread nào bị chặn, nhưng tranh chấp cao thì tốn CPU vì spin. ABA là bẫy khi chỉ so sánh giá trị mà không so sánh lịch sử.',
   example:
     'Bộ đếm request dưới tải cao: `LongAdder` (chia ô đếm theo thread rồi cộng khi đọc) nhanh hơn `AtomicLong` vì giảm tranh chấp CAS. ABA quan trọng khi làm lock-free stack/queue với con trỏ node được tái sử dụng.',
+  viz: {
+    type: 'cycle',
+    title: 'incrementAndGet() = vòng lặp CAS (spin)',
+    steps: [
+      { label: 'đọc giá trị v', note: 'đọc giá trị hiện tại của ô nhớ' },
+      { label: 'tính v + 1', note: 'chuẩn bị giá trị mới' },
+      { label: 'CAS(v, v+1)', note: 'nếu ô nhớ vẫn là v thì đặt v+1, nguyên tử ở mức CPU' },
+      { label: 'thất bại → lặp lại', note: 'thread khác vừa đổi → đọc lại và thử lại; không thread nào bị chặn' },
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -256,6 +451,17 @@ SS.addQuestions('java', [
     '`sleep` là "nghỉ theo đồng hồ, vẫn ôm khoá". `wait` là "nghỉ theo tín hiệu, nhả khoá cho thread khác vào thay đổi điều kiện".',
   example:
     'Polling ngây thơ: `while(!ready) Thread.sleep(100)` lãng phí CPU và trễ. Phối hợp đúng: consumer `synchronized(lock){ while(queue.isEmpty()) lock.wait(); }`, producer `synchronized(lock){ queue.add(x); lock.notifyAll(); }` — hoặc dùng `BlockingQueue`.',
+  viz: {
+    type: 'compare',
+    cols: ['Thread.sleep(ms)', 'obj.wait()'],
+    rows: [
+      ['Thuộc', 'method static của Thread', 'method của Object'],
+      ['Giữ monitor?', 'KHÔNG nhả monitor đang giữ', 'NHẢ monitor của obj'],
+      ['Điều kiện gọi', 'bất kỳ đâu', 'phải đang giữ monitor của obj'],
+      ['Tỉnh khi', 'hết thời gian', 'notify/notifyAll, timeout, spurious wakeup'],
+      ['Mục đích', 'trì hoãn theo đồng hồ', 'phối hợp thread theo điều kiện'],
+    ],
+  },
 },
 {
   cat: 'Concurrency',
@@ -271,5 +477,16 @@ SS.addQuestions('java', [
     '`synchronized` = khoá nội tại đơn giản, an toàn khi thoát. `ReentrantLock` = khoá linh hoạt (timeout, interrupt, fairness, nhiều condition) đổi lấy trách nhiệm tự quản lý.',
   example:
     'Xử lý job cần "thử lấy lock trong 100ms, không được thì bỏ qua vòng này": chỉ `ReentrantLock.tryLock(100, MILLIS)` làm được. Nếu chỉ cần loại trừ lẫn nhau đơn giản, `synchronized` là đủ và rõ ràng hơn.',
+  viz: {
+    type: 'compare',
+    cols: ['synchronized', 'ReentrantLock'],
+    rows: [
+      ['tryLock / timeout', 'không', 'có — tránh chờ vô hạn, tránh deadlock'],
+      ['Huỷ khi chờ', 'không', 'lockInterruptibly()'],
+      ['Fairness (FIFO)', 'không', 'tuỳ chọn'],
+      ['Nhiều điều kiện chờ', 'một wait-set / monitor', 'nhiều Condition trên một lock'],
+      ['Nhả khoá', 'tự động khi rời block', 'phải unlock() trong finally'],
+    ],
+  },
 },
 ]);

@@ -54,8 +54,22 @@ if (problems.length) {
   process.exit(1);
 }
 
-/* Dọn & tạo dist */
-rmSync(DIST, { recursive: true, force: true });
+/* Cảnh báo (không dừng build) cho các trường tuỳ chọn */
+for (const t of topics) {
+  const list = SS.q[t.id] || [];
+  const ids = new Set(list.map((q) => q.id));
+  for (const q of list) {
+    if (Array.isArray(q.related))
+      for (const r of q.related)
+        if (!ids.has(r)) console.warn(`⚠ ${q.id}: related "${r}" không có trong chủ đề ${t.id}`);
+    if (q.viz && !q.viz.type) console.warn(`⚠ ${q.id}: viz thiếu "type"`);
+  }
+}
+
+/* Dọn & tạo dist — xoá nội dung, giữ lại thư mục gốc (tránh EPERM khi dist đang bị
+   một tiến trình khác giữ làm thư mục làm việc hoặc phục vụ tĩnh trên Windows) */
+mkdirSync(DIST, { recursive: true });
+for (const entry of readdirSync(DIST)) rmSync(join(DIST, entry), { recursive: true, force: true });
 mkdirSync(join(DIST, 'assets'), { recursive: true });
 
 /* Trang chủ */
@@ -76,12 +90,18 @@ for (const topic of topics) {
   const dir = join(DIST, topic.id);
   mkdirSync(dir, { recursive: true });
   const hasDiagrams = diagramTopics.has(topic.id) && list.some((q) => q.diagram);
-  writeFileSync(join(dir, 'index.html'), renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }));
+  const hasViz = list.some((q) => q.viz);
+  writeFileSync(
+    join(dir, 'index.html'),
+    renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz })
+  );
 }
 
 /* Tài nguyên tĩnh */
 cpSync(join(ROOT, 'assets', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 cpSync(join(ROOT, 'assets', 'enhance.js'), join(DIST, 'assets', 'enhance.js'));
+cpSync(join(ROOT, 'assets', 'topic-graph.js'), join(DIST, 'assets', 'topic-graph.js'));
+cpSync(join(ROOT, 'assets', 'viz'), join(DIST, 'assets', 'viz'), { recursive: true });
 if (diagramTopics.size) cpSync(diagramDir, join(DIST, 'assets', 'diagrams'), { recursive: true });
 
 /* SEO phụ trợ */

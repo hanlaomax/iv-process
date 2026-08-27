@@ -12,6 +12,16 @@ SS.addQuestions('java', [
     'Container là bên "sở hữu" việc tạo và wiring. Constructor injection biến hợp đồng phụ thuộc thành một phần chữ ký class — không thể tạo object ở trạng thái nửa vời.',
   example:
     '`@Service class OrderService { private final PaymentGateway gw; OrderService(PaymentGateway gw){ this.gw = gw; } }`. Trong unit test: `new OrderService(mockGw)` — không cần Spring context. Field injection sẽ buộc dùng reflection hoặc `@SpringBootTest` nặng nề.',
+  viz: {
+    type: 'compare',
+    cols: ['Constructor', 'Setter', 'Field (@Autowired)'],
+    rows: [
+      ['Phụ thuộc', 'final, bắt buộc', 'tuỳ chọn / cấu hình lại', 'không final được'],
+      ['Thiếu bean', 'phát hiện khi khởi động', 'muộn hơn', 'ẩn'],
+      ['Test', 'new thủ công, dễ', 'gọi setter', 'cần reflection / context'],
+      ['Circular dependency', 'lộ ngay (fail)', 'âm thầm chịu được', 'âm thầm chịu được'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -24,6 +34,16 @@ SS.addQuestions('java', [
     '`@Component` = "quét tôi". `@Bean` = "gọi factory method của tôi". `@Configuration` = "đây là nơi định nghĩa bean thủ công, có ngữ nghĩa singleton giữa các @Bean".',
   example:
     '`@Bean public ObjectMapper objectMapper() { return new ObjectMapper().registerModule(new JavaTimeModule()); }` — `ObjectMapper` là của Jackson, không thể gắn `@Component`, nên phải khai báo bằng `@Bean` kèm cấu hình.',
+  viz: {
+    type: 'compare',
+    cols: ['@Component', '@Bean', '@Configuration'],
+    rows: [
+      ['Đặt ở', 'class', 'method', 'class chứa các @Bean'],
+      ['Cách tạo bean', 'component scan tự phát hiện', 'gọi factory method', '—'],
+      ['Dùng cho', 'class của bạn', 'class thư viện bên thứ ba / cần logic khởi tạo', 'nơi khai báo bean thủ công'],
+      ['Ngữ nghĩa', 'stereotype', 'trả về = 1 bean', 'proxyBeanMethods giữ singleton giữa @Bean'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -37,6 +57,16 @@ SS.addQuestions('java', [
     'Spring singleton là "một per container", quản lý bởi container. Khác Singleton pattern (một per class loader, tự quản). State khả biến trong singleton bean là nguồn bug đa luồng.',
   example:
     'Một `@Service` lỡ có field `private User currentUser` được set trong method xử lý request → hai request đồng thời ghi đè nhau. Sửa: truyền `user` qua tham số, hoặc dùng `ThreadLocal`/request scope.',
+  viz: {
+    type: 'compare',
+    cols: ['singleton (mặc định)', 'prototype', 'request / session'],
+    rows: [
+      ['Số instance', '1 cho mỗi ApplicationContext', 'mới mỗi lần yêu cầu', '1 cho mỗi HTTP request / session'],
+      ['Khởi tạo', 'eager lúc startup', 'lazy khi cần', 'khi request tới'],
+      ['Callback huỷ', '@PreDestroy được gọi', 'KHÔNG gọi', 'khi request/session kết thúc'],
+      ['Lưu ý', 'phải stateless / thread-safe', 'container không quản lý huỷ', 'chỉ dùng trong web context'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -62,6 +92,18 @@ SS.addQuestions('java', [
     'Circular dependency chỉ "chữa" được khi có điểm chèn tham chiếu dở dang (setter/field). Vòng qua constructor là bế tắc thật sự. Nó thường là dấu hiệu phân tách trách nhiệm sai.',
   example:
     '`UserService` ↔ `NotificationService` gọi qua lại. Sửa bằng cách tách phần chung ra `UserNotificationFacade`, hoặc dùng `ApplicationEventPublisher` để `UserService` phát event thay vì gọi trực tiếp.',
+  viz: {
+    type: 'flow',
+    title: 'Three-level cache "chữa" vòng field/setter',
+    nodes: ['tạo A (dở dang)', 'đặt ref sớm vào cache', 'tiêm A dở vào B', 'hoàn thiện B', 'hoàn thiện A'],
+    steps: [
+      { to: 0, label: 'instantiate A qua constructor (chưa populate)' },
+      { to: 1, label: 'đặt tham chiếu sớm của A vào early singleton cache' },
+      { to: 2, label: 'B cần A → lấy tham chiếu A dở dang' },
+      { to: 3, label: 'B được wiring đầy đủ và hoàn thiện' },
+      { to: 4, label: 'quay lại tiêm B vào A, hoàn thiện A. (Constructor injection: bế tắc → BeanCurrentlyInCreationException)' },
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -78,6 +120,16 @@ SS.addQuestions('java', [
     'ApplicationContext = BeanFactory + hạ tầng ứng dụng doanh nghiệp (event, i18n, môi trường) + eager/fail-fast startup.',
   example:
     'Khi khai báo sai kiểu bean, `ApplicationContext` làm app **không khởi động được** với thông báo rõ ràng — tốt hơn nhiều so với lỗi runtime lúc request đầu tiên chạm tới bean đó.',
+  viz: {
+    type: 'compare',
+    cols: ['BeanFactory', 'ApplicationContext'],
+    rows: [
+      ['Khởi tạo singleton', 'lazy khi getBean', 'eager lúc startup (fail-fast)'],
+      ['BeanPostProcessor', 'phải tự đăng ký', 'tự nhận diện'],
+      ['i18n / event / Environment', 'không', 'có (MessageSource, publisher, profiles)'],
+      ['Thực tế dùng', 'chỉ nội bộ Spring', 'luôn dùng cái này'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -89,6 +141,19 @@ SS.addQuestions('java', [
     'BFPP thao tác trên "bản thiết kế" (definition) trước khi build. BPP thao tác trên "sản phẩm" (instance) trong lúc build. Đây là cơ chế Spring tự mở rộng chính nó.',
   example:
     '`@ConfigurationProperties` binding, `@Value` resolution là nhờ BFPP nạp property. `@Transactional`, `@Cacheable`, `@Async` hoạt động là nhờ BPP bọc bean bằng proxy ở `postProcessAfterInitialization`.',
+  viz: {
+    type: 'flow',
+    title: 'BFPP thao tác "bản thiết kế", BPP thao tác "sản phẩm"',
+    nodes: ['definition', 'BFPP', 'tạo instance', 'BPP before', '@PostConstruct', 'BPP after', 'sẵn sàng'],
+    steps: [
+      { to: 1, label: 'BeanFactoryPostProcessor: sửa định nghĩa, ví dụ resolve ${...}' },
+      { to: 2, label: 'container tạo instance + populate DI' },
+      { to: 3, label: 'BeanPostProcessor.postProcessBeforeInitialization' },
+      { to: 4, label: '@PostConstruct / afterPropertiesSet / initMethod' },
+      { to: 5, label: 'postProcessAfterInitialization — nơi bean bị bọc thành proxy AOP/transaction' },
+      { to: 6, label: 'bean bạn nhận thực chất là proxy' },
+    ],
+  },
 },
 {
   cat: 'Spring AOP',
@@ -114,6 +179,18 @@ SS.addQuestions('java', [
     '`@Transactional` là advice quanh proxy + quy tắc rollback theo loại exception. "Nuốt exception" hoặc "gọi nội bộ" là hai cách vô hiệu hoá nó mà không báo lỗi.',
   example:
     '`@Transactional void importFile() throws IOException { ... }` — nếu `IOException` xảy ra sau khi đã ghi vài bản ghi, transaction **vẫn commit** phần dở dang. Sửa: `@Transactional(rollbackFor = Exception.class)`.',
+  viz: {
+    type: 'flow',
+    title: '@Transactional = advice quanh proxy',
+    nodes: ['gọi proxy', 'mở transaction', 'chạy method', 'ném exception?', 'commit / rollback'],
+    steps: [
+      { to: 0, label: 'lời gọi phải đi qua proxy (public, từ bean khác)' },
+      { to: 1, label: 'TransactionInterceptor mở tx qua PlatformTransactionManager' },
+      { to: 2, label: 'thân method chạy' },
+      { to: 3, label: 'unchecked (RuntimeException/Error) → rollback; checked → COMMIT trừ khi rollbackFor' },
+      { to: 4, label: 'không tác dụng nếu: nuốt exception, self-invocation, method không public' },
+    ],
+  },
 },
 {
   cat: 'Spring AOP',
@@ -126,6 +203,16 @@ SS.addQuestions('java', [
     'REQUIRED = "một transaction dùng chung". REQUIRES_NEW = "transaction tách rời hoàn toàn". NESTED = "checkpoint bên trong transaction cha".',
   example:
     'Ghi audit log phải luôn lưu dù nghiệp vụ chính fail: đặt `@Transactional(propagation = REQUIRES_NEW)` cho `auditService.log(...)`. Nếu để REQUIRED, khi đơn hàng rollback thì log cũng biến mất.',
+  viz: {
+    type: 'compare',
+    cols: ['REQUIRED (mặc định)', 'REQUIRES_NEW', 'NESTED'],
+    rows: [
+      ['Với tx đang có', 'tham gia', 'tạm treo, mở tx mới độc lập', 'tạo savepoint bên trong'],
+      ['Rollback', 'ở bất kỳ đâu → cả tx rollback', 'riêng, không ảnh hưởng tx ngoài', 'chỉ về savepoint'],
+      ['Nếu tx ngoài rollback', '—', 'phần mới vẫn commit', 'phần nested cũng mất'],
+      ['Yêu cầu', '—', 'thường connection khác', 'DB hỗ trợ savepoint'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -138,6 +225,17 @@ SS.addQuestions('java', [
     'By-type trước, rồi thu hẹp bằng `@Primary` (mặc định toàn cục) hoặc `@Qualifier` (chỉ định cục bộ). Tên bean là "tie-breaker" cuối.',
   example:
     'Hai `DataSource`: `@Primary` cho `DataSource` chính, `@Qualifier("readReplicaDataSource")` tại nơi cần đọc từ replica. Repository báo cáo tiêm replica, phần còn lại dùng bean primary.',
+  viz: {
+    type: 'flow',
+    title: '@Autowired resolve khi có nhiều ứng viên',
+    nodes: ['khớp theo kiểu', 'nhiều ứng viên?', 'lọc @Primary', 'vẫn nhiều?', '@Qualifier / tên bean', 'không giải quyết được'],
+    steps: [
+      { to: 0, label: 'bước 1: tìm bean cùng kiểu' },
+      { to: 2, label: 'bước 2: nếu nhiều → chọn bean đánh dấu @Primary' },
+      { to: 4, label: 'bước 3: so khớp @Qualifier("name") hoặc tên field/param với tên bean (ưu tiên hơn @Primary)' },
+      { to: 5, label: 'không còn cách phân biệt → NoUniqueBeanDefinitionException' },
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -153,6 +251,19 @@ SS.addQuestions('java', [
     'Vòng đời bean con bị "kẹt" theo bean chứa nó nếu tiêm trực tiếp. Cần một lớp gián tiếp (provider/proxy/lookup) để mỗi lần truy cập mới trigger container tạo instance.',
   example:
     '`@Service class BatchRunner { private final ObjectProvider<JobContext> jobCtx; void run(){ JobContext c = jobCtx.getObject(); ... } }` — mỗi lần `run()` nhận một `JobContext` sạch, dù `BatchRunner` là singleton.',
+  viz: {
+    type: 'tree',
+    title: 'Lấy instance prototype mới mỗi lần',
+    root: {
+      label: 'Tiêm thẳng → prototype bị "đóng băng" trong singleton',
+      children: [
+        { label: 'ObjectProvider<T> / Provider<T>', note: 'gọi .getObject() mỗi lần cần' },
+        { label: '@Lookup method', note: 'Spring override method để trả bean mới' },
+        { label: 'Scoped proxy', note: '@Scope(proxyMode = TARGET_CLASS) — proxy tự lấy instance mới' },
+        { label: 'inject ApplicationContext + getBean()', note: 'coupling cao, ít dùng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -165,6 +276,16 @@ SS.addQuestions('java', [
     '`${}` là tra cứu cấu hình tĩnh. `#{}` là tính toán biểu thức động. Nhầm lẫn khiến giá trị không được resolve hoặc SpEL injection.',
   example:
     '`@Value("${app.max-retry:3}") int maxRetry;` lấy từ config, mặc định 3. `@Value("#{${app.rate} * 60}") int perMinute;` tính từ giá trị config. Cẩn thận SpEL với input người dùng — rủi ro thực thi mã.',
+  viz: {
+    type: 'compare',
+    cols: ['${property.key:default}', '#{expression}'],
+    rows: [
+      ['Là gì', 'property placeholder', 'SpEL — Spring Expression Language'],
+      ['Nguồn', 'Environment: yml, env var, --arg, config server', 'biểu thức chạy lúc tạo bean'],
+      ['Làm được', 'tra cứu cấu hình tĩnh + default', 'gọi method, truy cập bean khác, toán tử, T(...)'],
+      ['Rủi ro', 'giá trị không resolve nếu sai cú pháp', 'SpEL injection nếu ghép input người dùng'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -177,6 +298,16 @@ SS.addQuestions('java', [
     'Profile là công tắc điều kiện ở tầng định nghĩa bean và property, giúp một artifact chạy đúng ở nhiều môi trường mà không cần build lại.',
   example:
     '`@Bean @Profile("!prod") CommandLineRunner seedData(...){...}` chỉ nạp dữ liệu mẫu ngoài production. `@Bean @Profile("prod") DataSource realDs()` vs `@Profile("test") DataSource h2()`.',
+  viz: {
+    type: 'compare',
+    cols: ['profile: test', 'profile: prod'],
+    rows: [
+      ['DataSource', 'H2 in-memory', 'DataSource thật (@Profile("prod"))'],
+      ['seedData CommandLineRunner', 'chạy (@Profile("!prod"))', 'không chạy'],
+      ['File cấu hình', 'application-test.yml chồng lên', 'application-prod.yml chồng lên'],
+      ['Kích hoạt', 'spring.profiles.active=test', 'spring.profiles.active=prod'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -189,6 +320,17 @@ SS.addQuestions('java', [
     'Event giúp giảm coupling giữa các module trong cùng process (in-process pub/sub). Đồng bộ theo mặc định; `AFTER_COMMIT` là chốt an toàn cho side-effect ra ngoài.',
   example:
     '`OrderService` phát `OrderPaidEvent`; `InvoiceListener` (AFTER_COMMIT) tạo hoá đơn, `EmailListener` (AFTER_COMMIT + @Async) gửi mail. `OrderService` không biết gì về invoice/email → dễ thêm listener mới.',
+  viz: {
+    type: 'sequence',
+    title: 'Event in-process + @TransactionalEventListener',
+    actors: ['OrderService', 'TX', 'InvoiceListener', 'EmailListener'],
+    messages: [
+      { from: 0, to: 1, label: 'publishEvent(OrderPaidEvent)' },
+      { from: 1, to: 1, label: 'commit thành công' },
+      { from: 1, to: 2, label: 'AFTER_COMMIT → tạo hoá đơn' },
+      { from: 1, to: 3, label: 'AFTER_COMMIT + @Async → gửi mail', dashed: true },
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -201,6 +343,17 @@ SS.addQuestions('java', [
     'Vị trí class main quyết định phạm vi quét mặc định. Đây là lý do quy ước đặt class main ở package gốc của dự án.',
   example:
     'Class main ở `com.acme.app`, nhưng có `@Repository` ở `com.acme.shared.persistence` → không được quét, khởi động fail. Sửa: chuyển class main lên `com.acme`, hoặc khai báo `@SpringBootApplication(scanBasePackages = "com.acme")`.',
+  viz: {
+    type: 'flow',
+    title: 'Phạm vi component scan',
+    nodes: ['@SpringBootApplication', '@ComponentScan', 'quét package main + sub', 'tìm @Component', 'đăng ký bean'],
+    steps: [
+      { to: 1, label: '@SpringBootApplication = @Configuration + @EnableAutoConfiguration + @ComponentScan' },
+      { to: 2, label: 'mặc định quét package của class main và mọi sub-package' },
+      { to: 3, label: 'tìm class có @Component / @Service / @Repository / @Controller' },
+      { to: 4, label: 'đăng ký bean. Class ngoài cây package đó → KHÔNG được quét → "bean không tìm thấy"' },
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -212,6 +365,16 @@ SS.addQuestions('java', [
     'Full mode giữ ngữ nghĩa singleton kể cả khi bạn gọi `@Bean` method như hàm thường. Lite mode bỏ proxy để nhẹ, đổi lại bạn chịu trách nhiệm không gọi chéo.',
   example:
     'Spring Boot auto-configuration đặt `proxyBeanMethods = false` để tăng tốc startup. Trong config của bạn, nếu `beanA()` gọi `beanB()`, hãy dùng `@Bean A a(B b)` (nhận `b` qua tham số) thay vì gọi `beanB()` trực tiếp.',
+  viz: {
+    type: 'compare',
+    cols: ['Full mode (proxyBeanMethods=true)', 'Lite mode (=false)'],
+    rows: [
+      ['@Configuration', 'bọc CGLIB proxy', 'không proxy'],
+      ['Gọi chéo @Bean method', 'trả về cùng singleton đã đăng ký', 'tạo object mới mỗi lần'],
+      ['Startup', 'chậm hơn, tốn bộ nhớ', 'nhanh, nhẹ'],
+      ['Trách nhiệm', 'gọi như hàm thường vẫn đúng', 'phải nhận bean qua tham số method'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -227,6 +390,19 @@ SS.addQuestions('java', [
     'Auto-config là "cấu hình mặc định có điều kiện": có `spring-data-redis` + `redis.host` → tự tạo `RedisTemplate`, trừ khi bạn đã tự khai báo (`@ConditionalOnMissingBean`).',
   example:
     'Thêm dependency `spring-boot-starter-data-jpa` + `com.h2database:h2` → Boot tự cấu hình `DataSource` H2 in-memory, `EntityManagerFactory`, `JpaTransactionManager`. Bạn khai báo `DataSource` riêng → auto-config lùi lại nhờ `@ConditionalOnMissingBean`.',
+  viz: {
+    type: 'tree',
+    title: '@Conditional — cấu hình mặc định có điều kiện',
+    root: {
+      label: '@Conditional(...) — chỉ đăng ký khi điều kiện đúng',
+      children: [
+        { label: '@ConditionalOnClass / OnMissingClass', note: 'theo class có trên classpath' },
+        { label: '@ConditionalOnBean / OnMissingBean', note: 'auto-config lùi lại nếu bạn đã tự khai báo' },
+        { label: '@ConditionalOnProperty', note: 'theo giá trị property' },
+        { label: '@ConditionalOnWebApplication / OnExpression', note: '…' },
+      ],
+    },
+  },
 },
 {
   cat: 'Spring AOP',
@@ -239,6 +415,17 @@ SS.addQuestions('java', [
     'Cả hai chỉ là advice quanh proxy. `@Async` cần executor có giới hạn; `@Scheduled` cần pool và, trong môi trường scale-out, cần cơ chế chọn một node chạy.',
   example:
     'Job gửi email nhắc hạn chạy `@Scheduled(cron="0 0 8 * * *")` trên 3 pod → 3 lần gửi. Bọc bằng `@SchedulerLock` (ShedLock + Redis/DB) để chỉ một pod thực thi mỗi lần.',
+  viz: {
+    type: 'compare',
+    cols: ['@Async', '@Scheduled'],
+    rows: [
+      ['Cần bật', '@EnableAsync', '@EnableScheduling'],
+      ['Cơ chế', 'đẩy lời gọi sang TaskExecutor, trả về ngay', 'chạy theo fixedRate / fixedDelay / cron'],
+      ['Cạm bẫy chính', 'executor mặc định tạo thread vô hạn', '1 thread cho mọi job → job chậm làm trễ job khác'],
+      ['Trong cluster', '—', 'mọi node đều chạy → cần ShedLock'],
+      ['Chung', 'self-invocation vô hiệu hoá (advice quanh proxy)', 'method phải public'],
+    ],
+  },
 },
 {
   cat: 'Spring Core / IoC',
@@ -253,5 +440,18 @@ SS.addQuestions('java', [
     'Bean singleton nên là "hàm không trạng thái có phụ thuộc". Trạng thái đi theo lời gọi (stack), không đi theo bean.',
   example:
     '`@Service class PdfService { private ByteArrayOutputStream buffer; }` — sai, hai request ghi chung buffer. Đúng: tạo `buffer` cục bộ trong method `generate()` và trả về, không lưu lại trên bean.',
+  viz: {
+    type: 'tree',
+    title: 'Giữ singleton bean an toàn đa luồng',
+    root: {
+      label: 'Spring KHÔNG làm bean thread-safe',
+      children: [
+        { label: 'Không giữ state khả biến trên field', note: 'đừng lưu dữ liệu request vào field service' },
+        { label: 'Phụ thuộc được tiêm thường đã thread-safe', note: 'repository, template — dùng thoải mái' },
+        { label: 'State theo request', note: 'biến cục bộ method, tham số, ThreadLocal, scope request/prototype' },
+        { label: 'State dùng chung thật sự', note: 'synchronized, Atomic*, ConcurrentHashMap' },
+      ],
+    },
+  },
 },
 ]);

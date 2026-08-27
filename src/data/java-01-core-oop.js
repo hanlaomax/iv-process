@@ -11,6 +11,15 @@ SS.addQuestions('java', [
     'Quan hệ bao nhau: JDK ⊃ JRE ⊃ JVM. JVM cho tính "write once run anywhere" vì bytecode độc lập nền tảng, chỉ JVM là phụ thuộc OS/CPU.',
   example:
     'Trên CI bạn cần `eclipse-temurin:17-jdk` để `mvn package`. Nhưng image production chỉ cần runtime: dùng `jlink` tạo custom JRE ~40MB chứa đúng module ứng dụng dùng, rồi copy vào `distroless` image — nhỏ hơn nhiều so với đóng gói cả JDK.',
+  viz: {
+    type: 'layers',
+    title: 'JDK ⊃ JRE ⊃ JVM',
+    layers: [
+      { name: 'JDK', tag: 'viết + biên dịch + chạy', note: 'JRE + công cụ: javac, jar, javadoc, jlink, jshell…' },
+      { name: 'JRE', tag: 'chỉ chạy', note: 'JVM + thư viện chuẩn (module java.base…) + file cấu hình' },
+      { name: 'JVM', tag: 'thực thi bytecode', note: 'nạp/verify class, JIT, quản lý bộ nhớ + GC. Là spec: HotSpot, OpenJ9' },
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -27,6 +36,16 @@ SS.addQuestions('java', [
     'Cấu trúc dữ liệu băm định vị phần tử qua `hashCode()` (chọn bucket) rồi mới dùng `equals()` (so trong bucket). Hai bước phải nhất quán, nên override thì override cả cặp.',
   example:
     'Một `class Money {currency, amount}` chỉ override `equals` mà quên `hashCode`. Khi làm key trong `Map<Money, Integer>`, hai object `Money("USD",10)` được coi là khác nhau → đếm số lượng sai. Sửa bằng `Objects.hash(currency, amount)` và `Objects.equals(...)` trong `equals`.',
+  viz: {
+    type: 'compare',
+    cols: ['==', 'equals()'],
+    rows: [
+      ['Bản chất', 'toán tử', 'method (override được)'],
+      ['So sánh', 'giá trị biến / địa chỉ tham chiếu', 'giá trị logic'],
+      ['Mặc định ở Object', '—', 'cũng so sánh tham chiếu'],
+      ['Cặp bắt buộc', '—', 'đi cùng hashCode()'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -40,6 +59,16 @@ SS.addQuestions('java', [
     'Immutability đổi lấy an toàn và khả năng chia sẻ/cache bằng chi phí tạo object mới khi biến đổi. StringBuilder là "String có thể sửa" cục bộ trong một thread.',
   example:
     'Ghép 10.000 dòng log: `s += line` tạo ~10.000 String và mảng char trung gian → O(n²). Đổi sang `StringBuilder` với `append` → O(n), giảm rõ rệt GC pressure. Trong microservice xử lý batch, đây là điểm tối ưu hay bị bỏ sót.',
+  viz: {
+    type: 'compare',
+    cols: ['String', 'StringBuilder', 'StringBuffer'],
+    rows: [
+      ['Khả biến', 'không (immutable)', 'có', 'có'],
+      ['Đồng bộ', '— (bất biến nên an toàn)', 'không', 'có (synchronized)'],
+      ['Nối chuỗi trong vòng lặp', 'O(n²), nhiều rác', 'O(n), nhanh', 'O(n), chậm hơn do khoá'],
+      ['Dùng khi', 'giá trị cố định, key map', '1 thread ghép chuỗi', 'nhiều thread ghi 1 buffer (hiếm)'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -52,6 +81,16 @@ SS.addQuestions('java', [
     'Ba thứ chỉ giống tên. Cơ chế dọn tài nguyên hiện đại là try-with-resources (`AutoCloseable`) và `java.lang.ref.Cleaner`, không phải `finalize`.',
   example:
     'Code cũ đóng `Connection` trong `finalize()` → connection pool cạn kiệt vì GC chạy trễ. Sửa: `try (Connection c = ds.getConnection()) { ... }` đảm bảo `close()` gọi ngay khi rời block, kể cả khi ném exception.',
+  viz: {
+    type: 'compare',
+    cols: ['final', 'finally', 'finalize()'],
+    rows: [
+      ['Loại', 'từ khoá', 'khối lệnh', 'method của Object'],
+      ['Vai trò', 'bất biến: biến / method / class', 'luôn chạy khi rời try', 'GC gọi trước khi thu hồi'],
+      ['Thời điểm', 'biên dịch', 'runtime, sau try/catch', 'không xác định, có thể không chạy'],
+      ['Khuyến nghị', 'dùng nhiều', 'thay bằng try-with-resources', 'deprecated (Java 9) — tránh'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -64,6 +103,16 @@ SS.addQuestions('java', [
     'Overloading là "chọn method nào" do compiler quyết theo kiểu khai báo. Overriding là "phiên bản nào của method" do JVM quyết theo object thật — nền tảng của đa hình.',
   example:
     'Bug kinh điển: `List<Integer> l; l.remove(1)` gọi `remove(int index)` (overload) chứ không phải `remove(Object)` → xoá nhầm phần tử vị trí 1. Muốn xoá giá trị 1 phải `l.remove(Integer.valueOf(1))`. Đây là overloading resolution lúc compile.',
+  viz: {
+    type: 'compare',
+    cols: ['Overloading', 'Overriding'],
+    rows: [
+      ['Chữ ký', 'khác danh sách tham số', 'giống hệt lớp cha'],
+      ['Phạm vi', 'cùng class / kế thừa', 'lớp con định nghĩa lại của lớp cha'],
+      ['Phân giải', 'lúc biên dịch (kiểu tĩnh)', 'lúc chạy (kiểu thực của object)'],
+      ['Cơ chế', 'static dispatch', 'dynamic dispatch (virtual method table)'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -76,6 +125,17 @@ SS.addQuestions('java', [
     'Abstract class = khung xương chung (code + state) theo trục "là gì". Interface = hợp đồng theo trục "làm được gì", đa kế thừa. Ưu tiên interface + composition.',
   example:
     'Thiết kế module thanh toán: `interface PaymentGateway { PaymentResult charge(...); }` cho phép `StripeGateway`, `VnpayGateway`, `MockGateway` (test). Một `AbstractHttpGateway` (abstract class) chứa logic retry/timeout dùng chung, các gateway cụ thể extends nó nhưng vẫn implements interface để service phụ thuộc vào hợp đồng.',
+  viz: {
+    type: 'compare',
+    cols: ['abstract class', 'interface'],
+    rows: [
+      ['State (field khả biến)', 'có', 'không (chỉ hằng public static final)'],
+      ['Constructor', 'có', 'không'],
+      ['Đa kế thừa', 'chỉ 1 class', 'implements nhiều'],
+      ['Method có thân', 'mọi access modifier', 'default / static / private'],
+      ['Ý nghĩa', 'is-a — là một loại', 'can-do — năng lực / hợp đồng'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -89,6 +149,23 @@ SS.addQuestions('java', [
     'Checked = "hợp đồng lỗi" nằm trong chữ ký method, ép caller quyết định. Unchecked = lỗi không kỳ vọng caller xử lý ngay. Lựa chọn là về API design, không phải kỹ thuật.',
   example:
     'Spring bọc `SQLException` (checked) thành `DataAccessException` (unchecked) với cây con rõ nghĩa (`DuplicateKeyException`, `DeadlockLoserDataAccessException`). Nhờ đó tầng service không phải `try/catch SQLException` khắp nơi, và code không bị khoá vào JDBC.',
+  viz: {
+    type: 'tree',
+    title: 'Cây Throwable',
+    root: {
+      label: 'Throwable',
+      children: [
+        { label: 'Error', note: 'lỗi hệ thống — không catch' },
+        {
+          label: 'Exception',
+          children: [
+            { label: 'RuntimeException + con', note: 'UNCHECKED — NPE, IllegalArgument/State; không bắt buộc khai báo' },
+            { label: 'các Exception còn lại', note: 'CHECKED — IOException, SQLException; bắt buộc catch hoặc throws' },
+          ],
+        },
+      ],
+    },
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -101,6 +178,18 @@ SS.addQuestions('java', [
     'Compiler sinh ra khối `finally` đúng chuẩn (null-safe, đóng ngược thứ tự, suppressed exception) thay cho bạn — loại bỏ cả một lớp bug tài nguyên.',
   example:
     '`try (var in = Files.newInputStream(p); var out = Files.newOutputStream(q)) { in.transferTo(out); }` — cả hai stream đóng đúng, nếu ổ đĩa đầy khi ghi thì `IOException` gốc vẫn hiện, lỗi khi `close()` được đính kèm chứ không thay thế.',
+  viz: {
+    type: 'flow',
+    title: 'Đóng resource theo thứ tự ngược',
+    nodes: ['mở A', 'mở B', 'thân try', 'close B', 'close A'],
+    steps: [
+      { to: 0, label: 'mở resource A (AutoCloseable) trong try (...)' },
+      { to: 1, label: 'mở resource B' },
+      { to: 2, label: 'chạy thân try — có thể ném exception' },
+      { to: 3, label: 'close B trước (ngược thứ tự khai báo)' },
+      { to: 4, label: 'close A — lỗi khi close bị suppressed, không che lỗi gốc' },
+    ],
+  },
 },
 {
   cat: 'Collections',
@@ -115,6 +204,15 @@ SS.addQuestions('java', [
     'Wrapper là object có định danh (identity); primitive chỉ có giá trị. Trộn hai thế giới bằng autobox tiện nhưng che giấu cấp phát heap và nguy cơ NPE.',
   example:
     'Tính tổng: `Long total = 0L; for (long v : values) total += v;` — mỗi vòng lặp unbox `total`, cộng, rồi box lại → hàng triệu `Long`. Đổi `Long` thành `long` giúp nhanh gấp nhiều lần và không sinh rác.',
+  viz: {
+    type: 'compare',
+    cols: ['Integer a=100, b=100', 'Integer a=200, b=200'],
+    rows: [
+      ['a == b', 'true — nằm trong cache [-128, 127]', 'false — hai object mới trên heap'],
+      ['a.equals(b)', 'true', 'true'],
+      ['Bài học', 'luôn so sánh wrapper bằng .equals()', 'luôn so sánh wrapper bằng .equals()'],
+    ],
+  },
 },
 {
   cat: 'Collections',
@@ -127,6 +225,18 @@ SS.addQuestions('java', [
     'Big-O của LinkedList đẹp trên giấy nhưng hằng số lớn và cache miss khiến nó chậm hơn ArrayList trong hầu hết workload thực.',
   example:
     'Hàng đợi task in-memory: chọn `ArrayDeque` thay `LinkedList` — `offer`/`poll` O(1), mảng vòng liền mạch, ít GC hơn. Chỉ khi cần list truy cập ngẫu nhiên thì `ArrayList`.',
+  viz: {
+    type: 'compare',
+    cols: ['ArrayList', 'LinkedList'],
+    rows: [
+      ['Cấu trúc', 'mảng động (liền mạch)', 'danh sách liên kết đôi'],
+      ['get(i)', 'O(1)', 'O(n) — phải duyệt'],
+      ['add/remove cuối', 'amortized O(1)', 'O(1)'],
+      ['add/remove giữa', 'O(n) — dịch phần tử', 'O(n) tìm nút + O(1) nối'],
+      ['Cache locality', 'tốt', 'kém, tốn con trỏ'],
+      ['Thực tế', 'mặc định nên chọn', 'hiếm; cần Deque → ArrayDeque'],
+    ],
+  },
 },
 {
   cat: 'Collections',
@@ -139,6 +249,18 @@ SS.addQuestions('java', [
     'HashMap đánh đổi bộ nhớ (bảng thưa) lấy tốc độ truy cập trung bình O(1). Chất lượng `hashCode` và load factor quyết định nó gần O(1) hay suy biến về O(n)/O(log n).',
   example:
     'Cache 1 triệu bản ghi: khởi tạo `new HashMap<>(1_400_000)` (≈ 1M/0.75) để tránh ~20 lần resize + rehash tốn CPU và tạo rác lúc warm-up. Với key là enum/immutable có hashCode tốt, tra cứu ổn định O(1).',
+  viz: {
+    type: 'flow',
+    title: 'HashMap định vị một key',
+    nodes: ['key', 'hashCode()', 'khuấy bit', 'index = (n-1) & hash', 'bucket', 'list → cây đỏ-đen'],
+    steps: [
+      { to: 1, label: 'tính hashCode() của key' },
+      { to: 2, label: 'khuấy bit: h ^ (h >>> 16) để bit cao ảnh hưởng index' },
+      { to: 3, label: 'index trong bảng (n = capacity, luỹ thừa 2)' },
+      { to: 4, label: 'tới bucket tương ứng' },
+      { to: 5, label: '≥ 8 phần tử & bảng ≥ 64 → treeify thành cây O(log n)' },
+    ],
+  },
 },
 {
   cat: 'Collections',
@@ -152,6 +274,17 @@ SS.addQuestions('java', [
     'Khác nhau ở **hạt khoá**: Hashtable/synchronizedMap khoá cả map; ConcurrentHashMap khoá theo bucket + đọc lock-free → thông lượng cao khi nhiều thread.',
   example:
     'Bộ đếm truy cập theo endpoint dưới tải cao: `map.merge(path, 1L, Long::sum)` trên `ConcurrentHashMap` là nguyên tử và không khoá toàn cục. Dùng `synchronizedMap` ở đây sẽ khiến mọi request tuần tự hoá qua một lock.',
+  viz: {
+    type: 'compare',
+    cols: ['HashMap', 'Hashtable', 'synchronizedMap', 'ConcurrentHashMap'],
+    rows: [
+      ['Đồng bộ', 'không', 'khoá toàn map', 'khoá toàn map', 'CAS + khoá theo bucket'],
+      ['Đọc', 'không khoá', 'khoá', 'khoá', 'lock-free'],
+      ['null key/value', 'cho phép', 'không', 'theo map gốc', 'không'],
+      ['Iterator', 'fail-fast', 'fail-fast', 'fail-fast', 'weakly-consistent'],
+      ['Dùng', '1 thread', 'đừng dùng nữa', 'ít', 'nhiều thread, thông lượng cao'],
+    ],
+  },
 },
 {
   cat: 'Collections',
@@ -163,6 +296,16 @@ SS.addQuestions('java', [
     '`ConcurrentModificationException` là cơ chế phát hiện bug "sửa collection khi đang duyệt", không phải lỗi đa luồng thuần. Sửa đúng: dùng `iterator.remove()`, `removeIf()`, hoặc gom thay đổi rồi áp dụng sau.',
   example:
     '`for (Order o : orders) if (o.isExpired()) orders.remove(o);` → CME. Sửa: `orders.removeIf(Order::isExpired)`. Nếu cần xử lý song song khi duyệt, chuyển sang `ConcurrentHashMap`/`CopyOnWriteArrayList`.',
+  viz: {
+    type: 'compare',
+    cols: ['fail-fast', 'fail-safe'],
+    rows: [
+      ['Ví dụ', 'ArrayList, HashMap', 'CopyOnWriteArrayList, ConcurrentHashMap'],
+      ['Cơ chế', 'theo dõi biến đếm modCount', 'duyệt snapshot / weakly-consistent view'],
+      ['Khi sửa lúc duyệt', 'ném ConcurrentModificationException', 'không ném, có thể bỏ sót thay đổi mới'],
+      ['Sửa đúng', 'iterator.remove(), removeIf()', '—'],
+    ],
+  },
 },
 {
   cat: 'Collections',
@@ -175,6 +318,16 @@ SS.addQuestions('java', [
     'Comparable = "thứ tự mặc định của tôi". Comparator = "cách sắp xếp theo ngữ cảnh". Hàm so sánh phải là total order đúng chuẩn, nếu không cấu trúc sắp xếp sẽ hỏng.',
   example:
     'Danh sách sản phẩm: thứ tự tự nhiên theo `sku` (`Comparable`), nhưng màn hình cần sắp theo giá tăng dần rồi tên: `products.sort(comparing(Product::getPrice).thenComparing(Product::getName))`. Không cần sửa class `Product`.',
+  viz: {
+    type: 'compare',
+    cols: ['Comparable<T>', 'Comparator<T>'],
+    rows: [
+      ['Ở đâu', 'trong chính class — compareTo()', 'lớp / biểu thức bên ngoài'],
+      ['Số lượng', '1 thứ tự tự nhiên', 'nhiều, tuỳ ngữ cảnh'],
+      ['Truyền vào', '—', 'sort(), TreeMap, PriorityQueue'],
+      ['Bẫy', 'a - b tràn số → dùng Integer.compare', 'phải là total order nhất quán'],
+    ],
+  },
 },
 {
   cat: 'Generics',
@@ -188,6 +341,16 @@ SS.addQuestions('java', [
     'Erasure giữ tương thích ngược với code trước Java 5. Wildcard cho phép API vừa an toàn kiểu vừa linh hoạt: chọn `extends` hay `super` tuỳ method đang sản xuất hay tiêu thụ phần tử.',
   example:
     '`Collections.copy(List<? super T> dest, List<? extends T> src)`: `src` là producer (đọc phần tử) nên `extends`; `dest` là consumer (ghi phần tử) nên `super`. Nhờ vậy có thể copy `List<Integer>` sang `List<Number>`.',
+  viz: {
+    type: 'compare',
+    cols: ['? extends T — Producer', '? super T — Consumer'],
+    rows: [
+      ['Đọc ra', 'chắc chắn là T', 'chỉ chắc là Object'],
+      ['Ghi vào', 'không (trừ null)', 'add(T) được'],
+      ['Vai trò', 'nguồn cung cấp dữ liệu', 'nơi nhận dữ liệu'],
+      ['Trong copy(dest, src)', 'src', 'dest'],
+    ],
+  },
 },
 {
   cat: 'Java 8+',
@@ -202,6 +365,15 @@ SS.addQuestions('java', [
     'Stream là "công thức" chứ không phải dữ liệu; không có terminal thì không tính toán. `flatMap` = `map` + làm phẳng, dành cho quan hệ một-nhiều.',
   example:
     'Lấy tất cả line-item của các đơn hàng: `orders.stream().flatMap(o -> o.getItems().stream()).filter(i -> i.getQty() > 0).collect(toList())`. Dùng `map` ở đây sẽ ra `Stream<List<Item>>`, không phải `Stream<Item>`.',
+  viz: {
+    type: 'flow',
+    title: 'Không có terminal thì không tính toán',
+    nodes: ['nguồn', 'filter (lazy)', 'map (lazy)', 'collect (terminal)'],
+    steps: [
+      { to: 2, label: 'xâu chuỗi các phép intermediate — chưa duyệt phần tử nào' },
+      { to: 3, label: 'terminal kích hoạt: duyệt nguồn 1 lần, các phép được fusion; limit/findFirst → short-circuit' },
+    ],
+  },
 },
 {
   cat: 'Java 8+',
@@ -218,6 +390,16 @@ SS.addQuestions('java', [
     'Optional là công cụ thiết kế API ở **ranh giới trả về**, không phải để thay thế mọi null trong hệ thống. Giá trị của nó là ép xử lý nhánh rỗng tại compile-time-ish.',
   example:
     '`userRepo.findByEmail(email).map(User::getId).orElseThrow(() -> new BusinessException("Email chưa đăng ký"))` — dòng này vừa gọn vừa không thể quên nhánh "không tìm thấy", khác hẳn `user.getId()` có nguy cơ NPE.',
+  viz: {
+    type: 'flow',
+    title: 'Optional ở ranh giới trả về',
+    nodes: ['findByEmail(email)', 'Optional<User>', '.map(User::getId)', '.orElseThrow(...)'],
+    steps: [
+      { to: 1, label: 'repo trả Optional — không bao giờ trả null' },
+      { to: 2, label: 'map: có giá trị thì biến đổi, rỗng thì giữ rỗng' },
+      { to: 3, label: 'rỗng → ném BusinessException; không dùng get() trần, không isPresent()+get()' },
+    ],
+  },
 },
 {
   cat: 'Java 8+',
@@ -230,6 +412,16 @@ SS.addQuestions('java', [
     'Functional interface là "kiểu" của hành vi; lambda/method reference là hai cách viết một giá trị hành vi. Lambda nhẹ hơn anonymous class về ngữ nghĩa `this` và bytecode.',
   example:
     '`list.forEach(System.out::println)`, `stream.map(String::trim).filter(s -> !s.isBlank())`. Trong Spring: `jdbcTemplate.query(sql, (rs, i) -> new User(rs.getLong("id"), rs.getString("name")))` — `RowMapper` là functional interface.',
+  viz: {
+    type: 'compare',
+    cols: ['Functional interface', 'Lambda', 'Method reference'],
+    rows: [
+      ['Là gì', 'interface đúng 1 abstract method (SAM)', 'biểu thức hiện thực SAM đó', 'rút gọn lambda chỉ gọi 1 method'],
+      ['Ví dụ', 'Function, Predicate, Runnable', '(a, b) -> a + b', 'User::getName, ArrayList::new'],
+      ['Bytecode', '—', 'invokedynamic, không sinh $1.class', 'như lambda'],
+      ['this', '—', 'trỏ class bao ngoài', 'trỏ class bao ngoài'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -244,6 +436,15 @@ SS.addQuestions('java', [
     'Cái được copy khi truyền tham số là ô nhớ chứa reference, không phải object. Sửa xuyên qua reference thì thấy, thay reference thì không.',
   example:
     '`void reset(User u) { u = new User(); }` — sau khi gọi, biến ở ngoài không đổi. `void deactivate(User u) { u.setActive(false); }` — biến ở ngoài thấy `active=false`. Đây là lý do method "swap(a, b)" kiểu C không viết được trong Java.',
+  viz: {
+    type: 'compare',
+    cols: ['param = new User()', 'param.setActive(false)'],
+    rows: [
+      ['Thao tác', 'gán lại tham số', 'sửa trạng thái qua reference'],
+      ['Caller có thấy?', 'KHÔNG', 'CÓ'],
+      ['Vì sao', 'chỉ đổi bản sao của reference', 'cả hai reference cùng trỏ 1 object trên heap'],
+    ],
+  },
 },
 {
   cat: 'Java Core & OOP',
@@ -257,5 +458,15 @@ SS.addQuestions('java', [
     'Khác biệt nằm ở việc các tham chiếu con được chia sẻ hay nhân bản. `clone()` là cơ chế cũ nhiều khiếm khuyết; copy constructor rõ ràng và an toàn hơn.',
   example:
     '`class Team { List<Player> players; }`. Shallow copy hai team dùng chung list → thêm cầu thủ vào team A cũng vào team B. Copy constructor: `this.players = new ArrayList<>(other.players)` (và deep-copy từng `Player` nếu `Player` mutable).',
+  viz: {
+    type: 'compare',
+    cols: ['Shallow copy', 'Deep copy'],
+    rows: [
+      ['Field tham chiếu', 'trỏ chung object con với bản gốc', 'nhân bản đệ quy toàn đồ thị object'],
+      ['Sửa object con', 'ảnh hưởng cả bản gốc lẫn bản sao', 'hai bản độc lập hoàn toàn'],
+      ['Object.clone()', 'mặc định là shallow', '—'],
+      ['Nên dùng', 'copy constructor / static factory', 'copy constructor deep từng field'],
+    ],
+  },
 },
 ]);

@@ -55,6 +55,18 @@ export function fmt(text) {
     .join('');
 }
 
+/* Rút thuật ngữ nổi bật trong markdown-lite: **in đậm** và `code` (giữ thứ tự xuất hiện) */
+export function boldTerms(text) {
+  const out = [];
+  const s = String(text);
+  let m;
+  const bold = /\*\*([^*]+)\*\*/g;
+  while ((m = bold.exec(s))) if (m[1].trim()) out.push(m[1].trim());
+  const code = /`([^`\n]+)`/g;
+  while ((m = code.exec(s))) if (m[1].trim()) out.push(m[1].trim());
+  return out;
+}
+
 /* Bỏ markup -> text thuần cho meta description & JSON-LD */
 export function plain(text) {
   return String(text)

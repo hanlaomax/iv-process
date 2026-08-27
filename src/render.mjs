@@ -1,6 +1,7 @@
 /* Sinh HTML cho trang chủ và từng trang chủ đề */
 import { fmt, esc, plain, slugify, truncate } from './format.mjs';
 import { head, header, footer, breadcrumb, page } from './templates.mjs';
+import { connect } from './relate.mjs';
 
 /* Gom câu hỏi theo mục (giữ thứ tự xuất hiện) */
 function groupByCat(list) {
@@ -42,7 +43,23 @@ function faqJsonLd(topic, list, url) {
   return JSON.stringify({ '@context': 'https://schema.org', '@graph': graph });
 }
 
-function questionArticle(q, n) {
+function relatedChips(q, ctx) {
+  const ids = (ctx.related && ctx.related.get(q.id)) || [];
+  const links = ids
+    .map((rid) => {
+      const r = ctx.byId.get(rid);
+      if (!r) return '';
+      return `<a class="related-chip" href="#${esc(rid)}" data-rel="${esc(rid)}">${esc(truncate(r.q, 58))}</a>`;
+    })
+    .filter(Boolean)
+    .join('');
+  if (!links) return '';
+  return `<nav class="qa-related" aria-label="Câu hỏi liên quan">
+      <span class="qa-related-label">Câu liên quan</span>${links}
+    </nav>`;
+}
+
+function questionArticle(q, n, ctx) {
   return `<article class="qa" id="${esc(q.id)}">
   <div class="qa-head">
     <span class="qa-num" aria-hidden="true">${n}</span>
@@ -56,9 +73,20 @@ function questionArticle(q, n) {
     <div class="qa-block qa-answer"><h4>Trả lời</h4>${fmt(q.answer)}</div>
     <div class="qa-block qa-essence"><h4>Bản chất</h4>${fmt(q.essence)}</div>
     <div class="qa-block qa-example"><h4>Ví dụ thực tế</h4>${fmt(q.example)}</div>
-    ${q.diagram ? diagramFigure(q.diagram) : ''}
+    ${q.viz ? vizFigure(q.viz) : q.diagram ? diagramFigure(q.diagram) : ''}
+    ${relatedChips(q, ctx)}
   </div>
 </article>`;
+}
+
+/* Hình minh hoạ tương tác dựng từ dữ liệu khai báo (viz-core.js + renderer theo type) */
+function vizFigure(spec) {
+  const json = JSON.stringify(spec).replace(/</g, '\\u003c');
+  const title = spec.title ? `<span class="viz-title">${esc(spec.title)}</span>` : '';
+  return `<figure class="viz" data-viz="${esc(json)}">
+  <figcaption class="viz-cap"><span class="viz-badge">Minh hoạ</span>${title}</figcaption>
+  <noscript><p class="viz-noscript">Bật JavaScript để xem hình minh hoạ tương tác cho câu này.</p></noscript>
+</figure>`;
 }
 
 function diagramFigure(id) {
@@ -69,12 +97,15 @@ function diagramFigure(id) {
 }
 
 /* Trang chủ đề */
-export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }) {
+export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz }) {
   const url = `${siteUrl}${topic.id}/`;
   const groups = groupByCat(list);
   const idx = topics.findIndex((t) => t.id === topic.id);
   const prev = topics[idx - 1];
   const next = topics[idx + 1];
+
+  const { related, graph } = connect(list);
+  const ctx = { related, byId: new Map(list.map((q) => [q.id, q])) };
 
   const toc = groups
     .map(
@@ -88,7 +119,7 @@ export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }) {
     .map(
       (g) => `<section class="cat" id="${g.slug}" aria-labelledby="${g.slug}-h">
   <h2 class="cat-title" id="${g.slug}-h">${esc(g.cat)} <span class="cat-count">${g.items.length} câu</span></h2>
-  ${g.items.map((q) => questionArticle(q, ++n)).join('\n')}
+  ${g.items.map((q) => questionArticle(q, ++n, ctx)).join('\n')}
 </section>`
     )
     .join('\n');
@@ -123,6 +154,10 @@ export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }) {
       <p class="topic-count-line">${list.length} câu hỏi phỏng vấn · cấp độ Middle</p>
       <p class="lede">${esc(topic.intro)}</p>
       <div class="toolbar" role="search">
+        <div class="view-toggle" role="group" aria-label="Kiểu xem" hidden>
+          <button type="button" class="vt-btn is-on" data-view="list" aria-pressed="true">Danh sách</button>
+          <button type="button" class="vt-btn" data-view="graph" aria-pressed="false">Bản đồ</button>
+        </div>
         <label class="filter"><span class="visually-hidden">Lọc câu hỏi</span>
           <input type="search" class="filter-input" placeholder="Lọc câu hỏi trong trang…" autocomplete="off">
         </label>
@@ -133,15 +168,23 @@ export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams }) {
         <p class="filter-empty" hidden>Không có câu hỏi khớp từ khoá.</p>
       </div>
       ${sections}
+      <section class="topic-graph" aria-label="Bản đồ khái niệm" hidden>
+        <noscript><p class="graph-noscript">Bật JavaScript để xem bản đồ khái niệm.</p></noscript>
+      </section>
       ${pager}
     </div>
   </div>
 </main>
+<script type="application/json" id="graph-data">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>
 ${footer('../')}`;
+
+  const topicScripts = ['assets/topic-graph.js'];
+  if (hasViz) topicScripts.push('assets/viz/viz-core.js', 'assets/viz/viz-static.js', 'assets/viz/viz-anim.js');
+  if (hasDiagrams) topicScripts.push('assets/diagrams/core.js', `assets/diagrams/${topic.id}.js`);
 
   return page({
     root: '../',
-    scripts: hasDiagrams ? ['assets/diagrams/core.js', `assets/diagrams/${topic.id}.js`] : [],
+    scripts: topicScripts,
     head: head({
       title: `${topic.name} — ${list.length} câu hỏi phỏng vấn (level Middle)`,
       description: desc,

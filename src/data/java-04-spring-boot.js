@@ -14,6 +14,16 @@ SS.addQuestions('java', [
     'Boot không thêm sức mạnh mới cho Spring; nó loại bỏ cấu hình lặp lại bằng quy ước + auto-config có điều kiện, để bạn tập trung vào nghiệp vụ.',
   example:
     'Một REST API "hello world": Spring thuần cần ~5 file XML/Java config + WAR + Tomcat. Với Boot: 1 class `@SpringBootApplication` + `spring-boot-starter-web`, `mvn spring-boot:run` là chạy.',
+  viz: {
+    type: 'compare',
+    cols: ['Spring thuần', 'Spring Boot'],
+    rows: [
+      ['Cấu hình', 'khai báo DispatcherServlet, view resolver, DataSource… thủ công', 'auto-configuration theo classpath'],
+      ['Phiên bản thư viện', 'tự chọn + ghép tương thích', 'starter + BOM đã kiểm định'],
+      ['Server', 'đóng WAR, cài Tomcat ngoài', 'embedded, java -jar'],
+      ['Vận hành', 'tự thêm', 'Actuator, externalized config, logging sẵn'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -26,6 +36,16 @@ SS.addQuestions('java', [
     'Auto-config = "nếu thấy X trên classpath và bạn chưa tự cấu hình thì tôi cấu hình mặc định cho X". Nó phản ứng theo dependency chứ không phải luôn bật.',
   example:
     'Có `HikariCP` + `spring.datasource.url` → tự tạo `DataSource`. Thêm `spring-boot-starter-data-redis` → tự tạo `RedisConnectionFactory`, `RedisTemplate`, `StringRedisTemplate`. Tự khai báo `@Bean RedisTemplate` → bản của bạn được dùng.',
+  viz: {
+    type: 'flow',
+    title: 'Auto-configuration đánh giá theo điều kiện',
+    nodes: ['@EnableAutoConfiguration', 'đọc AutoConfiguration.imports', 'đánh giá @ConditionalOn...', 'áp dụng cái phù hợp'],
+    steps: [
+      { to: 1, label: 'đọc danh sách class auto-config từ mọi jar (META-INF/spring/...)' },
+      { to: 2, label: 'mỗi class gắn @ConditionalOnClass / OnMissingBean / OnProperty…' },
+      { to: 3, label: 'chỉ áp dụng cấu hình có điều kiện đúng; bean bạn tự khai báo luôn thắng nhờ @ConditionalOnMissingBean' },
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -38,6 +58,19 @@ SS.addQuestions('java', [
     'Starter = "giỏ dependency theo tính năng" + quản lý phiên bản tập trung. Nó biến việc chọn thư viện từ bài toán tương thích thành một dòng khai báo.',
   example:
     'Cần bảo mật: thêm `spring-boot-starter-security`. Cần gọi HTTP: `spring-boot-starter-webflux` (WebClient) hoặc dùng `RestClient`. Cần test: `spring-boot-starter-test` (JUnit 5, Mockito, AssertJ, Spring Test).',
+  viz: {
+    type: 'tree',
+    title: 'Starter = giỏ dependency theo tính năng',
+    root: {
+      label: 'spring-boot-starter-web',
+      children: [
+        { label: 'spring-webmvc' },
+        { label: 'spring-boot-starter-tomcat', note: 'embedded server' },
+        { label: 'spring-boot-starter-json', note: 'Jackson' },
+        { label: 'validation' },
+      ],
+    },
+  },
 },
 {
   cat: 'Spring Boot',
@@ -56,6 +89,18 @@ SS.addQuestions('java', [
     'Cấu hình gần runtime và gần môi trường thật thì thắng. Nhờ đó một artifact chạy được ở mọi môi trường chỉ bằng cách bơm env var/arg khác nhau.',
   example:
     'Image Docker build sẵn với `application.yml` mặc định (dev). Khi deploy prod, K8s inject `SPRING_PROFILES_ACTIVE=prod` và `SPRING_DATASOURCE_PASSWORD` từ Secret — ghi đè giá trị trong jar mà không rebuild.',
+  viz: {
+    type: 'layers',
+    title: 'Ưu tiên nguồn cấu hình (trên ghi đè dưới)',
+    layers: [
+      { name: 'Tham số dòng lệnh', tag: 'cao nhất', note: '--server.port=9000' },
+      { name: 'SPRING_APPLICATION_JSON' },
+      { name: 'Biến môi trường OS / -D system properties', note: 'cách ghi đè phổ biến trong K8s (relaxed binding)' },
+      { name: 'application-{profile}.yml', note: 'ngoài jar → trong jar' },
+      { name: 'application.yml', note: 'ngoài jar → trong jar' },
+      { name: 'Default properties', tag: 'thấp nhất' },
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -67,6 +112,16 @@ SS.addQuestions('java', [
     '`@Value` là "lấy một ô cấu hình". `@ConfigurationProperties` là "map một khối cấu hình có kiểu và validate". Cấu hình phức tạp thì luôn dùng cái sau.',
   example:
     '`@ConfigurationProperties("app.rate-limit") @Validated record RateLimitProps(@Min(1) int perSecond, Duration window) {}` — gom cấu hình rate limit, sai kiểu/thiếu giá trị là app không khởi động, thay vì lỗi runtime.',
+  viz: {
+    type: 'compare',
+    cols: ['@Value("${...}")', '@ConfigurationProperties'],
+    rows: [
+      ['Phạm vi', 'một giá trị lẻ', 'cả nhóm property vào POJO có cấu trúc'],
+      ['Kiểu phức', 'không', 'nested, List, Map, Duration, DataSize'],
+      ['Relaxed binding', 'hạn chế', 'đầy đủ (max-size ↔ maxSize)'],
+      ['Validate', 'không', '@Validated (JSR-380) — sai là app không khởi động'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -78,6 +133,16 @@ SS.addQuestions('java', [
     'Server là dependency chứ không phải hạ tầng. Fat jar là một artifact tự chứa, chạy giống nhau trên laptop, CI và production — hợp với triết lý container.',
   example:
     'Dockerfile chỉ cần `FROM eclipse-temurin:17-jre` + `COPY app.jar` + `ENTRYPOINT ["java","-jar","/app.jar"]`. Để tối ưu cache layer, dùng `layertools` tách dependencies/loader/app thành các layer riêng.',
+  viz: {
+    type: 'flow',
+    title: 'java -jar app.jar (fat jar)',
+    nodes: ['java -jar app.jar', 'JarLauncher (Main-Class)', 'class loader lồng nhau', 'đọc jar-in-jar', 'gọi class main thật'],
+    steps: [
+      { to: 1, label: 'Main-Class trong manifest là JarLauncher của Boot' },
+      { to: 2, label: 'tạo class loader đọc BOOT-INF/classes (app) + BOOT-INF/lib (dependency)' },
+      { to: 4, label: 'launcher gọi class @SpringBootApplication → ServletWebServerFactory tạo Tomcat nhúng, mở cổng' },
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -92,6 +157,19 @@ SS.addQuestions('java', [
     'Actuator biến app thành "observable": health cho orchestrator, metrics cho monitoring, loggers/env cho debug production. Đổi lại phải kiểm soát truy cập vì nó lộ thông tin nhạy cảm.',
   example:
     'K8s dùng `/actuator/health/liveness` và `/readiness` cho probe. Prometheus scrape `/actuator/prometheus`. `env`, `heapdump` chỉ mở trong mạng nội bộ hoặc sau auth.',
+  viz: {
+    type: 'tree',
+    title: '/actuator/** — biến app thành "observable"',
+    root: {
+      label: '/actuator (mặc định chỉ health expose qua HTTP)',
+      children: [
+        { label: 'health', note: 'app + DB, disk, Redis… → cho orchestrator (liveness/readiness)' },
+        { label: 'metrics / prometheus', note: 'Micrometer → monitoring' },
+        { label: 'loggers', note: 'đổi log level runtime' },
+        { label: 'env / heapdump / threaddump', note: 'debug — lộ thông tin nhạy cảm, phải bảo vệ' },
+      ],
+    },
+  },
 },
 {
   cat: 'Spring Boot',
@@ -104,6 +182,16 @@ SS.addQuestions('java', [
     'Liveness bảo vệ khỏi treo vĩnh viễn (biện pháp mạnh: restart). Readiness bảo vệ người dùng khỏi bị route tới pod chưa/không sẵn sàng (biện pháp nhẹ: rút khỏi load balancer).',
   example:
     'DB chập chờn 30 giây: nếu để liveness phụ thuộc DB → K8s restart hàng loạt pod, càng tệ. Đúng: readiness fail (ngừng nhận request), liveness vẫn pass (không restart), pod tự hồi khi DB trở lại.',
+  viz: {
+    type: 'compare',
+    cols: ['Liveness', 'Readiness'],
+    rows: [
+      ['Câu hỏi', 'process còn sống & phục hồi được không?', 'đã sẵn sàng nhận traffic chưa?'],
+      ['Fail →', 'orchestrator RESTART pod', 'ngừng route traffic, KHÔNG restart'],
+      ['Nên fail khi', 'deadlock, hỏng nội bộ không tự thoát', 'warm-up, mất DB tạm, graceful shutdown'],
+      ['Endpoint', '/actuator/health/liveness', '/actuator/health/readiness'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -116,6 +204,17 @@ SS.addQuestions('java', [
     'Graceful shutdown loại bỏ lỗi 5xx và transaction dở dang khi deploy/scale-down. Nó là sự phối hợp giữa app (chờ request) và orchestrator (chờ app).',
   example:
     'Rolling update: pod cũ nhận SIGTERM → readiness fail → hết route → xử lý nốt 12 request đang chạy trong ~5s → thoát sạch. Không có graceful, 12 request đó nhận connection reset.',
+  viz: {
+    type: 'timeline',
+    title: 'Graceful shutdown khi rolling update',
+    events: [
+      { t: 't0', label: 'nhận SIGTERM' },
+      { t: 't0+', label: 'readiness fail' },
+      { t: 't1', label: 'load balancer rút pod, hết route request mới' },
+      { t: 't1→t2', label: 'chờ request đang chạy hoàn tất (timeout-per-shutdown-phase)' },
+      { t: 't2', label: 'đóng server, thoát sạch — không 5xx' },
+    ],
+  },
 },
 {
   cat: 'Testing',
@@ -130,6 +229,16 @@ SS.addQuestions('java', [
     'Slice = "nạp ít context nhất để test đúng một tầng" → nhanh, cô lập. `@SpringBootTest` = "nạp tất cả" → dùng khi thật sự cần kiểm tra các tầng ghép với nhau.',
   example:
     'Test validation + mã HTTP của `POST /users`: `@WebMvcTest` + `MockMvc`, mock `UserService`. Test truy vấn custom `@Query`: `@DataJpaTest` chạy trên Testcontainers Postgres. Chỉ smoke test toàn hệ thống mới cần `@SpringBootTest`.',
+  viz: {
+    type: 'compare',
+    cols: ['@SpringBootTest', '@WebMvcTest', '@DataJpaTest'],
+    rows: [
+      ['Nạp', 'toàn bộ ApplicationContext', 'chỉ MVC layer', 'chỉ JPA layer + DB nhúng'],
+      ['Tốc độ', 'chậm', 'nhanh', 'nhanh'],
+      ['Phụ thuộc', 'thật', 'service phải @MockBean', 'repository thật, transaction rollback mỗi test'],
+      ['Dùng cho', 'integration / end-to-end', 'test controller: mapping, validation, HTTP', 'test @Query, mapping entity'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -144,6 +253,16 @@ SS.addQuestions('java', [
     'Runner là "hook chạy sau startup". `ApplicationRunner` hơn ở chỗ đã parse tham số. Không dùng cho tác vụ chạy nền dài hạn (đó là việc của `@Scheduled`/`@Async`).',
   example:
     '`@Bean ApplicationRunner seed(UserRepo repo){ return args -> { if (args.containsOption("seed")) repo.saveAll(demoUsers()); }; }` — chỉ nạp dữ liệu mẫu khi chạy `java -jar app.jar --seed`.',
+  viz: {
+    type: 'compare',
+    cols: ['CommandLineRunner', 'ApplicationRunner'],
+    rows: [
+      ['Tham số', 'String... args (thô)', 'ApplicationArguments (đã parse)'],
+      ['Phân biệt --x=y vs operand', 'không', 'có'],
+      ['Thời điểm chạy', 'một lần, sau khi context sẵn sàng', 'một lần, sau khi context sẵn sàng'],
+      ['Thứ tự nhiều runner', '@Order / Ordered', '@Order / Ordered'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -157,6 +276,19 @@ SS.addQuestions('java', [
     'Boot cho phép chỉnh 90% nhu cầu logging bằng property. Trong môi trường container, log ra stdout dạng JSON để hệ thống thu thập (ELK/Loki) parse được.',
   example:
     'Debug một request lạ trên production: `curl -X POST /actuator/loggers/com.acme.payment -d \'{"configuredLevel":"DEBUG"}\'` bật DEBUG tạm thời cho đúng package, không cần redeploy, xong thì trả về `INFO`.',
+  viz: {
+    type: 'tree',
+    title: 'Logging trong Spring Boot',
+    root: {
+      label: 'Logback qua SLF4J (mặc định, ghi stdout)',
+      children: [
+        { label: 'Đặt level qua property', note: 'logging.level.com.acme=DEBUG — không cần file XML' },
+        { label: 'Đổi runtime', note: 'POST /actuator/loggers/<package> — không redeploy' },
+        { label: 'Ghi file', note: 'logging.file.name=app.log' },
+        { label: 'Cấu hình sâu', note: 'logback-spring.xml — appender, JSON encoder, <springProfile>' },
+      ],
+    },
+  },
 },
 {
   cat: 'Spring Boot',
@@ -171,6 +303,16 @@ SS.addQuestions('java', [
     'DevTools là công cụ chỉ dành cho dev; restart hai-class-loader nhanh hơn khởi động lại JVM. Nó cố ý "biến mất" trong artifact production.',
   example:
     'Sửa một `@RestController`, lưu → DevTools restart context trong ~1s thay vì ~8s cold start. Kết hợp IDE "build automatically" để trải nghiệm gần như hot reload.',
+  viz: {
+    type: 'compare',
+    cols: ['DevTools ở dev', 'ở production'],
+    rows: [
+      ['Automatic restart', '2 class loader → restart ~1s khi đổi code', 'tự vô hiệu hoá khi java -jar'],
+      ['LiveReload', 'tự refresh trình duyệt', '—'],
+      ['Cache template', 'tắt', '—'],
+      ['Trong fat jar', 'scope developmentOnly / optional', 'không được đóng gói vào'],
+    ],
+  },
 },
 {
   cat: 'Web / Boot',
@@ -183,6 +325,17 @@ SS.addQuestions('java', [
     'Advice tách xử lý lỗi khỏi controller, cho một hợp đồng lỗi nhất quán toàn API. `ProblemDetail` chuẩn hoá hình dạng body lỗi để client xử lý đồng nhất.',
   example:
     '`@ExceptionHandler(EntityNotFoundException.class) ProblemDetail handle(EntityNotFoundException e){ var pd = ProblemDetail.forStatusAndDetail(NOT_FOUND, e.getMessage()); pd.setType(URI.create("https://api.acme.com/errors/not-found")); return pd; }`.',
+  viz: {
+    type: 'flow',
+    title: 'Xử lý lỗi tập trung',
+    nodes: ['exception nghiệp vụ', '@RestControllerAdvice', '@ExceptionHandler', 'map HTTP + ProblemDetail', 'client'],
+    steps: [
+      { to: 1, label: 'advice áp cho toàn bộ controller — tách xử lý lỗi khỏi controller' },
+      { to: 2, label: '@ExceptionHandler(EntityNotFoundException.class)' },
+      { to: 3, label: 'ProblemDetail (RFC 7807/9457): type, title, status, detail, instance' },
+      { to: 4, label: 'mọi lỗi có hình dạng body nhất quán → client xử lý đồng nhất' },
+    ],
+  },
 },
 {
   cat: 'Web / Boot',
@@ -196,6 +349,16 @@ SS.addQuestions('java', [
     '`@Valid` là "hãy validate cái này". `@Validated` là bản Spring mở rộng thêm groups + validate ngay tại biên method. Validate ở biên (controller/service) để dữ liệu vào trong luôn hợp lệ.',
   example:
     '`record CreateUser(@NotBlank String name, @Email String email, @Min(18) int age)` + `@PostMapping ... ResponseEntity<?> create(@Valid @RequestBody CreateUser req)`. Sai email → 400 với danh sách field lỗi, không chạm tới service.',
+  viz: {
+    type: 'compare',
+    cols: ['@Valid (Jakarta)', '@Validated (Spring)'],
+    rows: [
+      ['Vai trò', 'kích hoạt validate object lồng nhau', 'thêm validation groups + method-level'],
+      ['Đặt ở', '@RequestBody, param, field', 'class (@Service/@Controller) → validate tham số/kết quả method'],
+      ['Lỗi @RequestBody', 'MethodArgumentNotValidException', '—'],
+      ['Lỗi param', '—', 'ConstraintViolationException'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -209,6 +372,17 @@ SS.addQuestions('java', [
     'Ba trụ cột — metrics, traces, logs — được nối với nhau qua trace-id. Micrometer là lớp trừu tượng để đổi backend (Prometheus, Tempo, Datadog) mà không sửa code.',
   example:
     'Request chậm: xem metric `http_server_requests_seconds{uri="/orders",quantile="0.99"}` tăng → mở trace theo `traceId` trong log → thấy span "call inventory-service" chiếm 800ms → khoanh vùng đúng service.',
+  viz: {
+    type: 'flow',
+    title: 'Ba trụ cột nối nhau qua traceId',
+    nodes: ['metric p99 tăng', 'mở trace theo traceId', 'xem span chậm', 'khoanh vùng service'],
+    steps: [
+      { to: 0, label: 'http_server_requests_seconds{uri="/orders",quantile="0.99"} tăng (Micrometer → Prometheus)' },
+      { to: 1, label: 'log tự thêm traceId/spanId → nhảy từ log sang trace' },
+      { to: 2, label: 'span "call inventory-service" chiếm 800ms' },
+      { to: 3, label: 'đổi backend (Prometheus/Tempo/Datadog) không sửa code nhờ Micrometer' },
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -222,6 +396,19 @@ SS.addQuestions('java', [
     'Boot 3 là mốc "dọn nhà": rời nền tảng javax cũ, lên Java hiện đại, mở đường cho native/serverless. Rào cản chính khi nâng cấp là hệ sinh thái thư viện javax.',
   example:
     'Function serverless cần cold start nhanh: build native image Boot 3 → khởi động 40ms, RAM 60MB thay vì JVM 2s / 300MB. Với service thường trực, JVM + CDS/AOT vẫn là lựa chọn cân bằng hơn.',
+  viz: {
+    type: 'tree',
+    title: 'Spring Boot 3 — "dọn nhà"',
+    root: {
+      label: 'Spring Boot 3',
+      children: [
+        { label: 'Jakarta EE 9+', note: 'javax.* → jakarta.*; rào cản chính khi nâng cấp' },
+        { label: 'Java 17 baseline', note: '3.2+ hỗ trợ Java 21, virtual threads' },
+        { label: 'GraalVM native image', note: 'khởi động ~vài chục ms, RAM thấp; build lâu, cần reflection hint' },
+        { label: 'Observability tích hợp', note: 'Micrometer Tracing, RestClient, ProblemDetail, @HttpExchange' },
+      ],
+    },
+  },
 },
 {
   cat: 'Testing',
@@ -234,6 +421,16 @@ SS.addQuestions('java', [
     '`@Mock` cô lập một object. `@MockBean` cô lập một **bean bên trong context đang chạy** — mạnh hơn nhưng phá cache context, nên dùng có chọn lọc.',
   example:
     '`@WebMvcTest(OrderController.class)` + `@MockBean OrderService service` — controller thật chạy với service giả, kiểm tra mapping/validation/HTTP status. Nếu chỉ test một helper thuần logic, dùng `@Mock` + `@InjectMocks` nhanh hơn nhiều.',
+  viz: {
+    type: 'compare',
+    cols: ['@Mock (Mockito)', '@MockBean / @MockitoBean (Spring)'],
+    rows: [
+      ['Phạm vi', 'một object, gán vào field test', 'thay bean cùng kiểu trong ApplicationContext'],
+      ['Bean phụ thuộc', 'không liên quan', 'mọi bean phụ thuộc nhận mock'],
+      ['Context cache', 'không ảnh hưởng', 'đánh dấu dirty → tạo lại context (chậm nếu lạm dụng)'],
+      ['Dùng khi', 'test logic thuần (+ @InjectMocks)', 'cần cô lập 1 bean trong context đang chạy'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -246,6 +443,16 @@ SS.addQuestions('java', [
     'YAML hợp cấu hình phân cấp; multi-document YAML gộp mọi profile vào một file; `configtree` là cầu nối chuẩn giữa Secret dạng file của K8s và property của Spring.',
   example:
     'K8s mount Secret vào `/etc/secrets/spring.datasource.password`. Đặt `spring.config.import=optional:configtree:/etc/secrets/` → Boot đọc file đó thành property `spring.datasource.password`, không cần env var lộ trong `describe pod`.',
+  viz: {
+    type: 'compare',
+    cols: ['.properties', '.yml', 'spring.config.import'],
+    rows: [
+      ['Cú pháp', 'key phẳng', 'phân cấp, gọn cho lồng nhau', 'nạp thêm nguồn ngoài'],
+      ['Multi-document', 'không', '--- + spring.config.activate.on-profile', '—'],
+      ['Nguồn thêm', '—', '—', 'optional:file:, configtree:/etc/secrets/, configserver:'],
+      ['Dùng', 'đơn giản', 'cấu hình phân cấp', 'K8s Secret mount → property (không lộ trong describe pod)'],
+    ],
+  },
 },
 {
   cat: 'Spring Boot',
@@ -258,5 +465,16 @@ SS.addQuestions('java', [
     'Virtual threads giữ code đồng bộ dễ đọc nhưng bỏ được trần "1 request = 1 OS thread". Với service I/O-bound, đây là cách tăng thông lượng mà không viết reactive.',
   example:
     'API gateway gọi 5 downstream tuần tự, mỗi cái 100ms: với platform thread, 200 thread phục vụ 200 request đồng thời. Bật virtual threads → 10.000 request đồng thời vẫn ổn vì thread chờ I/O gần như miễn phí.',
+  viz: {
+    type: 'compare',
+    cols: ['Platform thread', 'Virtual thread (Java 21)'],
+    rows: [
+      ['Ánh xạ', '1:1 với OS thread', 'nhiều virtual : ít carrier OS thread'],
+      ['Khi block I/O', 'giữ OS thread', 'gỡ khỏi carrier — gần như miễn phí'],
+      ['Số lượng khả thi', 'hàng trăm–nghìn', 'hàng triệu'],
+      ['Bật ở Boot 3.2+', '—', 'spring.threads.virtual.enabled=true'],
+      ['Lưu ý', '—', 'tránh synchronized dài (pin carrier); pool connection vẫn là trần'],
+    ],
+  },
 },
 ]);
