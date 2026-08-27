@@ -197,9 +197,9 @@ export function renderHub({ topics, counts, total, siteUrl }) {
     <div class="wrap">
       <p class="hero-eyebrow">Ôn tập phỏng vấn · cấp độ Middle</p>
       <h1 class="hero-h1">${total} câu hỏi phỏng vấn, mỗi câu <em>hiểu tới bản chất</em></h1>
-      <p class="hero-lede">Java &amp; Spring Boot, Apache Kafka, AWS, Redis và SQL. Mỗi câu gồm ba phần:
-        <strong>trả lời</strong> chi tiết, <strong>bản chất</strong> để nhớ nhanh, và <strong>ví dụ thực tế</strong>.
-        Tiếng Việt, giữ nguyên thuật ngữ tiếng Anh.</p>
+      <p class="hero-lede">Java &amp; Spring Boot, Apache Kafka, AWS, Redis, SQL, Microservices và Design Patterns.
+        Mỗi câu gồm ba phần: <strong>trả lời</strong> chi tiết, <strong>bản chất</strong> để nhớ nhanh, và
+        <strong>ví dụ thực tế</strong>. Tiếng Việt, giữ nguyên thuật ngữ tiếng Anh.</p>
       <div class="hero-stats">
         <span><b>${total}</b> câu hỏi</span>
         <span><b>${topics.length}</b> chủ đề</span>
@@ -226,9 +226,9 @@ ${footer('')}`;
   return page({
     root: '',
     head: head({
-      title: `Interview Vault — ${total} câu hỏi phỏng vấn Java, Kafka, AWS, Redis, SQL`,
-      description: `Bộ ${total} câu hỏi phỏng vấn cấp độ Middle cho Java/Spring Boot, Apache Kafka, AWS, Redis và SQL. Mỗi câu có trả lời chi tiết, phần bản chất để nhớ nhanh và ví dụ thực tế. Nội dung tiếng Việt.`,
-      keywords: 'câu hỏi phỏng vấn, phỏng vấn backend, java spring boot, kafka, aws, redis, sql, ôn thi phỏng vấn middle developer',
+      title: `Interview Vault — ${total} câu hỏi phỏng vấn Backend & Kiến trúc`,
+      description: `Bộ ${total} câu hỏi phỏng vấn cấp độ Middle: Java/Spring Boot, Apache Kafka, AWS, Redis, SQL, Microservices và Design Patterns. Mỗi câu có trả lời chi tiết, phần bản chất để nhớ nhanh và ví dụ thực tế. Nội dung tiếng Việt.`,
+      keywords: 'câu hỏi phỏng vấn, phỏng vấn backend, java spring boot, kafka, aws, redis, sql, microservices, design pattern, solid, ôn thi phỏng vấn middle developer',
       canonical: siteUrl,
       root: '',
       jsonld,

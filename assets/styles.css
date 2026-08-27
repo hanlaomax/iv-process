@@ -76,18 +76,24 @@
 .topic-page[data-topic="aws"],   .topic-card[data-topic="aws"]   { --accent: #cf6a2c; }
 .topic-page[data-topic="redis"], .topic-card[data-topic="redis"] { --accent: #cf4f45; }
 .topic-page[data-topic="sql"],   .topic-card[data-topic="sql"]   { --accent: #1f9188; }
+.topic-page[data-topic="microservices"],   .topic-card[data-topic="microservices"]   { --accent: #7857c9; }
+.topic-page[data-topic="design-patterns"], .topic-card[data-topic="design-patterns"] { --accent: #3f8f5c; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .topic-page[data-topic="java"],  :root:not([data-theme="light"]) .topic-card[data-topic="java"]  { --accent: #d99a55; }
   :root:not([data-theme="light"]) .topic-page[data-topic="kafka"], :root:not([data-theme="light"]) .topic-card[data-topic="kafka"] { --accent: #6fb0dc; }
   :root:not([data-theme="light"]) .topic-page[data-topic="aws"],   :root:not([data-theme="light"]) .topic-card[data-topic="aws"]   { --accent: #e3894b; }
   :root:not([data-theme="light"]) .topic-page[data-topic="redis"], :root:not([data-theme="light"]) .topic-card[data-topic="redis"] { --accent: #e5776b; }
   :root:not([data-theme="light"]) .topic-page[data-topic="sql"],   :root:not([data-theme="light"]) .topic-card[data-topic="sql"]   { --accent: #45b5ab; }
+  :root:not([data-theme="light"]) .topic-page[data-topic="microservices"],   :root:not([data-theme="light"]) .topic-card[data-topic="microservices"]   { --accent: #a894e0; }
+  :root:not([data-theme="light"]) .topic-page[data-topic="design-patterns"], :root:not([data-theme="light"]) .topic-card[data-topic="design-patterns"] { --accent: #63c084; }
 }
 :root[data-theme="dark"] .topic-page[data-topic="java"],  :root[data-theme="dark"] .topic-card[data-topic="java"]  { --accent: #d99a55; }
 :root[data-theme="dark"] .topic-page[data-topic="kafka"], :root[data-theme="dark"] .topic-card[data-topic="kafka"] { --accent: #6fb0dc; }
 :root[data-theme="dark"] .topic-page[data-topic="aws"],   :root[data-theme="dark"] .topic-card[data-topic="aws"]   { --accent: #e3894b; }
 :root[data-theme="dark"] .topic-page[data-topic="redis"], :root[data-theme="dark"] .topic-card[data-topic="redis"] { --accent: #e5776b; }
 :root[data-theme="dark"] .topic-page[data-topic="sql"],   :root[data-theme="dark"] .topic-card[data-topic="sql"]   { --accent: #45b5ab; }
+:root[data-theme="dark"] .topic-page[data-topic="microservices"],   :root[data-theme="dark"] .topic-card[data-topic="microservices"]   { --accent: #a894e0; }
+:root[data-theme="dark"] .topic-page[data-topic="design-patterns"], :root[data-theme="dark"] .topic-card[data-topic="design-patterns"] { --accent: #63c084; }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 84px; }

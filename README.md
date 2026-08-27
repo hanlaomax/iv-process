@@ -1,7 +1,7 @@
 # Interview Vault
 
-Trang web tĩnh ôn tập **501 câu hỏi phỏng vấn cấp độ Middle** cho 5 chủ đề:
-**Java / Spring Boot · Apache Kafka · AWS · Redis · SQL**.
+Trang web tĩnh ôn tập **700+ câu hỏi phỏng vấn cấp độ Middle** cho 7 chủ đề:
+**Java / Spring Boot · Apache Kafka · AWS · Redis · SQL · Microservices · Design Patterns**.
 
 Mỗi câu gồm ba phần: **Trả lời** (chi tiết) · **Bản chất** (cốt lõi để nhớ nhanh) · **Ví dụ thực tế**.
 Nội dung tiếng Việt, giữ nguyên thuật ngữ kỹ thuật tiếng Anh.
@@ -49,7 +49,7 @@ npm run serve
 
 ```
 src/
-  data/                 # 25 file câu hỏi + _topics.js (nội dung, tự đăng ký qua SS.addQuestions)
+  data/                 # 35 file câu hỏi + _topics.js (nội dung, tự đăng ký qua SS.addQuestions)
   format.mjs            # markdown-lite -> HTML, slug, hash id, strip
   templates.mjs         # <head> đầy đủ SEO, header, footer, breadcrumb, khung trang
   render.mjs            # sinh trang chủ, trang chủ đề, sitemap, 404

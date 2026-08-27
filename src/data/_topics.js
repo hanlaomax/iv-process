@@ -65,4 +65,33 @@ SS.topics = [
       'liệu, partitioning, multi-tenancy) và nâng cao (window function, CTE đệ quy, materialized view).',
     keywords: 'câu hỏi phỏng vấn sql, sql join index, transaction isolation level, mvcc deadlock, window function cte, database schema design',
   },
+  {
+    id: 'microservices',
+    name: 'Microservices',
+    icon: '🧩',
+    blurb: 'Boundary · Communication · Resilience · Observability',
+    subtitle: 'Nền tảng & phân rã, Giao tiếp (sync/async, saga), Khả năng chịu lỗi, Hạ tầng & quan sát, Dữ liệu & bảo mật',
+    intro:
+      'Câu hỏi phỏng vấn kiến trúc Microservices cấp độ Middle: khi nào nên/không nên tách, bounded context và ' +
+      'phân rã service, giao tiếp đồng bộ vs bất đồng bộ (REST/gRPC, message broker, event-driven, saga), các mẫu ' +
+      'chịu lỗi (timeout, retry, circuit breaker, bulkhead), hạ tầng (API gateway, service discovery, service mesh, ' +
+      'config), quan sát (correlation id, distributed tracing, SLO), cùng dữ liệu (database-per-service, CQRS, event ' +
+      'sourcing, outbox) và bảo mật (JWT propagation, mTLS, BFF). Mỗi câu kèm ví dụ thực tế.',
+    keywords: 'câu hỏi phỏng vấn microservices, bounded context, saga pattern, circuit breaker, api gateway, service mesh, cqrs event sourcing, distributed tracing',
+  },
+  {
+    id: 'design-patterns',
+    name: 'Design Patterns',
+    icon: '📐',
+    blurb: 'GoF · SOLID · Enterprise · Kiến trúc',
+    subtitle: 'Creational, Structural, Behavioral (GoF), Nguyên lý (SOLID/DRY/KISS), Enterprise & Kiến trúc (Repository, DDD, Hexagonal, Clean)',
+    intro:
+      'Câu hỏi phỏng vấn Design Pattern cấp độ Middle: 23 mẫu GoF (Singleton, Factory, Builder, Adapter, Decorator, ' +
+      'Proxy, Facade, Strategy, Observer, Template Method, Command, State, Chain of Responsibility…), nguyên lý ' +
+      'thiết kế (SOLID, DRY/KISS/YAGNI, composition over inheritance, Law of Demeter), cùng các mẫu enterprise và ' +
+      'kiến trúc (Repository, Unit of Work, DTO, Value Object, Aggregate/DDD, Domain Events, Specification, ' +
+      'Anti-Corruption Layer, Ports & Adapters / Hexagonal, Clean Architecture). Mỗi câu nêu vấn đề nó giải quyết, ' +
+      'khi nào KHÔNG nên dùng, và ví dụ thực tế trong code.',
+    keywords: 'câu hỏi phỏng vấn design pattern, gof pattern, solid principles, singleton factory builder, strategy observer, repository pattern, hexagonal clean architecture, ddd aggregate',
+  },
 ];
