@@ -11,6 +11,16 @@ SS.addQuestions('aws', [
     'Standard = nhanh, trùng, không thứ tự (cần consumer idempotent). FIFO = thứ tự + không trùng, đổi lấy throughput. Visibility timeout phải > thời gian xử lý; DLQ hứng message độc.',
   example:
     'Xử lý đơn hàng cần đúng thứ tự per-customer: FIFO với `MessageGroupId = customerId`. Xử lý email hàng loạt (thứ tự không quan trọng): Standard. Visibility timeout đặt 6× thời gian xử lý trung bình; `maxReceiveCount = 5` → DLQ + alarm.',
+  viz: {
+    type: 'compare',
+    cols: ['SQS Standard', 'SQS FIFO'],
+    rows: [
+      ['Throughput', 'gần vô hạn', '~3000 msg/s (cao hơn với high throughput mode)'],
+      ['Thứ tự', 'best-effort (không đảm bảo)', 'đảm bảo trong một MessageGroupId'],
+      ['Trùng', 'at-least-once (cần consumer idempotent)', 'exactly-once (dedup 5 phút)'],
+      ['Chung', 'visibility timeout phải > thời gian xử lý; DLQ sau maxReceiveCount', 'như trái'],
+    ],
+  },
 },
 {
   cat: 'Messaging',
@@ -23,6 +33,16 @@ SS.addQuestions('aws', [
     'Long polling giảm chi phí và latency bằng cách để server chờ thay vì client hỏi liên tục. Retention là "hạn sử dụng" của message chưa xử lý.',
   example:
     'Consumer đặt `WaitTimeSeconds=20`: gần như không có ReceiveMessage rỗng, hoá đơn SQS giảm, message được pick trong < 1s. Queue phục vụ job nặng chạy đêm: retention 14 ngày phòng consumer chết cả cuối tuần.',
+  viz: {
+    type: 'compare',
+    cols: ['Short polling (mặc định, WaitTimeSeconds=0)', 'Long polling (1–20s)'],
+    rows: [
+      ['Hành vi', 'trả về ngay, có thể rỗng dù có message', 'server CHỜ tới khi có message hoặc hết thời gian'],
+      ['Request rỗng', 'nhiều → tốn tiền + latency', 'ít'],
+      ['Khuyến nghị', '—', 'LUÔN nên bật'],
+      ['Retention', 'mặc định 4 ngày (60s–14 ngày)', 'không consume kịp → mất'],
+    ],
+  },
 },
 {
   cat: 'Messaging',
@@ -35,6 +55,16 @@ SS.addQuestions('aws', [
     'SNS đẩy (push) một message tới nhiều đích. Fanout SNS→SQS thêm buffer/độ bền cho mỗi consumer. Filter policy chuyển việc lọc lên tầng messaging.',
   example:
     'Event `OrderPlaced` → SNS topic → 3 SQS queue: `inventory` (filter: mọi order), `fraud-check` (filter: `amount > 1000`), `analytics` (mọi order). Thêm consumer mới = thêm một subscription, publisher không đổi.',
+  viz: {
+    type: 'flow',
+    title: 'SNS fanout + filter policy',
+    nodes: ['publisher → SNS topic', 'đẩy tới mọi subscriber', 'fanout: SNS → nhiều SQS queue', 'mỗi service tiêu thụ độc lập (buffer, retry, DLQ)'],
+    steps: [
+      { to: 1, label: 'subscriber: SQS, Lambda, HTTP/S, email, SMS, Firehose' },
+      { to: 3, label: 'filter policy: mỗi subscription lọc theo attribute — subscriber chỉ nhận cái nó quan tâm' },
+      { to: 3, label: 'thêm consumer mới = thêm một subscription, publisher không đổi' },
+    ],
+  },
 },
 {
   cat: 'Messaging',
@@ -50,6 +80,16 @@ SS.addQuestions('aws', [
     'SNS = fanout nhanh, đơn giản (attribute filter). EventBridge = router sự kiện thông minh (content-based routing, nguồn AWS/SaaS, replay) — chậm hơn chút nhưng mạnh hơn nhiều cho event choreography.',
   example:
     'Microservice choreography: dùng EventBridge custom bus, rule `detail.status = "SHIPPED"` → Lambda gửi email + Step Function bắt đầu quy trình giao. `EC2 Spot interruption` event của AWS → rule → Lambda drain instance.',
+  viz: {
+    type: 'compare',
+    cols: ['SNS', 'EventBridge'],
+    rows: [
+      ['Lọc / định tuyến', 'theo attribute', 'theo TOÀN BỘ nội dung event (prefix, số, exists, anything-but)'],
+      ['Nguồn event', 'publisher của bạn', '+ AWS services (EC2, S3…) + SaaS partners (Datadog…)'],
+      ['Tính năng', 'fanout thuần', 'schema registry, input transformer, archive & replay, cross-account bus'],
+      ['Hiệu năng', 'nhanh hơn, rẻ hơn cho fanout đơn giản', 'chậm hơn chút, mạnh hơn cho event choreography'],
+    ],
+  },
 },
 {
   cat: 'Streaming',
@@ -62,6 +102,16 @@ SS.addQuestions('aws', [
     'Data Streams = bус realtime replay-được (bạn xử lý). Firehose = ống nạp dữ liệu vào kho, không quản lý gì. Flink = engine tính toán trên stream.',
   example:
     'Clickstream: web → Kinesis Data Streams → (a) Lambda realtime cho dashboard live; (b) Firehose subscribe cùng stream, nén Parquet, đổ S3 mỗi 5 phút cho Athena. Cần tính "top sản phẩm 10 phút gần nhất": Flink.',
+  viz: {
+    type: 'compare',
+    cols: ['Kinesis Data Streams', 'Firehose', 'Managed Flink'],
+    rows: [
+      ['Vai trò', 'bus realtime có shard, replay được (bạn xử lý)', 'ống nạp dữ liệu vào kho (không quản lý gì)', 'engine tính toán trên stream'],
+      ['Latency', '~200ms', 'tối thiểu ~60s', '—'],
+      ['Replay', 'có (retention 1–365 ngày)', 'không', '—'],
+      ['Đích / xử lý', 'KCL / Lambda', 'S3/Redshift/OpenSearch/Splunk + transform', 'aggregate, window, join bằng SQL/Java/Python'],
+    ],
+  },
 },
 {
   cat: 'Streaming',
@@ -74,6 +124,16 @@ SS.addQuestions('aws', [
     'Shard là đơn vị throughput + song song (giống partition Kafka). Partition key quyết định phân bố; on-demand mode bỏ việc tự quản shard nhưng đắt hơn ở tải cao ổn định.',
   example:
     'Telemetry từ 100k thiết bị: partition key = `deviceId` (cardinality cao, phân bố đều). Một khách hàng lớn chiếm 40% traffic → hot shard → split shard đó, hoặc thêm suffix ngẫu nhiên vào key cho tenant lớn.',
+  viz: {
+    type: 'flow',
+    title: 'Kinesis shard (giống partition Kafka)',
+    nodes: ['record + partition key', 'hash → shard', 'shard: 1MB/s ghi, 1000 rec/s, 2MB/s đọc', 'key phân bố kém → hot shard', 'resharding: split / merge; on-demand tự scale'],
+    steps: [
+      { to: 2, label: 'shard = đơn vị throughput + song song' },
+      { to: 3, label: 'một shard quá tải trong khi shard khác nhàn' },
+      { to: 4, label: 'split hot shard làm hai, hoặc thêm suffix ngẫu nhiên vào key cho tenant lớn' },
+    ],
+  },
 },
 {
   cat: 'Orchestration',
@@ -86,6 +146,17 @@ SS.addQuestions('aws', [
     'Step Functions thay "orchestration bằng code + retry thủ công" bằng state machine khai báo có retry/catch built-in. Standard cho workflow dài đáng tin; Express cho khối lượng lớn ngắn hạn.',
   example:
     'Onboarding khách hàng (nhiều bước, chờ phê duyệt, có thể kéo dài ngày): Standard, `Wait for callback` cho bước duyệt thủ công. Xử lý mỗi event IoT qua 4 bước biến đổi, 50k/s: Express.',
+  viz: {
+    type: 'compare',
+    cols: ['Step Functions Standard', 'Express'],
+    rows: [
+      ['Thời gian tối đa', '1 năm', '5 phút'],
+      ['Semantics', 'exactly-once', 'at-least-once'],
+      ['Lịch sử thực thi', 'đầy đủ (audit/debug)', 'không'],
+      ['Giá', 'theo state transition', 'theo số lần chạy + thời gian/RAM'],
+      ['Dùng cho', 'workflow nghiệp vụ dài, cần tin cậy', 'event/stream tần suất lớn, ngắn'],
+    ],
+  },
 },
 {
   cat: 'Observability',
@@ -99,6 +170,19 @@ SS.addQuestions('aws', [
     'Metrics cho xu hướng & alarm; Logs cho chi tiết & điều tra; Logs Insights cho truy vấn nhanh; metric filter/EMF là cầu nối biến log thành metric.',
   example:
     'Không có metric "số lần thanh toán thất bại": thêm metric filter trên log group đếm pattern `"payment failed"` → metric → alarm khi > 10/5 phút. Điều tra spike: Logs Insights `fields @message | filter @message like /payment failed/ | stats count() by bin(1m)`.',
+  viz: {
+    type: 'tree',
+    title: 'CloudWatch',
+    root: {
+      label: 'Metrics: xu hướng & alarm · Logs: chi tiết & điều tra',
+      children: [
+        { label: 'Metrics', note: 'time-series; PutMetricData custom hoặc EMF (log JSON → CloudWatch tự trích metric)' },
+        { label: 'Alarms', note: 'ngưỡng/anomaly → SNS, Auto Scaling, EC2 action; composite alarm giảm nhiễu' },
+        { label: 'Logs', note: 'retention cấu hình, metric filter (đếm pattern → metric), subscription filter' },
+        { label: 'Logs Insights', note: 'query ngôn ngữ riêng để phân tích log ad-hoc' },
+      ],
+    },
+  },
 },
 {
   cat: 'Observability',
@@ -111,6 +195,16 @@ SS.addQuestions('aws', [
     'Tracing nối các mảnh xử lý rải rác của một request thành một bức tranh liền mạch — chỉ ra service/khâu nào là nút thắt hoặc nguồn lỗi, điều mà metric và log đơn lẻ không làm được.',
   example:
     'API p99 tăng: service map X-Ray cho thấy 80% thời gian nằm ở subsegment "DynamoDB Query" của một Lambda → thiếu index / query scan. Không có tracing, bạn phải đoán và thêm log thủ công khắp nơi.',
+  viz: {
+    type: 'flow',
+    title: 'X-Ray / distributed tracing',
+    nodes: ['request qua API GW → Lambda → DynamoDB → SQS → Lambda', 'trace ID truyền qua các service', 'mỗi service ghi segment/subsegment (thời gian, lỗi, metadata)', 'service map + timeline của từng request'],
+    steps: [
+      { to: 1, label: 'log rời rạc không cho biết KHÂU NÀO chậm/lỗi' },
+      { to: 3, label: 'chỉ ra service/khâu nào là nút thắt — điều metric và log đơn lẻ không làm được' },
+      { to: 3, label: 'SDK/agent, hoặc OpenTelemetry (ADOT)' },
+    ],
+  },
 },
 {
   cat: 'IaC',
@@ -124,6 +218,19 @@ SS.addQuestions('aws', [
     'CloudFormation là state machine cho hạ tầng: template là mong muốn, stack là hiện trạng, change set là "diff" xem trước, drift là "ai đó sửa lén". StackSets nhân bản ra tổ chức.',
   example:
     'Đổi instance type RDS: tạo change set → thấy "Replacement: True" (mất dữ liệu!) → dừng lại, dùng `modify-db-instance` thay vì CloudFormation, hoặc snapshot trước. Drift detection hàng tuần phát hiện security group bị mở tay.',
+  viz: {
+    type: 'tree',
+    title: 'CloudFormation — state machine cho hạ tầng',
+    root: {
+      label: 'template = mong muốn; stack = hiện trạng',
+      children: [
+        { label: 'Stack', note: 'tập tài nguyên từ một template; xoá stack = xoá tài nguyên (trừ DeletionPolicy: Retain)' },
+        { label: 'Change set', note: 'xem trước "diff" — cảnh báo "Replacement: True" (re-create → mất dữ liệu)' },
+        { label: 'Drift detection', note: 'phát hiện tài nguyên bị sửa NGOÀI CloudFormation' },
+        { label: 'Nested stacks / StackSets', note: 'module hoá / deploy ra nhiều account/region' },
+      ],
+    },
+  },
 },
 {
   cat: 'IaC',
@@ -136,6 +243,16 @@ SS.addQuestions('aws', [
     'CFN/CDK cho "all-in AWS" (CDK thêm sức mạnh ngôn ngữ). Terraform cho đa cloud và hệ sinh thái provider rộng, đổi lấy việc tự quản state. Chọn theo phạm vi (AWS-only?) và kỹ năng team.',
   example:
     'Shop toàn AWS, team thích TypeScript: CDK (Construct dùng lại cho mọi service: ECS + ALB + alarm + dashboard trong 20 dòng). Công ty dùng cả AWS + Cloudflare + Datadog + GitHub: Terraform để quản tất cả trong một workflow.',
+  viz: {
+    type: 'compare',
+    cols: ['CloudFormation', 'CDK', 'Terraform'],
+    rows: [
+      ['Ngôn ngữ', 'YAML/JSON khai báo', 'TS/Python/Java → synth ra CFN', 'HCL khai báo'],
+      ['Phạm vi', 'chỉ AWS', 'chỉ AWS + sức mạnh ngôn ngữ (Construct)', 'đa cloud / đa provider'],
+      ['State', 'AWS giữ', 'AWS giữ (qua CFN)', 'state file (backend S3 + DynamoDB lock)'],
+      ['Rollback', 'tự động', 'tự động', 'không tự động (plan/apply)'],
+    ],
+  },
 },
 {
   cat: 'CI/CD',
@@ -149,6 +266,16 @@ SS.addQuestions('aws', [
     'Pipeline điều phối, Build biên dịch/test, Deploy đưa ra môi trường an toàn (canary + auto rollback). Ba dịch vụ rời để ghép linh hoạt với công cụ ngoài.',
   example:
     'Pipeline: Source (CodeCommit/GitHub) → CodeBuild (`mvn verify`, build image, push ECR) → Deploy staging (CodeDeploy ECS blue/green) → Manual approval → Deploy prod (canary 10% 10 phút, rollback nếu alarm 5xx).',
+  viz: {
+    type: 'flow',
+    title: 'Pipeline: 3 dịch vụ rời để ghép linh hoạt',
+    nodes: ['Source (CodeCommit/GitHub)', 'CodeBuild (mvn verify, build image, push ECR)', 'Deploy staging (CodeDeploy)', 'Manual approval', 'Deploy prod (canary + auto rollback)'],
+    steps: [
+      { to: 0, label: 'CodePipeline orchestrator: định nghĩa các stage, trigger theo commit' },
+      { to: 1, label: 'CodeBuild = CI runner theo buildspec.yml → trả artifact' },
+      { to: 4, label: 'CodeDeploy: in-place / blue-green / canary, hook lifecycle, tự rollback khi alarm/health fail' },
+    ],
+  },
 },
 {
   cat: 'CI/CD',
@@ -161,6 +288,16 @@ SS.addQuestions('aws', [
     'Rolling tiết kiệm nhưng rollback chậm và trộn version. Blue/green cho rollback tức thì. Canary cho phát hiện lỗi sớm với ít người dùng bị ảnh hưởng. Canary + auto-rollback theo alarm là tiêu chuẩn vàng.',
   example:
     'ECS service với CodeDeploy: blue/green, canary `10% trong 5 phút` → CloudWatch alarm theo dõi 5xx & latency → nếu vượt ngưỡng, tự rollback về task set cũ (chưa bị xoá) trong < 1 phút.',
+  viz: {
+    type: 'compare',
+    cols: ['Rolling', 'Blue/Green', 'Canary'],
+    rows: [
+      ['Cách', 'thay dần từng batch', 'dựng môi trường mới rồi chuyển TOÀN BỘ traffic', 'chuyển một phần nhỏ traffic, tăng dần'],
+      ['Tài nguyên thừa', 'ít', '2x tạm thời', 'ít'],
+      ['Rollback', 'rolling ngược (chậm), trộn 2 version', 'trỏ lại blue TỨC THÌ', 'blast radius nhỏ'],
+      ['Tiêu chuẩn vàng', '—', '—', 'canary + auto-rollback theo alarm'],
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -175,6 +312,20 @@ SS.addQuestions('aws', [
     'SSM loại bỏ nhu cầu SSH/bastion và các credential quản trị: mọi thao tác vận hành đi qua IAM + agent, được audit. "Không có port 22" là một mục tiêu bảo mật khả thi nhờ SSM.',
   example:
     'Điều tra sự cố trên instance production: `aws ssm start-session --target i-xxx` → vào shell, phiên được ghi ra S3/CloudWatch. Vá lỗ hổng khẩn: Run Command chạy `yum update -y openssl` trên 200 instance có tag `env=prod` trong một lệnh.',
+  viz: {
+    type: 'tree',
+    title: 'Systems Manager — "không có port 22" là mục tiêu khả thi',
+    root: {
+      label: 'Mọi thao tác vận hành qua IAM + agent, được audit',
+      children: [
+        { label: 'Session Manager', note: 'shell vào EC2 không cần SSH/bastion/port 22; log toàn bộ phiên' },
+        { label: 'Run Command', note: 'chạy lệnh/script trên nhiều instance cùng lúc' },
+        { label: 'Patch Manager', note: 'vá OS theo baseline + maintenance window' },
+        { label: 'Parameter Store', note: 'config & secret phân cấp' },
+        { label: 'State Manager / Automation', note: 'giữ instance ở trạng thái mong muốn, runbook' },
+      ],
+    },
+  },
 },
 {
   cat: 'Chi phí',
@@ -191,6 +342,21 @@ SS.addQuestions('aws', [
     'Tối ưu chi phí = (đo lường + tag) → (right-size + cam kết + Spot) → (dọn rác + tiering) → (giảm data transfer). Làm liên tục, không phải một lần.',
   example:
     'Cost Explorer group by service: 40% hoá đơn là NAT Gateway data processing → thêm S3/ECR/SQS VPC Endpoint, tiết kiệm ~30% tổng. Compute Optimizer: 15 instance `m5.2xlarge` ở 10% CPU → xuống `m6i.large`.',
+  viz: {
+    type: 'tree',
+    title: 'Tối ưu chi phí AWS — làm LIÊN TỤC',
+    root: {
+      label: '(đo + tag) → (right-size + cam kết + Spot) → (dọn rác + tiering) → (giảm data transfer)',
+      children: [
+        { label: 'Right-sizing', note: 'Compute Optimizer / CloudWatch phát hiện instance quá khổ' },
+        { label: 'Cam kết', note: 'Savings Plans / RI cho baseline; Spot cho workload chịu gián đoạn' },
+        { label: 'Tắt cái không dùng', note: 'dev/test theo lịch; xoá EBS/EIP/snapshot mồ côi' },
+        { label: 'Storage tiering', note: 'S3 lifecycle, gp2→gp3, Intelligent-Tiering' },
+        { label: 'Giảm data transfer', note: 'VPC Endpoint, CloudFront, tránh chit-chat cross-AZ' },
+        { label: 'Quan sát', note: 'Cost Explorer, Budgets + alert, anomaly detection' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -203,6 +369,15 @@ SS.addQuestions('aws', [
     'Serverless (Lambda/DynamoDB on-demand) scale gần như tự động. Provisioned mode và ECS cần cấu hình target tracking. Luôn có trần (concurrency limit, max capacity) để chặn chi phí/blast radius khi có sự cố hoặc tấn công.',
   example:
     'ECS service: target tracking `ALBRequestCountPerTarget=1000`, min 4 / max 40 task. Kèm CloudWatch alarm nếu chạm max 40 trong 10 phút → cảnh báo (có thể là DDoS hoặc cần tăng max). DynamoDB bảng đi kèm: auto scaling WCU 100–5000.',
+  viz: {
+    type: 'compare',
+    cols: ['Lambda', 'DynamoDB', 'ECS'],
+    rows: [
+      ['Cách scale', 'tự theo invoke đồng thời (burst 500–3000, rồi +500/phút)', 'Application Auto Scaling RCU/WCU theo target utilization; hoặc on-demand', 'Service Auto Scaling target tracking (CPU/mem/ALB request)'],
+      ['Cần cấu hình?', 'gần như không', 'provisioned mode cần; on-demand tự lo', 'cần + Cluster Auto Scaling / Fargate cho node'],
+      ['Luôn có trần', 'concurrency limit', 'max capacity', 'max task'],
+    ],
+  },
 },
 {
   cat: 'Tuân thủ',
@@ -217,6 +392,16 @@ SS.addQuestions('aws', [
     'Config biến chính sách bảo mật/tuân thủ thành kiểm tra tự động, liên tục, có thể tự khắc phục — thay vì audit thủ công định kỳ.',
   example:
     'Rule `s3-bucket-server-side-encryption-enabled` + remediation: bucket nào bị tạo không mã hoá → Config đánh dấu NON_COMPLIANT → SSM Automation tự bật SSE-S3 và gửi thông báo cho team tạo ra nó.',
+  viz: {
+    type: 'flow',
+    title: 'AWS Config rules — chính sách thành kiểm tra tự động, liên tục',
+    nodes: ['Config rule đánh giá cấu hình liên tục', 'COMPLIANT / NON_COMPLIANT', 'remediation: SSM Automation tự sửa', 'conformance pack: bó rule theo chuẩn (CIS, PCI, HIPAA)'],
+    steps: [
+      { to: 1, label: 'managed rules (s3-bucket-public-read-prohibited, encrypted-volumes…) hoặc custom (Lambda/Guard)' },
+      { to: 2, label: 'ví dụ: bucket không mã hoá → tự bật SSE-S3 + thông báo team tạo ra nó' },
+      { to: 3, label: 'deploy một lần cho account/OU — thay audit thủ công định kỳ' },
+    ],
+  },
 },
 {
   cat: 'Độ tin cậy',
@@ -231,6 +416,18 @@ SS.addQuestions('aws', [
     'DR là đánh đổi chi phí ↔ (RTO: bao lâu để phục hồi) và (RPO: mất bao nhiêu dữ liệu). Chọn theo mức độ chịu đựng của nghiệp vụ, không phải "càng cao càng tốt".',
   example:
     'Blog nội bộ: Backup & Restore (snapshot hàng ngày sang region khác). Hệ thống thanh toán: Warm Standby — Aurora Global Database (RPO < 1s), ECS service min-capacity ở region phụ, Route 53 failover, diễn tập failover hàng quý.',
+  viz: {
+    type: 'bars',
+    title: 'DR — RTO điển hình (log scale, càng ngắn càng đắt/phức tạp)',
+    unit: 'phút',
+    scale: 'log',
+    items: [
+      { label: 'Backup & Restore', value: 240, note: 'snapshot/S3 CRR sang region khác — rẻ nhất, RTO/RPO hàng giờ' },
+      { label: 'Pilot Light', value: 30, note: 'lõi tối thiểu chạy sẵn (DB replica, AMI); phần còn lại tắt' },
+      { label: 'Warm Standby', value: 3, note: 'phiên bản thu nhỏ chạy đủ, scale lên khi failover' },
+      { label: 'Multi-site Active/Active', value: 1, note: 'chạy đầy đủ nhiều region, RTO ~0 — đắt & phức tạp nhất' },
+    ],
+  },
 },
 {
   cat: 'Messaging',
@@ -243,6 +440,16 @@ SS.addQuestions('aws', [
     'Không bật partial batch response = "một message xấu kéo cả lô chạy lại". `ReportBatchItemFailures` khoanh vùng thất bại xuống từng message, giữ hiệu quả của batching mà không mất tính đúng đắn.',
   example:
     'Lô 10 message, message #4 lỗi transient: function `try/catch` từng cái, trả `{batchItemFailures: [{itemIdentifier: "id-4"}]}` → 9 message được xoá, chỉ #4 quay lại queue và retry; sau `maxReceiveCount` lần → DLQ.',
+  viz: {
+    type: 'flow',
+    title: 'SQS + Lambda: partial batch failure',
+    nodes: ['Lambda poll SQS theo lô', 'mặc định: function ném lỗi → CẢ LÔ quay lại queue', 'bật ReportBatchItemFailures', 'trả batchItemFailures (id message fail)', 'chỉ message đó quay lại, phần thành công được xoá'],
+    steps: [
+      { to: 1, label: 'message đã xử lý thành công bị xử lý lại — "một message xấu kéo cả lô"' },
+      { to: 4, label: 'khoanh vùng thất bại xuống từng message, giữ hiệu quả batching' },
+      { to: 4, label: 'visibility timeout ≥ 6× function timeout; DLQ trên QUEUE (không phải Lambda)' },
+    ],
+  },
 },
 {
   cat: 'Observability',
@@ -256,5 +463,15 @@ SS.addQuestions('aws', [
     'Metrics phát hiện "có gì đó sai" (alarm). Traces khoanh vùng "ở đâu". Logs giải thích "tại sao". Một quy trình điều tra tốt đi qua cả ba, được nối bằng id chung.',
   example:
     'Alarm: p99 latency `/checkout` tăng (metric) → mở X-Ray, lọc trace chậm → thấy span `PaymentService.charge` timeout (trace) → Logs Insights lọc theo `traceId` đó → thấy `connection pool exhausted` (log). Nguyên nhân: pool size quá nhỏ.',
+  viz: {
+    type: 'flow',
+    title: 'Điều tra: metrics → traces → logs, nối bằng id chung',
+    nodes: ['Metrics: "có gì đó sai" (alarm p99 tăng)', 'Traces: "ở đâu" (span PaymentService.charge timeout)', 'Logs: "tại sao" (connection pool exhausted)'],
+    steps: [
+      { to: 0, label: 'metric rẻ để lưu lâu, tốt cho dashboard & xu hướng' },
+      { to: 1, label: 'trace khoanh vùng khâu chậm/lỗi qua các service' },
+      { to: 2, label: 'Logs Insights lọc theo traceId đó → nguyên nhân gốc' },
+    ],
+  },
 },
 ]);

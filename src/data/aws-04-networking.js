@@ -24,6 +24,16 @@ SS.addQuestions('aws', [
     'IGW = cửa hai chiều cho máy có public IP. NAT GW = cửa một chiều (ra) cho máy private. NAT bảo vệ backend khỏi kết nối đến từ bên ngoài trong khi vẫn cho phép outbound.',
   example:
     'EC2 app ở private subnet cần `apt update` và gọi Stripe API: route `0.0.0.0/0 → nat-gw`. Stripe không thể mở kết nối tới EC2 đó. Chi phí NAT cao khi traffic outbound lớn → cân nhắc VPC Endpoint cho traffic tới dịch vụ AWS.',
+  viz: {
+    type: 'compare',
+    cols: ['Internet Gateway (IGW)', 'NAT Gateway'],
+    rows: [
+      ['Cho ai', 'tài nguyên có public IP trong public subnet', 'tài nguyên private subnet (chỉ private IP)'],
+      ['Chiều', 'hai chiều', 'một chiều (ra ngoài)'],
+      ['Internet vào được?', 'có', 'KHÔNG'],
+      ['Phí', 'không', 'phí giờ + phí GB xử lý; đặt mỗi AZ một cái'],
+    ],
+  },
 },
 {
   cat: 'VPC',
@@ -40,6 +50,17 @@ SS.addQuestions('aws', [
     'SG stateful + chỉ allow + gắn instance = lớp bảo vệ chính. NACL stateless + có deny + gắn subnet = lớp bổ sung ở biên. Traffic phải qua cả hai.',
   example:
     'SG của RDS: chỉ allow port 5432 từ **SG của app** (không phải từ CIDR) → dù app scale, IP đổi, rule vẫn đúng. NACL: thêm deny cho một dải IP đang tấn công brute-force, áp cho cả subnet ngay lập tức.',
+  viz: {
+    type: 'compare',
+    cols: ['Security Group', 'Network ACL'],
+    rows: [
+      ['Cấp', 'ENI (instance)', 'Subnet'],
+      ['Trạng thái', 'stateful — reply tự cho phép', 'stateless — phải mở cả 2 chiều'],
+      ['Rule', 'chỉ allow', 'allow VÀ deny'],
+      ['Đánh giá', 'tất cả rule', 'theo thứ tự số, dừng ở match đầu'],
+      ['Vai trò', 'hàng rào chính (dùng hằng ngày)', 'lớp phụ ở biên — chỉ khi cần deny tường minh'],
+    ],
+  },
 },
 {
   cat: 'Kết nối',
@@ -51,6 +72,16 @@ SS.addQuestions('aws', [
     'Peering là dây nối trực tiếp, tốt cho vài VPC. TGW là "router đám mây" hình sao, cần khi mạng có nhiều VPC/account/on-prem và cần quản lý định tuyến tập trung.',
   example:
     '2 VPC (app + shared services): peering là đủ, rẻ. 30 VPC của 30 team + kết nối on-prem qua Direct Connect: TGW hub, mỗi VPC một attachment, route table TGW phân đoạn team nào nói chuyện được với team nào.',
+  viz: {
+    type: 'compare',
+    cols: ['VPC Peering', 'Transit Gateway (TGW)'],
+    rows: [
+      ['Hình thái', 'dây nối 1-1', 'router đám mây hình sao'],
+      ['Bắc cầu (transitive)', 'không', 'có'],
+      ['Số kết nối khi n VPC', 'n(n-1)/2 bùng nổ', 'n attachment'],
+      ['Dùng cho', 'vài VPC', 'nhiều VPC/account/on-prem, định tuyến tập trung'],
+    ],
+  },
 },
 {
   cat: 'Kết nối',
@@ -63,6 +94,16 @@ SS.addQuestions('aws', [
     'Endpoint giữ traffic tới dịch vụ AWS **trong mạng AWS** — bảo mật hơn (không ra internet), rẻ hơn (bỏ phí NAT), và cho phép private subnet không cần NAT cho các call này.',
   example:
     'App private subnet gọi S3, SQS, Secrets Manager, ECR (pull image): tạo Gateway Endpoint S3 (free) + Interface Endpoint cho SQS/Secrets/ECR. Hoá đơn NAT Gateway giảm mạnh, và bucket policy có thể `Deny` nếu request không đến từ VPC Endpoint của bạn.',
+  viz: {
+    type: 'compare',
+    cols: ['Gateway Endpoint', 'Interface Endpoint (PrivateLink)'],
+    rows: [
+      ['Dịch vụ', 'chỉ S3 và DynamoDB', 'hầu hết dịch vụ khác (SQS, KMS, ECR, Secrets…)'],
+      ['Hình thức', 'route trong route table', 'ENI với private IP trong subnet'],
+      ['Phí', 'miễn phí — nên luôn tạo', 'phí giờ + GB'],
+      ['Lợi ích chung', 'traffic AWS trong mạng AWS: bảo mật hơn, bỏ phí NAT', 'như trái'],
+    ],
+  },
 },
 {
   cat: 'DNS',
@@ -79,6 +120,21 @@ SS.addQuestions('aws', [
     'Route 53 không chỉ là DNS mà là "traffic manager toàn cầu": định tuyến theo tỉ lệ, độ trễ, vị trí, hoặc sức khoẻ endpoint — điều khiển ở tầng phân giải tên.',
   example:
     'Ra mắt version mới: weighted 95% v1 / 5% v2, tăng dần nếu ổn. App đa vùng: latency-based routing đưa user châu Á vào `ap-southeast-1`, user Mỹ vào `us-east-1`. DR: failover record trỏ region phụ khi health check region chính fail.',
+  viz: {
+    type: 'tree',
+    title: 'Route 53 — "traffic manager toàn cầu"',
+    root: {
+      label: 'Định tuyến ở tầng phân giải tên',
+      children: [
+        { label: 'Simple', note: 'một record, một/nhiều IP' },
+        { label: 'Weighted', note: 'chia traffic theo tỉ lệ — canary, A/B, blue-green' },
+        { label: 'Latency-based', note: 'user tới region độ trễ thấp nhất' },
+        { label: 'Failover', note: 'primary/secondary theo health check — active-passive DR' },
+        { label: 'Geolocation / Geoproximity', note: 'theo vị trí / khoảng cách + bias' },
+        { label: 'Multivalue answer', note: 'trả nhiều IP khoẻ — round robin đơn giản' },
+      ],
+    },
+  },
 },
 {
   cat: 'DNS',
@@ -94,6 +150,16 @@ SS.addQuestions('aws', [
     'Health check biến DNS thành cơ chế failover: record "biến mất" khỏi câu trả lời khi endpoint chết. Kết hợp failover routing policy để tự chuyển sang backup.',
   example:
     'Primary record (region A) + health check gọi `/health`. Region A sập → sau vài chục giây, health check fail → Route 53 trả secondary record (region B). TTL thấp (60s) để client cập nhật nhanh.',
+  viz: {
+    type: 'flow',
+    title: 'Route 53 health check = cơ chế failover DNS',
+    nodes: ['AWS checkers (nhiều địa điểm) gọi endpoint', 'tỉ lệ fail vượt ngưỡng → unhealthy', 'Route 53 ngừng trả record unhealthy', 'failover routing → secondary record'],
+    steps: [
+      { to: 0, label: 'HTTP/HTTPS/TCP; loại: endpoint / calculated / CloudWatch alarm check' },
+      { to: 2, label: 'record "biến mất" khỏi câu trả lời khi endpoint chết' },
+      { to: 3, label: 'TTL thấp (60s) để client cập nhật nhanh' },
+    ],
+  },
 },
 {
   cat: 'CDN',
@@ -107,6 +173,19 @@ SS.addQuestions('aws', [
     'CloudFront giảm latency và tải origin bằng cache ở biên. Dùng versioned URL thay vì invalidation, và OAC để origin S3 không bao giờ public.',
   example:
     'SPA: `index.html` cache 60s (đổi nhanh khi deploy), asset băm nội dung (`main.a1b2c3.js`) cache 1 năm `immutable`. S3 bucket private, chỉ CloudFront (OAC) đọc được. Deploy mới = upload asset mới + index.html trỏ tới chúng, không cần invalidation.',
+  viz: {
+    type: 'tree',
+    title: 'CloudFront',
+    root: {
+      label: 'Giảm latency + tải origin bằng cache ở biên',
+      children: [
+        { label: 'Cache key', note: 'mặc định URL; cấu hình thêm header/cookie/query string' },
+        { label: 'TTL', note: 'Cache-Control/Expires của origin, hoặc Min/Default/Max của behavior' },
+        { label: 'Invalidation', note: 'xoá cache trước hạn — tính phí; TỐT HƠN: versioned URL (app.v2.js)' },
+        { label: 'OAC (Origin Access Control)', note: 'chỉ CloudFront đọc S3 origin → bucket private hoàn toàn' },
+      ],
+    },
+  },
 },
 {
   cat: 'CDN',
@@ -122,6 +201,16 @@ SS.addQuestions('aws', [
     'S3 lưu file, CloudFront phục vụ (TLS, cache, edge, WAF). Bucket không bao giờ public — OAC là cầu nối. SPA cần map lỗi về index.html.',
   example:
     '`app.acme.com` → Route 53 alias → CloudFront → OAC → S3 `acme-frontend`. User vào `app.acme.com/dashboard` (route client-side) → S3 trả 403 (không có key đó) → CloudFront custom error rule đổi thành `index.html` 200 → React router xử lý.',
+  viz: {
+    type: 'flow',
+    title: 'Static website: S3 + CloudFront',
+    nodes: ['user → Route 53 alias', 'CloudFront (TLS, cache, edge, WAF)', 'OAC ký SigV4', 'S3 bucket PRIVATE (BPA bật)'],
+    steps: [
+      { to: 1, label: 'ACM cert ở us-east-1 cho custom domain' },
+      { to: 3, label: 'bucket không bao giờ public — OAC là cầu nối' },
+      { to: 3, label: 'SPA: custom error response 403/404 → trả /index.html status 200' },
+    ],
+  },
 },
 {
   cat: 'API',
@@ -134,6 +223,15 @@ SS.addQuestions('aws', [
     'HTTP API là mặc định (rẻ, nhanh, đủ dùng). REST API khi cần tính năng doanh nghiệp (usage plan, transform, cache). WebSocket khi cần server chủ động push.',
   example:
     'Backend cho mobile app: HTTP API + Lambda + JWT authorizer (Cognito). Cổng API bán cho đối tác cần rate limit theo gói + API key + báo cáo usage: REST API với usage plans. Tính năng chat realtime: WebSocket API.',
+  viz: {
+    type: 'compare',
+    cols: ['HTTP API', 'REST API', 'WebSocket API'],
+    rows: [
+      ['Giá / latency', 'rẻ hơn ~70%, latency thấp', 'đắt hơn', '—'],
+      ['Tính năng', 'proxy Lambda/HTTP, JWT authorizer, CORS', 'transform (VTL), validation, API keys + usage plans, cache, WAF, canary', 'kết nối 2 chiều lâu dài'],
+      ['Dùng cho', 'mặc định — hầu hết use case', 'tính năng doanh nghiệp', 'chat, notification realtime, streaming'],
+    ],
+  },
 },
 {
   cat: 'API',
@@ -150,6 +248,18 @@ SS.addQuestions('aws', [
     'Throttling bảo vệ backend khỏi quá tải; usage plan biến API thành sản phẩm có gói cước; authorizer tách xác thực khỏi code business (đặc biệt Lambda authorizer cho logic tuỳ biến, có cache theo token).',
   example:
     'API công khai: throttle account-level 10.000 rps burst 5.000. Đối tác Free: 1.000 req/ngày, 5 rps. Đối tác Pro: 1M req/ngày, 100 rps. Lambda authorizer verify JWT của Auth0, cache 5 phút theo token → giảm lời gọi authorizer.',
+  viz: {
+    type: 'tree',
+    title: 'API Gateway — bảo vệ + kiếm tiền + xác thực',
+    root: {
+      label: '3 lớp',
+      children: [
+        { label: 'Throttling', note: 'token bucket: rate + burst; vượt → 429. Áp account/stage/method/per-client' },
+        { label: 'Usage plan (REST)', note: 'API key + quota ngày/tháng + throttle riêng → bán API theo gói' },
+        { label: 'Authorization', note: 'IAM SigV4 (nội bộ), Cognito, Lambda authorizer (logic tuỳ ý, có cache), JWT authorizer (HTTP API)' },
+      ],
+    },
+  },
 },
 {
   cat: 'API',
@@ -162,6 +272,15 @@ SS.addQuestions('aws', [
     'API Gateway = "API management layer" (feature-rich, per-request pricing, hợp serverless & thấp/trung bình traffic). ALB = "load balancer" (rẻ ở quy mô lớn, hợp workload thường trực).',
   example:
     'Microservice trên ECS Fargate, 50k rps nội bộ: ALB (path routing) — API Gateway sẽ tốn kém và thêm latency. Public API bán cho khách hàng, ~500 rps, cần quota + key: API Gateway REST.',
+  viz: {
+    type: 'compare',
+    cols: ['API Gateway', 'ALB'],
+    rows: [
+      ['Là gì', 'API management layer', 'load balancer'],
+      ['Giá', 'theo request → đắt ở quy mô lớn', 'theo giờ + LCU → rẻ ở quy mô lớn'],
+      ['Hơn khi', 'serverless, API key/quota, transform, WebSocket, throttle per-client', 'container/EC2 thường trực, throughput rất cao, latency cực thấp, sticky'],
+    ],
+  },
 },
 {
   cat: 'Kết nối',
@@ -174,6 +293,17 @@ SS.addQuestions('aws', [
     'VPN = nhanh dựng, rẻ, qua internet (best-effort). DX = hạ tầng vật lý riêng, hiệu năng đảm bảo, đắt và chậm triển khai. Kết hợp DX + VPN backup cho enterprise.',
   example:
     'Công ty migrate data center: DX 10Gbps để copy hàng trăm TB và cho ứng dụng lai on-prem/cloud latency nhạy; VPN dựng ngay trong tuần đầu để bắt đầu làm việc, và làm đường dự phòng khi DX bảo trì.',
+  viz: {
+    type: 'compare',
+    cols: ['Site-to-Site VPN', 'Direct Connect (DX)'],
+    rows: [
+      ['Kết nối', 'tunnel IPsec qua internet', 'cáp vật lý riêng (qua đối tác colo)'],
+      ['Băng thông / latency', 'phụ thuộc internet, kém ổn định', 'cam kết 1–100 Gbps, thấp và ổn định'],
+      ['Thời gian dựng', 'vài phút', 'hàng tuần'],
+      ['Mã hoá', 'sẵn', 'không — chạy VPN trên DX nếu cần'],
+      ['Thực tế', 'backup', 'kết nối chính; + VPN backup'],
+    ],
+  },
 },
 {
   cat: 'VPC',
@@ -190,6 +320,20 @@ SS.addQuestions('aws', [
     'VPC Resolver `.2` xử lý DNS trong VPC. Resolver endpoints nối DNS của AWS và on-prem để tên phân giải được cả hai chiều trong kiến trúc lai.',
   example:
     'App trên EC2 cần gọi `db.corp.local` (on-prem) và `api.internal.acme.com` (Route 53 private zone). Outbound resolver rule: `corp.local → forward tới 10.1.0.53` (DNS on-prem). Private zone gắn VPC lo phần còn lại.',
+  viz: {
+    type: 'tree',
+    title: 'DNS resolution trong VPC',
+    root: {
+      label: 'Route 53 Resolver tại VPC_CIDR_base + 2 (10.0.0.2) và 169.254.169.253',
+      children: [
+        { label: 'Phân giải tên public bình thường' },
+        { label: 'Private hosted zone gắn với VPC' },
+        { label: 'Hostname nội bộ EC2' },
+        { label: 'Inbound endpoint', note: 'on-prem query được tên trong Route 53 private zone' },
+        { label: 'Outbound endpoint + rules', note: 'VPC forward query domain on-prem (corp.local) tới DNS on-prem' },
+      ],
+    },
+  },
 },
 {
   cat: 'Chi phí',
@@ -205,6 +349,18 @@ SS.addQuestions('aws', [
     'Data transfer là "chi phí ẩn" lớn nhất trên AWS. Giữ traffic trong cùng AZ, dùng VPC Endpoint thay NAT, đặt CloudFront trước origin, và cẩn thận với chit-chat cross-AZ giữa microservice.',
   example:
     'Microservice A (AZ-a) gọi B (AZ-b) hàng triệu lần/ngày với payload lớn → hoá đơn cross-AZ bất ngờ. Sửa: dùng topology-aware routing (gọi instance cùng AZ trước), hoặc chấp nhận đánh đổi HA. NAT GW xử lý 10TB/tháng traffic tới S3 → thay bằng Gateway Endpoint (free).',
+  viz: {
+    type: 'bars',
+    title: 'Data transfer — chi phí tương đối ($/GB, xấp xỉ)',
+    unit: '$/GB',
+    items: [
+      { label: 'Inbound tới AWS', value: 0, note: 'hầu như miễn phí' },
+      { label: 'Cross-AZ (mỗi chiều)', value: 0.01, note: 'tính CẢ HAI CHIỀU — RDS Multi-AZ, chat cross-AZ giữa microservice' },
+      { label: 'Cross-region', value: 0.02, note: 'đắt hơn cross-AZ' },
+      { label: 'Qua NAT Gateway', value: 0.045, note: 'phí xử lý mỗi GB + phí giờ' },
+      { label: 'Outbound ra internet', value: 0.09, note: 'giảm dần theo bậc; CloudFront rẻ hơn trực tiếp' },
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -217,6 +373,16 @@ SS.addQuestions('aws', [
     'Shield = chống DDoS (volumetric). WAF = lọc request độc hại ở tầng HTTP (injection, bot, abuse). Hai lớp khác nhau, thường dùng cùng nhau ở biên (CloudFront + WAF).',
   example:
     'API public: CloudFront + WAF với managed rule `AWSManagedRulesCommonRuleSet` + rate-based rule (chặn IP > 2000 req/5 phút) + geo-block các nước không phục vụ. Shield Standard tự lo lớp mạng. Nếu là mục tiêu DDoS thường xuyên → Shield Advanced.',
+  viz: {
+    type: 'compare',
+    cols: ['AWS Shield', 'AWS WAF'],
+    rows: [
+      ['Lớp', 'L3/L4 — chống DDoS volumetric (SYN flood, UDP reflection)', 'L7 — lọc request độc hại HTTP'],
+      ['Chặn gì', 'lưu lượng tấn công', 'SQLi, XSS, bot, rate-based, geo block, IP reputation'],
+      ['Standard', 'miễn phí, tự động cho mọi public IP/CloudFront/Route 53', '—'],
+      ['Advanced / gắn vào', 'DDoS response team, cost protection, L7', 'ALB, CloudFront, API Gateway, AppSync'],
+    ],
+  },
 },
 {
   cat: 'Kết nối',
@@ -229,6 +395,16 @@ SS.addQuestions('aws', [
     'PrivateLink = "expose đúng một service qua một ENI riêng tư", không phải nối hai mạng. Lý tưởng cho SaaS bán cho khách hàng AWS, hoặc chia sẻ service nội bộ giữa các VPC/account mà không mở rộng mặt phẳng mạng.',
   example:
     'Công ty bán API phân tích: tạo Endpoint Service trước NLB, khách hàng (account khác) tạo interface endpoint `vpce-xxx.analytics.acme.com` → gọi API hoàn toàn trong mạng AWS, không đi internet, không cần khách hàng biết VPC/IP của bạn.',
+  viz: {
+    type: 'flow',
+    title: 'PrivateLink — expose đúng MỘT service, không nối 2 mạng',
+    nodes: ['Provider: Endpoint Service trước một NLB', 'whitelist account được phép', 'Consumer: Interface Endpoint (ENI private IP)', 'traffic một chiều consumer → provider trong mạng AWS'],
+    steps: [
+      { to: 2, label: 'consumer tạo interface endpoint trỏ tới service đó' },
+      { to: 3, label: 'không qua internet, không peering, IP hai bên không cần không trùng' },
+      { to: 3, label: 'lý tưởng cho SaaS bán cho khách AWS' },
+    ],
+  },
 },
 {
   cat: 'VPC',
@@ -242,6 +418,15 @@ SS.addQuestions('aws', [
     'Flow Logs cho biết "traffic thực tế đi/bị chặn thế nào" (động). Reachability Analyzer cho biết "theo cấu hình thì có tới được không và tắc ở đâu" (tĩnh) — không cần gửi packet thật.',
   example:
     'App không kết nối được RDS: Reachability Analyzer từ ENI của app tới ENI của RDS → báo "blocked by security group sg-db: no inbound rule for port 5432 from sg-app". Sửa SG, phân tích lại → "reachable".',
+  viz: {
+    type: 'compare',
+    cols: ['VPC Flow Logs', 'Reachability Analyzer'],
+    rows: [
+      ['Kiểu', 'động — traffic thực tế', 'tĩnh — theo cấu hình (không gửi packet thật)'],
+      ['Cho biết', 'traffic có tới nơi không, bị chặn ở đâu (ACCEPT/REJECT)', 'theo cấu hình có tới được không và TẮC ở thành phần nào'],
+      ['Output', 'metadata luồng IP → CloudWatch/S3', 'chỉ đúng route table/SG/NACL đang chặn'],
+    ],
+  },
 },
 {
   cat: 'CDN',
@@ -253,6 +438,17 @@ SS.addQuestions('aws', [
     'CloudFront tăng tốc bằng **cache ở biên**. Global Accelerator tăng tốc bằng **định tuyến qua backbone AWS** cho traffic không cache được (game, VoIP, API non-HTTP, IoT), kèm IP tĩnh + failover nhanh.',
   example:
     'Game server UDP đa vùng: Global Accelerator 2 IP tĩnh, player toàn cầu vào edge gần nhất, đi backbone tới region thấp latency nhất; region chết → chuyển endpoint trong vài giây (không chờ DNS). Website tin tức: CloudFront (cache).',
+  viz: {
+    type: 'compare',
+    cols: ['CloudFront', 'Global Accelerator'],
+    rows: [
+      ['Tăng tốc bằng', 'cache nội dung ở edge', 'định tuyến qua backbone AWS'],
+      ['Cache?', 'có', 'KHÔNG'],
+      ['Giao thức', 'chủ yếu HTTP/S', 'mọi giao thức (TCP/UDP)'],
+      ['Đặc điểm', 'WAF, Lambda@Edge', '2 anycast IP tĩnh, failover region nhanh (không phụ thuộc DNS TTL)'],
+      ['Dùng cho', 'content tĩnh/động cacheable', 'game, VoIP, API non-HTTP, IoT'],
+    ],
+  },
 },
 {
   cat: 'VPC',
@@ -264,5 +460,15 @@ SS.addQuestions('aws', [
     'ENI là "danh tính mạng có thể tháo lắp"; EIP là "IP public cố định bạn kiểm soát". Dùng khi cần IP không đổi (whitelist của đối tác, DNS trỏ cứng, failover thủ công).',
   example:
     'Đối tác chỉ whitelist một IP outbound: đặt NAT Gateway với EIP cố định → mọi outbound của private subnet có IP nguồn không đổi. Failover appliance: tháo ENI (mang theo IP + SG) từ instance chết, gắn sang instance dự phòng.',
+  viz: {
+    type: 'compare',
+    cols: ['ENI (Elastic Network Interface)', 'Elastic IP (EIP)'],
+    rows: [
+      ['Là gì', 'card mạng ảo: private IP, MAC, SG', 'public IPv4 tĩnh của bạn'],
+      ['Gắn/tháo', 'giữa các instance (cùng AZ) → di chuyển "danh tính mạng"', 'gán vào ENI, giữ nguyên khi stop/start hoặc đổi instance'],
+      ['Lưu ý', '—', 'EIP không gắn tài nguyên đang chạy → bị tính phí'],
+      ['Dùng khi', 'failover appliance (mang IP + SG)', 'whitelist đối tác, DNS trỏ cứng'],
+    ],
+  },
 },
 ]);

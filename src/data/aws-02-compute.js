@@ -13,6 +13,18 @@ SS.addQuestions('aws', [
     'Chọn theo tài nguyên **giới hạn** (bottleneck) của workload: CPU-bound → `c`; RAM-bound → `r`; đều → `m`; tải thất thường nhẹ → `t`. Đo trước khi chọn.',
   example:
     'API Java heap 12GB, CPU trung bình 30%: `r6i.large` (16GB RAM) hợp hơn `c6i.large` (4GB — OOM) hay `m6i.xlarge` (thừa CPU, tốn tiền). Dev/test server ít traffic: `t3.small` burstable.',
+  viz: {
+    type: 'quadrant',
+    title: 'Chọn họ EC2 theo bottleneck của workload',
+    x: ['CPU thấp', 'CPU cao'],
+    y: ['RAM thấp', 'RAM cao'],
+    items: [
+      { label: 't (burstable) — tải nhẹ/không đều', qx: 0, qy: 0 },
+      { label: 'c (compute) — batch, encoding, web', qx: 1, qy: 0 },
+      { label: 'r / x (memory) — DB in-memory, cache', qx: 0, qy: 1 },
+      { label: 'm (general) — tải ổn định, cân bằng', qx: 1, qy: 1 },
+    ],
+  },
 },
 {
   cat: 'EC2',
@@ -26,6 +38,16 @@ SS.addQuestions('aws', [
     'On-Demand cho phần thay đổi; Savings Plans/RI cho phần baseline ổn định (cam kết đổi lấy giảm giá); Spot cho phần chịu được gián đoạn. Kết hợp cả ba để tối ưu chi phí.',
   example:
     'Fleet 20 instance: 8 instance baseline 24/7 → Compute Savings Plan 1 năm. Phần scale theo giờ cao điểm → On-Demand. Job xử lý ảnh async, retry được → Spot (tiết kiệm ~80%).',
+  viz: {
+    type: 'compare',
+    cols: ['On-Demand', 'Reserved (RI)', 'Savings Plans', 'Spot'],
+    rows: [
+      ['Cam kết', 'không', '1–3 năm, cấu hình cụ thể', '1–3 năm, mức chi tiêu $/h'],
+      ['Giảm giá', '0', 'tới ~72%', 'tương tự RI', 'tới ~90%'],
+      ['Linh hoạt', 'cao nhất', 'cứng (family/region)', 'across family/region/OS, cả Fargate/Lambda', 'AWS thu hồi (báo 2 phút)'],
+      ['Dùng cho', 'phần thay đổi / đo baseline', 'baseline (RI cũ)', 'baseline ổn định', 'chịu được gián đoạn'],
+    ],
+  },
 },
 {
   cat: 'EC2',
@@ -41,6 +63,16 @@ SS.addQuestions('aws', [
     'Spot rẻ vì "mượn" capacity — kiến trúc phải coi việc mất instance là bình thường: stateless, checkpoint, đa dạng hoá, và có phần On-Demand làm sàn.',
   example:
     'CI runner trên Spot: mỗi job đọc từ SQS, nếu nhận interruption notice thì để job chạy dở quay lại queue (visibility timeout hết) → job khác pick trên instance mới. Kết quả: giảm 85% chi phí CI, thỉnh thoảng job chậm vài phút.',
+  viz: {
+    type: 'flow',
+    title: 'Chịu được Spot bị thu hồi',
+    nodes: ['interruption notice (~2 phút, IMDS/EventBridge)', 'drain connection + checkpoint tiến độ', 'trả task về queue', 'diversify: nhiều instance type + AZ (capacity-optimized)'],
+    steps: [
+      { to: 1, label: 'chỉ chạy workload chịu gián đoạn: batch, CI, xử lý queue, stateless web sau LB' },
+      { to: 2, label: 'job dở quay lại queue → instance mới pick lại' },
+      { to: 3, label: 'kết hợp On-Demand base + Spot trong ASG làm sàn' },
+    ],
+  },
 },
 {
   cat: 'EC2',
@@ -54,6 +86,19 @@ SS.addQuestions('aws', [
     'AMI = trạng thái ban đầu; user data = tuỳ biến lúc boot; IMDS = cách instance biết "mình là ai" và lấy credential. IMDSv2 vá lỗ hổng SSRF kinh điển (Capital One breach).',
   example:
     'Golden AMI có sẵn JDK + agent monitoring. User data: `aws s3 cp s3://config/app.yml /etc/app/ && systemctl start app`. Enforce IMDSv2 để một bug SSRF trong app không đọc được credential role qua `169.254.169.254`.',
+  viz: {
+    type: 'tree',
+    title: 'Khởi động EC2',
+    root: {
+      label: 'AMI = trạng thái ban đầu; user data = tuỳ biến lúc boot; IMDS = "mình là ai"',
+      children: [
+        { label: 'AMI', note: 'ảnh đĩa gốc: OS + phần mềm. "Golden AMI" (Packer) → khởi động nhanh, nhất quán' },
+        { label: 'User data', note: 'script chạy lần đầu boot (cloud-init): cài agent, đăng ký cluster' },
+        { label: 'IMDS (169.254.169.254)', note: 'instance tự truy vấn metadata + credential của instance role' },
+        { label: 'IMDSv2', note: 'bắt buộc token (PUT) trước khi đọc → chống SSRF (Capital One breach). HttpTokens=required' },
+      ],
+    },
+  },
 },
 {
   cat: 'Storage',
@@ -67,6 +112,15 @@ SS.addQuestions('aws', [
     'SSD (gp3/io2) cho random I/O và latency thấp; HDD (st1/sc1) cho throughput tuần tự giá rẻ. gp3 tách IOPS khỏi size là lý do nên migrate từ gp2.',
   example:
     'DB Postgres OLTP: gp3 với 200GB nhưng provision 10.000 IOPS (không cần mua 3TB như gp2). Volume chứa log Kafka: st1 3TB — tuần tự, rẻ, throughput cao. Backup ít đọc lại: sc1.',
+  viz: {
+    type: 'compare',
+    cols: ['gp3 (SSD)', 'io2 (SSD provisioned)', 'st1 (HDD)', 'sc1 (HDD cold)'],
+    rows: [
+      ['I/O', 'random, latency thấp', 'IOPS cao & ổn định, 99.999% durability', 'tuần tự lớn', 'tuần tự, truy cập hiếm'],
+      ['Đặc điểm', 'tăng IOPS/throughput độc lập với size', 'Multi-Attach', 'rẻ', 'rẻ nhất'],
+      ['Dùng cho', 'mặc định hầu hết workload', 'DB khắt khe', 'log, big data, warehouse', 'archive'],
+    ],
+  },
 },
 {
   cat: 'Storage',
@@ -78,6 +132,17 @@ SS.addQuestions('aws', [
     'EBS = lưu trữ bền, linh hoạt, có phí. Instance store = scratch disk siêu nhanh, dữ liệu biến mất khi instance dừng. Chỉ để dữ liệu tái tạo được trên instance store.',
   example:
     'Database cache/tempdb, Kafka broker với replication, Elasticsearch data node (có replica shard): dùng instance store cho tốc độ. Dữ liệu nguồn của sự thật (RDS, EBS volume gốc): luôn EBS.',
+  viz: {
+    type: 'compare',
+    cols: ['EBS', 'Instance store'],
+    rows: [
+      ['Kiểu', 'volume mạng, tồn tại độc lập', 'đĩa NVMe gắn vật lý vào host'],
+      ['Khi stop/terminate instance', 'dữ liệu vẫn còn (trừ DeleteOnTermination)', 'MẤT SẠCH (ephemeral)'],
+      ['Tốc độ', 'tốt', 'cực thấp latency, throughput cao'],
+      ['Phí', 'có', 'miễn phí'],
+      ['Dùng cho', 'nguồn sự thật (RDS, volume gốc)', 'scratch: cache, tempdb, data node có replica'],
+    ],
+  },
 },
 {
   cat: 'Storage',
@@ -89,6 +154,16 @@ SS.addQuestions('aws', [
     'Snapshot incremental + lưu ở S3 = backup rẻ và có thể chuyển vùng. Nó là nền tảng cho AMI (AMI = snapshot(s) + metadata) và DR của EC2.',
   example:
     'Data Lifecycle Manager: tự snapshot mọi volume có tag `backup=daily` lúc 2h sáng, giữ 7 bản, copy sang `us-west-2`. Sự cố region chính: launch instance từ AMI + attach volume từ snapshot đã copy.',
+  viz: {
+    type: 'flow',
+    title: 'EBS snapshot — incremental, lưu ở S3 do AWS quản',
+    nodes: ['snapshot lần đầu: copy toàn bộ block đã dùng', 'snapshot sau: chỉ copy block THAY ĐỔI', 'lưu trên S3 (không thấy trong S3 của bạn)', 'khôi phục: tạo volume mới, lazy-load block'],
+    steps: [
+      { to: 1, label: 'backup rẻ vì chỉ lưu phần chênh lệch' },
+      { to: 3, label: 'warm up bằng Fast Snapshot Restore; copy sang region khác cho DR' },
+      { to: 3, label: 'AMI = snapshot(s) + metadata' },
+    ],
+  },
 },
 {
   cat: 'Auto Scaling',
@@ -116,6 +191,16 @@ SS.addQuestions('aws', [
     'Launch template là bản kế nhiệm có version của launch configuration. AWS đã ngừng phát triển launch configuration — dùng template cho mọi thứ mới.',
   example:
     'Mixed instances policy trong ASG: launch template định nghĩa base, ASG khai báo "20% On-Demand, 80% Spot, phân bổ trên `m6i.large`, `m5.large`, `m6a.large`". Launch configuration không làm được điều này.',
+  viz: {
+    type: 'compare',
+    cols: ['Launch configuration (cũ)', 'Launch template (khuyến nghị)'],
+    rows: [
+      ['Versioning', 'không — tạo mới để đổi', 'có'],
+      ['Tính năng EC2 mới', 'không', 'tất cả: mixed instances, Spot+On-Demand, IMDSv2 enforce, tag on launch'],
+      ['Dùng ở đâu', 'chỉ ASG', 'ASG + RunInstances + Spot Fleet'],
+      ['Trạng thái', 'AWS ngừng phát triển', 'dùng cho mọi thứ mới'],
+    ],
+  },
 },
 {
   cat: 'Load Balancing',
@@ -128,6 +213,16 @@ SS.addQuestions('aws', [
     'ALB = định tuyến thông minh ở tầng ứng dụng. NLB = ống dẫn L4 nhanh, IP tĩnh, giữ source IP. GWLB = "bump in the wire" cho security appliance.',
   example:
     'API REST + gRPC nội bộ: ALB với path routing (`/api/*` → service A, `/grpc.*` → service B). Game server UDP hoặc MQTT broker cần IP whitelist của khách hàng: NLB với Elastic IP.',
+  viz: {
+    type: 'compare',
+    cols: ['ALB (L7)', 'NLB (L4)', 'GWLB'],
+    rows: [
+      ['Hiểu', 'HTTP/HTTPS/gRPC/WebSocket', 'TCP/UDP/TLS', 'gói tin (GENEVE)'],
+      ['Routing', 'path, host, header, query, method', '—', 'trong suốt'],
+      ['Đặc điểm', 'WAF, Cognito auth, TLS termination', 'IP tĩnh/EIP, giữ source IP, latency siêu thấp', 'chèn appliance bên thứ ba (firewall, IDS)'],
+      ['Cho', 'web app, microservice, API', 'non-HTTP, throughput lớn, cần IP cố định', 'security appliance "bump in the wire"'],
+    ],
+  },
 },
 {
   cat: 'Load Balancing',
@@ -140,6 +235,18 @@ SS.addQuestions('aws', [
     'ALB = tập rule "nếu request khớp X thì gửi tới target group Y". Sticky session là giải pháp chữa cháy cho app stateful; đích đến nên là app không cần sticky.',
   example:
     'Rule: `Host = admin.acme.com` → target group `admin` (2 instance); `Path = /uploads/*` + `Method = POST` → target group `upload`. Tắt stickiness sau khi chuyển session sang ElastiCache → deploy/scale không làm rớt phiên đăng nhập.',
+  viz: {
+    type: 'tree',
+    title: 'ALB routing',
+    root: {
+      label: 'Tập rule "nếu request khớp X thì gửi tới target group Y"',
+      children: [
+        { label: 'Listener rule', note: 'đánh giá theo priority: điều kiện (host/path/header) → hành động (forward, redirect, auth)' },
+        { label: 'Target group', note: 'target (EC2/IP/Lambda) + health check + thuật toán + deregistration delay (draining)' },
+        { label: 'Sticky session', note: 'cookie ghim client vào một target — chỉ khi app có state cục bộ; tốt hơn: app stateless (session ở Redis)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Lambda',
@@ -154,6 +261,16 @@ SS.addQuestions('aws', [
     'Lambda tái sử dụng môi trường giữa các lần gọi — code ngoài handler chạy một lần mỗi môi trường. Cold start là cái giá của việc tạo môi trường mới khi scale hoặc sau thời gian nhàn rỗi.',
   example:
     'Kết nối DB: đặt `const pool = createPool()` **ngoài** handler → tái dùng qua nhiều invoke trên cùng môi trường. Đặt trong handler → tạo pool mỗi request → cạn connection DB.',
+  viz: {
+    type: 'flow',
+    title: 'Lambda execution environment (microVM Firecracker)',
+    nodes: ['cold start: tạo môi trường mới', 'tải code', 'init: runtime + code NGOÀI handler', 'chạy handler', 'warm invoke: chỉ chạy handler'],
+    steps: [
+      { to: 2, label: 'code ngoài handler chạy MỘT LẦN mỗi môi trường — đặt pool/client ở đây để tái dùng' },
+      { to: 3, label: 'mỗi môi trường xử lý một request tại một thời điểm; concurrency = số môi trường' },
+      { to: 4, label: 'giảm cold start: runtime nhẹ, giảm package, SnapStart (Java), provisioned concurrency' },
+    ],
+  },
 },
 {
   cat: 'Lambda',
@@ -165,6 +282,16 @@ SS.addQuestions('aws', [
     'Reserved = "trần và sàn về **số lượng**" (kiểm soát blast radius và chia phần). Provisioned = "warm sẵn để **không cold start**" (kiểm soát latency). Hai mục đích khác nhau.',
   example:
     'Function ghi vào RDS (pool 100 connection): đặt reserved concurrency = 50 để Lambda không mở > 50 connection. API nhạy latency, spike lúc 9h sáng: provisioned concurrency = 20 + auto scaling theo lịch để p99 không bị cold start.',
+  viz: {
+    type: 'compare',
+    cols: ['Reserved concurrency', 'Provisioned concurrency'],
+    rows: [
+      ['Kiểm soát', 'SỐ LƯỢNG (trần và sàn)', 'LATENCY (không cold start)'],
+      ['Làm gì', 'giới hạn trên + đảm bảo phần đó (lấy từ pool account)', 'khởi tạo sẵn N môi trường warm'],
+      ['Chi phí', 'không thêm', 'tính phí kể cả khi không dùng'],
+      ['Dùng để', 'bảo vệ downstream (DB), chia phần với function khác; =0 để tắt', 'p99 ổn định cho function nhạy latency'],
+    ],
+  },
 },
 {
   cat: 'Lambda',
@@ -180,6 +307,21 @@ SS.addQuestions('aws', [
     'Lambda hợp cho tác vụ **ngắn, event-driven, bùng nổ**. Chạm timeout 15 phút hay payload lớn là tín hiệu nên đổi sang Fargate/Step Functions.',
   example:
     'Xử lý video 20 phút: không phải việc của Lambda. Dùng Lambda để **nhận event S3** và **submit** một ECS Fargate task hoặc MediaConvert job, rồi một Lambda khác xử lý event "hoàn thành".',
+  viz: {
+    type: 'tree',
+    title: 'Giới hạn Lambda — dấu hiệu nên đổi sang Fargate/Step Functions',
+    root: {
+      label: 'Hợp cho tác vụ ngắn, event-driven, bùng nổ',
+      children: [
+        { label: 'Timeout tối đa 15 phút' },
+        { label: 'Memory 128MB–10GB', note: 'CPU tỉ lệ thuận với memory' },
+        { label: 'Payload 6MB sync / 256KB async', note: 'lớn hơn → S3 + tham chiếu' },
+        { label: '/tmp 512MB (tới 10GB)' },
+        { label: 'Package 50MB zip / 250MB giải nén / 10GB container' },
+        { label: 'Concurrency 1000/region (tăng được)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Containers',
@@ -192,6 +334,16 @@ SS.addQuestions('aws', [
     'ECS vs EKS là "đơn giản, thuần AWS" vs "chuẩn K8s, portable, phức tạp". Fargate vs EC2 là "không quản node, trả theo task" vs "quản node, rẻ hơn khi tải cao và ổn định".',
   example:
     'Team nhỏ, toàn AWS, vài chục service: **ECS on Fargate** — deploy nhanh, không lo node. Công ty có nền tảng K8s, cần Istio/ArgoCD/operator, chạy đa cloud: **EKS**, dùng EC2 node cho phần baseline + Fargate cho spike.',
+  viz: {
+    type: 'compare',
+    cols: ['ECS', 'EKS', 'Fargate (mode)'],
+    rows: [
+      ['Là gì', 'orchestrator của AWS, đơn giản', 'managed Kubernetes chuẩn', 'compute serverless cho ECS/EKS'],
+      ['Tích hợp / hệ sinh thái', 'sâu, thuần AWS', 'Helm, operators, portable đa cloud', '—'],
+      ['Vận hành', 'nhẹ', 'phức tạp, tốn công', 'không quản EC2 node'],
+      ['Đánh đổi', '—', '—', 'giá/đơn vị cao hơn, một số hạn chế (no DaemonSet, no GPU EKS Fargate)'],
+    ],
+  },
 },
 {
   cat: 'Containers',
@@ -205,6 +357,19 @@ SS.addQuestions('aws', [
     'Task definition = image + tài nguyên + quyền. Service = "giữ cho N bản chạy và cập nhật an toàn". Capacity provider = quyết định task chạy trên hạ tầng nào.',
   example:
     'Service `api`: task def yêu cầu 0.5 vCPU / 1GB, task role cho phép đọc Secrets Manager + ghi SQS, desired count 4, ALB target group, capacity provider strategy `FARGATE:1, FARGATE_SPOT:3` (25% ổn định, 75% rẻ).',
+  viz: {
+    type: 'tree',
+    title: 'ECS',
+    root: {
+      label: 'Task def = công thức; Service = giữ N bản + cập nhật an toàn; Capacity provider = chạy trên đâu',
+      children: [
+        { label: 'Task definition', note: 'image, CPU/memory, port, env, secrets, task role (quyền IAM), log config — có version' },
+        { label: 'Task', note: 'một lần chạy của task definition' },
+        { label: 'Service', note: 'duy trì N task, ALB, rolling/blue-green, auto scaling' },
+        { label: 'Capacity provider', note: 'FARGATE / FARGATE_SPOT / ASG EC2 — trộn được' },
+      ],
+    },
+  },
 },
 {
   cat: 'Containers',
@@ -218,6 +383,15 @@ SS.addQuestions('aws', [
     'ECR là nơi lưu image gắn với IAM. Enhanced scanning biến registry thành một điểm kiểm soát bảo mật liên tục — không chỉ quét lúc push mà quét lại khi thế giới phát hiện CVE mới.',
   example:
     'Pipeline: build image → push ECR → Inspector quét → nếu có CVE `CRITICAL` thì fail deploy. Vài tuần sau, CVE mới trong `log4j` được công bố → Inspector tự đánh dấu các image đang chạy chứa nó, gửi alert.',
+  viz: {
+    type: 'compare',
+    cols: ['Basic scanning', 'Enhanced (Amazon Inspector)'],
+    rows: [
+      ['Khi nào quét', 'lúc push', 'liên tục — tự quét lại khi có CVE mới'],
+      ['Quét gì', 'CVE OS packages (Clair)', 'OS packages + application dependencies (npm, pip, Maven)'],
+      ['Tích hợp', '—', 'đẩy finding vào Security Hub'],
+    ],
+  },
 },
 {
   cat: 'EC2',
@@ -230,6 +404,15 @@ SS.addQuestions('aws', [
     'Placement group điều khiển instance được đặt **gần nhau** (cluster: nhanh) hay **tách xa nhau** (spread: an toàn) hay **theo nhóm** (partition: cho hệ phân tán nhận biết topology).',
   example:
     'Cụm Kafka 12 broker: partition placement group với 3 partition → mỗi partition một tập rack; đặt replica của mỗi Kafka partition trải qua các partition placement khác nhau → mất một rack chỉ mất 1/3 broker.',
+  viz: {
+    type: 'compare',
+    cols: ['Cluster', 'Spread', 'Partition'],
+    rows: [
+      ['Vị trí', 'dồn cùng rack/AZ', 'mỗi instance một rack riêng (≤ 7/AZ)', 'các partition trên tập rack riêng'],
+      ['Ưu', 'mạng tới 100 Gbps, latency thấp', 'cách ly lỗi phần cứng tối đa', 'cân bằng hiệu năng ↔ cách ly'],
+      ['Cho', 'HPC, tính toán phân tán chặt', 'số ít instance quan trọng', 'HDFS, Kafka, Cassandra'],
+    ],
+  },
 },
 {
   cat: 'EC2',
@@ -243,6 +426,15 @@ SS.addQuestions('aws', [
     'System check = lỗi phía AWS (AWS/auto-recovery lo). Instance check = lỗi phía bạn (OS/app, bạn lo). Auto recovery xử lý hỏng phần cứng mà không mất danh tính instance.',
   example:
     'Host vật lý chạy instance DB bị lỗi phần cứng lúc nửa đêm: `StatusCheckFailed_System` → auto recovery di chuyển instance sang host khoẻ, cùng EBS volume, khởi động lại trong vài phút — không cần con người, không mất dữ liệu.',
+  viz: {
+    type: 'compare',
+    cols: ['System status check', 'Instance status check'],
+    rows: [
+      ['Kiểm tra', 'hạ tầng AWS bên dưới (host, mạng, điện)', 'OS/cấu hình instance (kernel panic, hết RAM, network sai)'],
+      ['Fail → ai lo', 'AWS — auto recovery di chuyển sang host khác (giữ id, IP, EIP, EBS)', 'bạn — thường reboot/rebuild'],
+      ['Bật auto recovery', 'CloudWatch alarm StatusCheckFailed_System → recover', '—'],
+    ],
+  },
 },
 {
   cat: 'EC2',
@@ -258,5 +450,19 @@ SS.addQuestions('aws', [
     'Graviton là "cùng công việc, ít tiền hơn" nếu stack của bạn chạy được trên ARM. Rào cản là build pipeline đa kiến trúc và dependency native, không phải hiệu năng.',
   example:
     'Service Java + Docker: đổi base image sang `arm64`, thêm `--platform linux/arm64` vào buildx, đổi task sang `c7g` → hoá đơn compute giảm ~30%, latency không đổi. Một Lambda dùng thư viện `sharp` (native) phải chờ bản ARM.',
+  viz: {
+    type: 'tree',
+    title: 'AWS Graviton (ARM) — "cùng công việc, ít tiền hơn"',
+    root: {
+      label: 'Rào cản là build pipeline đa kiến trúc + dependency native, không phải hiệu năng',
+      children: [
+        { label: 'Giá/hiệu năng tốt hơn ~20–40% so với x86', note: 'điện thấp hơn — tốt cho Sustainability' },
+        { label: 'Cần build lại artifact cho arm64', note: 'Docker multi-arch / binary ARM' },
+        { label: 'Kiểm tra thư viện native, agent, extension có bản ARM' },
+        { label: 'JVM/interpreted thường "chỉ chạy"; C/C++/Rust cần recompile' },
+        { label: 'Benchmark lại — lợi ích thực tế thay đổi theo workload' },
+      ],
+    },
+  },
 },
 ]);

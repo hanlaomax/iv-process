@@ -10,6 +10,16 @@ SS.addQuestions('aws', [
     'Durability = "dữ liệu không mất" (rất cao nhờ replicate đa AZ). Availability = "truy cập được ngay bây giờ" (thấp hơn). S3 gần như không mất dữ liệu, nhưng vẫn có thể tạm không truy cập được.',
   example:
     'Lưu backup DB, ảnh người dùng, log lên S3 Standard: không cần tự lo replicate. Nhưng vẫn nên bật **versioning** + **replication cross-region** để chống *xoá nhầm* và *sự cố region* — durability không cứu bạn khỏi lỗi con người.',
+  viz: {
+    type: 'compare',
+    cols: ['Durability (11 số 9)', 'Availability (99.9–99.99%)'],
+    rows: [
+      ['Nghĩa', 'dữ liệu KHÔNG mất', 'truy cập được NGAY bây giờ'],
+      ['Nhờ đâu', 'replicate mỗi object qua ≥ 3 AZ', 'tuỳ storage class'],
+      ['Không cứu khỏi', 'xoá nhầm, sự cố region', '—'],
+      ['Bổ sung', 'versioning + replication cross-region', '—'],
+    ],
+  },
 },
 {
   cat: 'S3',
@@ -24,6 +34,19 @@ SS.addQuestions('aws', [
     'Đánh đổi: giá lưu trữ ↔ giá + độ trễ truy xuất. Lifecycle policy tự động hoá việc "dữ liệu nguội thì đẩy xuống tier rẻ hơn".',
   example:
     'Log ứng dụng: lifecycle rule — 30 ngày ở Standard → 90 ngày Standard-IA → 1 năm Glacier Flexible → xoá sau 7 năm (tuân thủ). Với dữ liệu không rõ pattern (user upload): Intelligent-Tiering để khỏi đoán.',
+  viz: {
+    type: 'tree',
+    title: 'S3 storage class — giá lưu trữ ↔ giá + độ trễ truy xuất',
+    root: {
+      label: 'Lifecycle policy tự đẩy dữ liệu nguội xuống tier rẻ hơn',
+      children: [
+        { label: 'Standard', note: 'truy cập thường xuyên, độ trễ ms' },
+        { label: 'Intelligent-Tiering', note: 'tự chuyển tier theo pattern — mặc định tốt khi không rõ' },
+        { label: 'Standard-IA / One Zone-IA', note: 'truy cập ít, rẻ lưu nhưng phí retrieval; One Zone kém bền hơn' },
+        { label: 'Glacier Instant / Flexible / Deep Archive', note: 'archive dài hạn, ms → hàng giờ để lấy, cực rẻ' },
+      ],
+    },
+  },
 },
 {
   cat: 'S3',
@@ -36,6 +59,15 @@ SS.addQuestions('aws', [
     'S3 giờ hành xử trực giác: viết xong đọc lại thấy ngay. Bỏ các hack "sleep sau khi upload" trong codebase cũ.',
   example:
     'Pipeline: Lambda ghi file kết quả lên S3 rồi trigger Lambda tiếp theo `GET` file đó → đảm bảo đọc được nội dung vừa ghi, không còn cảnh "NoSuchKey" ngẫu nhiên như thời eventually consistent.',
+  viz: {
+    type: 'compare',
+    cols: ['Trước 12/2020', 'Từ 12/2020 (hiện nay)'],
+    rows: [
+      ['Ghi object mới', 'strong', 'strong'],
+      ['Ghi đè / xoá', 'eventually consistent', 'strong read-after-write'],
+      ['Hệ quả', 'code cũ cần retry / sleep sau upload', 'viết xong đọc lại thấy ngay — bỏ hết hack'],
+    ],
+  },
 },
 {
   cat: 'S3',
@@ -49,6 +81,19 @@ SS.addQuestions('aws', [
     'Mặc định private + BPA bật. Cấp quyền hẹp qua bucket policy/IAM. Chia sẻ tạm thời với người ngoài qua presigned URL, không phải làm bucket public.',
   example:
     'Cho phép user upload avatar: backend tạo presigned `PUT` URL (hết hạn 5 phút, giới hạn content-type, size) → browser upload thẳng lên S3, không đi qua server. Bucket vẫn hoàn toàn private, BPA bật.',
+  viz: {
+    type: 'tree',
+    title: 'Bảo mật S3 — mặc định private + BPA bật',
+    root: {
+      label: 'Cấp quyền hẹp; chia sẻ tạm qua presigned URL, KHÔNG làm bucket public',
+      children: [
+        { label: 'Block Public Access (BPA)', note: 'công tắc account & bucket chặn mọi cấu hình public — bật hết trừ static website' },
+        { label: 'Bucket policy (resource-based)', note: 'Condition: aws:SourceVpce, aws:PrincipalOrgID, ép mã hoá' },
+        { label: 'ACL', note: 'cơ chế cũ — tắt (Object Ownership = Bucket owner enforced)' },
+        { label: 'Presigned URL', note: 'URL có chữ ký + hạn dùng cho MỘT object, không cần credential AWS' },
+      ],
+    },
+  },
 },
 {
   cat: 'S3',
@@ -61,6 +106,16 @@ SS.addQuestions('aws', [
     'Versioning = "undo cho S3". Delete marker biến xoá thành một hành động có thể đảo. Object Lock là mức bảo vệ mạnh nhất cho dữ liệu bất biến (audit, backup).',
   example:
     'Bucket backup: versioning + Object Lock (compliance mode, 90 ngày) + lifecycle xoá version cũ hơn 1 năm. Ransomware mã hoá và ghi đè file backup → chỉ tạo version mới, các version sạch vẫn khôi phục được.',
+  viz: {
+    type: 'flow',
+    title: 'S3 versioning = "undo cho S3"',
+    nodes: ['bật versioning', 'PUT/DELETE tạo version mới', 'DELETE chỉ đặt delete marker', 'khôi phục: xoá delete marker', 'MFA Delete + Object Lock (WORM)'],
+    steps: [
+      { to: 2, label: 'object "biến mất" nhưng version cũ vẫn còn' },
+      { to: 3, label: 'xoá biến thành hành động có thể đảo' },
+      { to: 4, label: 'MFA Delete: cần mã MFA để xoá vĩnh viễn. Object Lock: khoá không cho xoá/sửa — chống ransomware + insider' },
+    ],
+  },
 },
 {
   cat: 'S3',
@@ -74,6 +129,16 @@ SS.addQuestions('aws', [
     'SSE-S3 cho "chỉ cần mã hoá at-rest". SSE-KMS khi cần kiểm soát và audit truy cập key (tách quyền: có `s3:GetObject` nhưng thiếu `kms:Decrypt` thì vẫn không đọc được).',
   example:
     'Bucket chứa dữ liệu PII: SSE-KMS với CMK riêng, bật S3 Bucket Keys để giảm chi phí KMS. Bucket policy `Deny` nếu request không có header `x-amz-server-side-encryption: aws:kms` → không ai upload plaintext được.',
+  viz: {
+    type: 'compare',
+    cols: ['SSE-S3 (AES256)', 'SSE-KMS', 'SSE-C', 'DSSE-KMS'],
+    rows: [
+      ['Ai quản key', 'AWS hoàn toàn', 'CMK của bạn trong KMS', 'bạn cung cấp key mỗi request', 'KMS, mã hoá 2 lớp'],
+      ['Kiểm soát / audit', 'không', 'key policy + CloudTrail + xoay vòng', 'tự quản', 'như KMS'],
+      ['Chi phí', 'miễn phí', 'phí KMS API (giảm bằng Bucket Keys)', '—', 'cao'],
+      ['Dùng khi', 'chỉ cần mã hoá at-rest', 'cần tách quyền (GetObject nhưng thiếu kms:Decrypt)', 'yêu cầu đặc biệt', 'tuân thủ khắt khe'],
+    ],
+  },
 },
 {
   cat: 'S3',
@@ -86,6 +151,18 @@ SS.addQuestions('aws', [
     'Throughput S3 gần như vô hạn nếu bạn **song song hoá** (nhiều prefix, nhiều part). Nút thắt thường là client đơn luồng, không phải S3.',
   example:
     'Upload file 50GB từ VN lên bucket ở `us-east-1`: multipart (part 100MB, 20 luồng song song) + Transfer Acceleration → từ vài giờ xuống vài chục phút, và nếu mạng rớt chỉ retry vài part.',
+  viz: {
+    type: 'tree',
+    title: 'Tối ưu hiệu năng S3 — nút thắt thường là client đơn luồng',
+    root: {
+      label: 'Throughput gần vô hạn nếu SONG SONG HOÁ',
+      children: [
+        { label: 'Prefix scaling', note: '~3500 ghi/s + ~5500 đọc/s MỖI prefix; nhiều prefix → cộng dồn' },
+        { label: 'Multipart upload', note: 'file > 100MB (bắt buộc > 5GB): chia phần, upload song song, retry/resume từng phần' },
+        { label: 'Transfer Acceleration', note: 'upload qua edge gần nhất rồi đi backbone AWS — cho client ở xa region' },
+      ],
+    },
+  },
 },
 {
   cat: 'S3',
@@ -98,6 +175,16 @@ SS.addQuestions('aws', [
     'S3 trở thành nguồn phát sự kiện: "có object mới" kích hoạt pipeline. EventBridge là đích linh hoạt nhất (lọc theo suffix, size, định tuyến nhiều target).',
   example:
     'User upload ảnh → `ObjectCreated` → Lambda tạo thumbnail + trích metadata EXIF + ghi record vào DynamoDB. Upload CSV vào prefix `imports/` → SQS → ECS task xử lý ETL (queue để chịu tải spike).',
+  viz: {
+    type: 'flow',
+    title: 'S3 Event Notifications — nguồn phát sự kiện',
+    nodes: ['s3:ObjectCreated / ObjectRemoved / ObjectRestore', 'đích: Lambda / SQS / SNS / EventBridge', 'pipeline event-driven'],
+    steps: [
+      { to: 1, label: 'EventBridge linh hoạt nhất (lọc theo suffix/size, nhiều target)' },
+      { to: 2, label: 'upload ảnh → Lambda tạo thumbnail; upload CSV → SQS → ECS ETL' },
+      { to: 2, label: 'delivery at-least-once (có thể trùng), thứ tự không đảm bảo → consumer idempotent' },
+    ],
+  },
 },
 {
   cat: 'RDS',
@@ -110,6 +197,16 @@ SS.addQuestions('aws', [
     'Multi-AZ = chống downtime (standby bị động, sync). Read Replica = chống nghẽn đọc (active, async, có lag). Giải quyết hai bài toán khác nhau.',
   example:
     'App thương mại điện tử: RDS Multi-AZ cho OLTP (failover tự động). Thêm 2 Read Replica: 1 cho trang danh mục/tìm kiếm (đọc nặng), 1 cho dashboard BI — writer không bị ảnh hưởng bởi query báo cáo nặng.',
+  viz: {
+    type: 'compare',
+    cols: ['Multi-AZ', 'Read Replica'],
+    rows: [
+      ['Replication', 'đồng bộ (sync)', 'bất đồng bộ (async, có lag)'],
+      ['Phục vụ traffic?', 'KHÔNG — standby bị động', 'CÓ — phục vụ read'],
+      ['Mục đích', 'HA / failover (~60–120s, không mất dữ liệu)', 'scale đọc, offload báo cáo'],
+      ['Bài toán', 'chống downtime', 'chống nghẽn đọc'],
+    ],
+  },
 },
 {
   cat: 'RDS',
@@ -122,6 +219,16 @@ SS.addQuestions('aws', [
     'Automated backup + transaction log = "tua ngược DB tới bất kỳ phút nào trong 35 ngày". Manual snapshot = ảnh chụp cố định bạn chủ động giữ (trước migration, cho compliance, cho DR cross-region).',
   example:
     'Lúc 14:32 một job chạy `DELETE` thiếu `WHERE` xoá nhầm 50k dòng. PITR: khôi phục instance mới về **14:31:00**, export bảng bị ảnh hưởng, import lại vào production — không mất các giao dịch khác sau 14:32 trên các bảng khác.',
+  viz: {
+    type: 'compare',
+    cols: ['Automated backup', 'Manual snapshot'],
+    rows: [
+      ['Retention', '1–35 ngày', 'giữ tới khi bạn xoá'],
+      ['Đặc biệt', 'backup hàng ngày + transaction log mỗi 5 phút → PITR về bất kỳ phút nào', 'ảnh chụp cố định'],
+      ['Copy cross-region/account', '—', 'được'],
+      ['Khi xoá instance', 'bị xoá (trừ final snapshot)', 'còn lại'],
+    ],
+  },
 },
 {
   cat: 'Aurora',
@@ -134,6 +241,16 @@ SS.addQuestions('aws', [
     'Aurora = "engine tương thích MySQL/PG + storage layer cloud-native chia sẻ". Replica dùng chung storage nên rẻ, nhanh, lag thấp; failover không cần khôi phục dữ liệu.',
   example:
     'App cần 10 read replica: RDS MySQL mỗi replica là một bản copy đầy đủ (tốn dung lượng + lag do binlog). Aurora: 10 replica cùng trỏ một storage, lag ~10ms, thêm/bớt replica trong 1–2 phút.',
+  viz: {
+    type: 'compare',
+    cols: ['RDS truyền thống', 'Aurora'],
+    rows: [
+      ['Storage', 'gắn với instance', 'tầng phân tán chia sẻ, tự mở rộng tới 128TB, 6 bản qua 3 AZ'],
+      ['Instance ghi', 'cả trang xuống đĩa', 'chỉ log records → nhanh hơn nhiều'],
+      ['Read replica', 'mỗi cái là bản copy đầy đủ, lag do binlog', 'tối đa 15, dùng chung storage, lag ~ms, thêm không cần copy'],
+      ['Failover', 'khôi phục dữ liệu', '~30s — replica đã sẵn trên cùng storage'],
+    ],
+  },
 },
 {
   cat: 'Aurora',
@@ -146,6 +263,15 @@ SS.addQuestions('aws', [
     'Serverless v2 = "trả đúng lượng compute DB đang cần, thay đổi mượt theo giây". Giá trị nằm ở tải biến động; tải phẳng thì instance cố định vẫn kinh tế hơn.',
   example:
     'SaaS B2B: ban ngày giờ hành chính tải cao, đêm gần như 0. Serverless v2 scale 4→32 ACU lúc cao điểm, co về 2 ACU ban đêm → tiết kiệm ~60% so với provision cho đỉnh.',
+  viz: {
+    type: 'compare',
+    cols: ['Tải biến động / không đoán được', 'Tải cao ổn định 24/7'],
+    rows: [
+      ['Nên dùng', 'Aurora Serverless v2', 'provisioned + Reserved'],
+      ['Serverless v2 làm gì', 'scale 0.5–256 ACU theo giây, không gián đoạn kết nối', '—'],
+      ['Ví dụ', 'dev/test, multi-tenant, ứng dụng mới, SaaS B2B giờ hành chính', 'hệ thống tải phẳng'],
+    ],
+  },
 },
 {
   cat: 'DynamoDB',
@@ -159,6 +285,18 @@ SS.addQuestions('aws', [
     'Partition key = "dữ liệu nằm ở đâu"; sort key = "thứ tự trong nhóm đó". Thiết kế key = thiết kế access pattern, làm ngay từ đầu vì đổi rất khó.',
   example:
     'Bảng messages: PK = `conversationId`, SK = `timestamp#messageId`. Query "50 tin nhắn mới nhất của hội thoại X" = query PK=X, SK descending, limit 50 — một thao tác, latency ms.',
+  viz: {
+    type: 'tree',
+    title: 'DynamoDB key — thiết kế key = thiết kế access pattern (làm từ đầu)',
+    root: {
+      label: 'Primary key = partition key (+ sort key) — phải DUY NHẤT',
+      children: [
+        { label: 'Partition key (hash)', note: '"dữ liệu nằm ở đâu" — cardinality cao, truy cập đều' },
+        { label: 'Sort key (range, tuỳ chọn)', note: '"thứ tự trong nhóm" — query theo khoảng, begins_with, between' },
+        { label: 'Item tối đa 400KB', note: 'gồm cả tên attribute' },
+      ],
+    },
+  },
 },
 {
   cat: 'DynamoDB',
@@ -171,6 +309,16 @@ SS.addQuestions('aws', [
     'Provisioned = cam kết capacity đổi giá rẻ (hợp tải phẳng). On-demand = trả theo dùng, co giãn tức thì (hợp tải bùng nổ hoặc chưa rõ). Chuyển qua lại được (giới hạn tần suất).',
   example:
     'Bảng session (tải đều theo DAU): provisioned + auto scaling 40–70% utilization. Bảng cho tính năng mới ra mắt: on-demand trong 2 tháng để quan sát pattern, rồi chuyển provisioned nếu ổn định.',
+  viz: {
+    type: 'compare',
+    cols: ['Provisioned', 'On-demand'],
+    rows: [
+      ['Bạn làm gì', 'đặt RCU/WCU + auto scaling theo target', 'không cần đặt'],
+      ['Giá', 'rẻ hơn nếu tải ổn định; mua reserved được', 'đắt hơn/đơn vị, trả theo request thực'],
+      ['Spike', 'có thể throttling', 'chịu spike tức thì, không lo throttling'],
+      ['Dùng cho', 'tải phẳng, đoán được', 'tải mới / thất thường / chưa rõ'],
+    ],
+  },
 },
 {
   cat: 'DynamoDB',
@@ -182,6 +330,16 @@ SS.addQuestions('aws', [
     'LSI = "cách sắp xếp khác trong cùng partition" (cố định lúc tạo bảng). GSI = "một access pattern hoàn toàn khác" (linh hoạt, capacity riêng, async). GSI phổ biến hơn nhiều.',
   example:
     'Bảng orders PK=`customerId`, SK=`orderDate`. Cần query "đơn theo trạng thái": GSI PK=`status`, SK=`orderDate`. Cần "đơn của customer sắp theo tổng tiền": LSI SK=`totalAmount` (phải quyết định lúc tạo bảng).',
+  viz: {
+    type: 'compare',
+    cols: ['LSI (Local Secondary Index)', 'GSI (Global Secondary Index)'],
+    rows: [
+      ['Key', 'cùng partition key, KHÁC sort key', 'partition key và sort key HOÀN TOÀN khác'],
+      ['Tạo', 'chỉ lúc tạo bảng, tối đa 5', 'bất kỳ lúc nào, tối đa 20'],
+      ['Capacity', 'dùng chung với bảng', 'riêng'],
+      ['Consistency', 'strong được', 'chỉ eventually consistent'],
+    ],
+  },
 },
 {
   cat: 'DynamoDB',
@@ -194,6 +352,16 @@ SS.addQuestions('aws', [
     'DynamoDB không có JOIN → single-table "pre-join" dữ liệu bằng cách đặt chung partition. Nó tối ưu cho số lần round-trip, đổi lấy độ phức tạp mô hình hoá.',
   example:
     'PK=`USER#123`: item SK=`PROFILE` (thông tin user), SK=`ORDER#2024-001`, SK=`ORDER#2024-002`. Query PK=`USER#123` một lần → lấy profile + toàn bộ đơn hàng. RDBMS cần 2 query hoặc 1 JOIN.',
+  viz: {
+    type: 'flow',
+    title: 'Single-table design — "pre-join" bằng cách đặt chung partition',
+    nodes: ['gom nhiều loại entity vào 1 bảng', 'PK/SK generic + tiền tố loại (USER#123, ORDER#456)', 'overload GSI cho access pattern khác', 'query 1 lần lấy nhiều entity liên quan'],
+    steps: [
+      { to: 1, label: 'DynamoDB không có JOIN' },
+      { to: 3, label: 'tối ưu số round-trip, đổi lấy độ phức tạp mô hình hoá' },
+      { to: 3, label: 'phải biết TRƯỚC mọi access pattern; migration phức tạp — nhiều team dùng "few-table" thực dụng hơn' },
+    ],
+  },
 },
 {
   cat: 'DynamoDB',
@@ -205,6 +373,19 @@ SS.addQuestions('aws', [
     'Streams biến DynamoDB thành nguồn CDC event-driven. TTL là cách dọn dữ liệu hết hạn (session, cache, log) mà không tốn WCU và không cần job xoá.',
   example:
     'Bảng `sessions` với TTL attribute `expiresAt`: item tự biến mất sau 24h. Streams → Lambda: khi item session bị REMOVE, ghi một sự kiện "session ended" vào analytics; khi ORDER được INSERT, cập nhật bộ đếm `dailyOrderCount`.',
+  viz: {
+    type: 'tree',
+    title: 'DynamoDB Streams + TTL',
+    root: {
+      label: 'Streams biến DynamoDB thành nguồn CDC event-driven',
+      children: [
+        { label: 'Streams', note: 'log INSERT/MODIFY/REMOVE theo thứ tự per-partition-key, giữ 24h → trigger Lambda' },
+        { label: 'Dùng Streams cho', note: 'aggregate, đồng bộ OpenSearch/S3, audit, materialized view, Global Tables' },
+        { label: 'TTL', note: 'attribute epoch → DynamoDB tự xoá item (~48h, miễn phí, không tốn WCU)' },
+        { label: 'Item xoá qua TTL', note: 'cũng xuất hiện trong Streams (userIdentity = dynamodb.amazonaws.com)' },
+      ],
+    },
+  },
 },
 {
   cat: 'DynamoDB',
@@ -217,6 +398,16 @@ SS.addQuestions('aws', [
     'Mặc định là eventually consistent để nhanh và rẻ; yêu cầu strong khi vừa-ghi-vừa-đọc cùng item. Transactions thêm tính nguyên tử ACID có giới hạn cho các thao tác đa item.',
   example:
     'Đăng ký username duy nhất: `TransactWriteItems` gồm `Put` item user + `Put` item `USERNAME#alice` với `ConditionExpression: attribute_not_exists(PK)` → hoặc cả hai thành công, hoặc fail nếu username đã tồn tại. Đọc lại profile ngay sau khi update: strongly consistent.',
+  viz: {
+    type: 'compare',
+    cols: ['Eventually consistent (mặc định)', 'Strongly consistent', 'Transactions'],
+    rows: [
+      ['Đọc', 'có thể trúng replica cũ (< 1s)', 'luôn phản ánh mọi ghi trước đó', 'TransactWriteItems/GetItems ≤ 100 item'],
+      ['Chi phí', '0.5 RCU', '1 RCU, latency nhỉnh', '2x capacity'],
+      ['Giới hạn', '—', 'KHÔNG dùng được trên GSI', 'all-or-nothing, có ConditionCheck'],
+      ['Dùng khi', 'nhanh, rẻ', 'vừa-ghi-vừa-đọc cùng item', 'nguyên tử đa item (chuyển tiền, tính duy nhất)'],
+    ],
+  },
 },
 {
   cat: 'Cache',
@@ -228,6 +419,16 @@ SS.addQuestions('aws', [
     'Memcached = cache RAM thuần, đa luồng, không HA. Redis = "cấu trúc dữ liệu qua mạng" + HA + persistence. Gần như luôn chọn Redis trừ khi nhu cầu cực kỳ đơn giản.',
   example:
     'Cache kết quả query DB dạng blob JSON, cần throughput cao trên instance nhiều core, chấp nhận mất khi restart: Memcached. Cần leaderboard (sorted set), phân tán rate limit, session store có failover: Redis.',
+  viz: {
+    type: 'compare',
+    cols: ['Memcached', 'Redis / Valkey'],
+    rows: [
+      ['Luồng', 'multi-threaded', 'single-threaded per shard'],
+      ['Kiểu dữ liệu', 'chỉ key-value string', 'list, set, sorted set, hash, stream'],
+      ['HA / persistence', 'không', 'replication, cluster, snapshot/AOF'],
+      ['Dùng cho', 'cache thuần, đơn giản, nhiều core', 'leaderboard, rate limit, session, pub/sub — gần như luôn chọn Redis'],
+    ],
+  },
 },
 {
   cat: 'Storage',
@@ -241,5 +442,14 @@ SS.addQuestions('aws', [
     'EBS = đĩa của một máy. EFS = ổ chia sẻ mạng POSIX cho nhiều máy. S3 = kho object qua API. Chọn theo "một hay nhiều client" và "filesystem hay object".',
   example:
     'Cụm 10 web server cần cùng thư mục upload: EFS mount lên cả 10. Mỗi server cần đĩa riêng cho DB local: EBS gp3. Ảnh gốc do người dùng tải lên, phục vụ qua CloudFront: S3.',
+  viz: {
+    type: 'compare',
+    cols: ['EBS', 'EFS', 'S3', 'FSx'],
+    rows: [
+      ['Kiểu', 'block — đĩa của MỘT máy', 'NFS POSIX — nhiều máy mount đồng thời', 'object qua API HTTP', 'filesystem chuyên dụng'],
+      ['Client', '1 EC2 (io2 Multi-Attach hạn chế)', 'nhiều EC2/Lambda/container, đa AZ', 'bất kỳ, qua HTTP', 'Windows (SMB/AD), Lustre (HPC), ONTAP'],
+      ['Dùng cho', 'OS, DB tự quản', 'shared content, home dir, CI workspace', 'backup, media, data lake, log', 'khối lượng công việc đặc thù'],
+    ],
+  },
 },
 ]);

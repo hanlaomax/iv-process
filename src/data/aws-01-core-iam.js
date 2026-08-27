@@ -10,6 +10,18 @@ SS.addQuestions('aws', [
     'Region = phạm vi dữ liệu & tuân thủ. AZ = đơn vị cách ly lỗi để thiết kế HA. Edge = lớp phân phối gần người dùng. Kiến trúc HA nghĩa là trải tài nguyên qua nhiều AZ.',
   example:
     'Web app cho khách VN: chọn region `ap-southeast-1`, chạy EC2/RDS trên **2–3 AZ** (mất 1 AZ vẫn sống), đặt CloudFront trước để người dùng tải ảnh/JS từ edge location tại TP.HCM/Hà Nội.',
+  viz: {
+    type: 'tree',
+    title: 'Hạ tầng toàn cầu AWS',
+    root: {
+      label: 'Kiến trúc HA = trải tài nguyên qua nhiều AZ',
+      children: [
+        { label: 'Region', note: 'vùng địa lý — phạm vi dữ liệu & tuân thủ (ap-southeast-1)' },
+        { label: 'Availability Zone (3+ mỗi region)', note: 'data center riêng biệt: điện/làm mát/mạng độc lập — đơn vị cách ly lỗi' },
+        { label: 'Edge Location (hàng trăm)', note: 'CloudFront / Route 53 — cache + kết thúc TLS gần người dùng' },
+      ],
+    },
+  },
 },
 {
   cat: 'IAM',
@@ -23,6 +35,19 @@ SS.addQuestions('aws', [
     'Policy là quyền; user/group là danh tính con người; role là danh tính tạm dùng cho máy móc và truy cập chéo. Nguyên tắc: ưu tiên role + credential tạm, hạn chế access key vĩnh viễn.',
   example:
     'Team dev: group `Developers` gắn policy read-only production + full quyền dev account. Ứng dụng trên EC2: gắn **instance role** `app-role` cho phép đọc một bucket S3 — không nhúng access key vào code.',
+  viz: {
+    type: 'tree',
+    title: 'IAM — quyền vs danh tính',
+    root: {
+      label: 'Ưu tiên role + credential tạm, hạn chế access key vĩnh viễn',
+      children: [
+        { label: 'Policy', note: 'JSON: Effect, Action, Resource, Condition — là QUYỀN' },
+        { label: 'User', note: 'danh tính lâu dài cho người/ứng dụng, có credential cố định' },
+        { label: 'Group', note: 'tập user, gắn policy chung theo vai trò công việc' },
+        { label: 'Role', note: 'danh tính KHÔNG có credential cố định — được "assume" → credential tạm từ STS' },
+      ],
+    },
+  },
 },
 {
   cat: 'IAM',
@@ -37,6 +62,16 @@ SS.addQuestions('aws', [
     'Role loại bỏ credential lâu dài: không có key để rò rỉ, credential hết hạn sau vài giờ, quyền gắn theo ngữ cảnh. Access key vĩnh viễn là "nợ bảo mật".',
   example:
     'GitHub Actions deploy lên AWS: cấu hình **OIDC trust** giữa GitHub và một IAM role, workflow assume role đó → không còn lưu `AWS_ACCESS_KEY_ID` trong secrets, không có key để bị lộ.',
+  viz: {
+    type: 'compare',
+    cols: ['IAM Role', 'IAM User'],
+    rows: [
+      ['Credential', 'tạm thời, tự xoay vòng (STS)', 'lâu dài (access key)'],
+      ['Dùng cho', 'workload AWS, cross-account, federated SSO/OIDC', 'chỉ khi thực sự cần credential lâu dài'],
+      ['Rủi ro key rò rỉ', 'gần như không', '"nợ bảo mật"'],
+      ['Ví dụ', 'EC2/Lambda role, GitHub Actions OIDC', 'CI cũ không federate được'],
+    ],
+  },
 },
 {
   cat: 'IAM',
@@ -52,6 +87,17 @@ SS.addQuestions('aws', [
     'Deny luôn thắng. Allow phải xuất hiện tường minh. Các "hàng rào" (SCP, boundary) chỉ thu hẹp, không mở rộng. Quyền cuối cùng là phần giao.',
   example:
     'Developer có policy Allow `s3:*`, nhưng SCP ở Organizations Deny `s3:DeleteBucket`. Kết quả: xoá bucket bị chặn dù identity policy cho phép — SCP là trần không vượt qua được.',
+  viz: {
+    type: 'flow',
+    title: 'Đánh giá quyền IAM — Deny luôn thắng',
+    nodes: ['gộp mọi policy áp dụng', 'có explicit Deny?', 'có explicit Allow (không bị boundary/SCP chặn)?', 'implicit deny'],
+    steps: [
+      { to: 0, label: 'identity-based + resource-based + boundary + SCP + session policy' },
+      { to: 1, label: 'bất kỳ policy nào Deny → TỪ CHỐI, dừng' },
+      { to: 2, label: 'không Deny + có Allow tường minh → CHO PHÉP' },
+      { to: 3, label: 'không Allow nào → implicit deny. SCP/boundary chỉ GIỚI HẠN, không cấp quyền' },
+    ],
+  },
 },
 {
   cat: 'IAM',
@@ -65,6 +111,16 @@ SS.addQuestions('aws', [
     'AssumeRole = "đổi danh tính tạm thời để lấy một bộ quyền khác". Trust policy kiểm soát *ai vào được*, permission policy kiểm soát *vào rồi làm gì*.',
   example:
     'Account `security` chạy tool audit: assume role `AuditRole` ở 50 account con (mỗi account có trust policy cho phép `security` account). Tool nhận credential tạm 1 giờ cho từng account, quét cấu hình, rồi credential tự hết hạn.',
+  viz: {
+    type: 'flow',
+    title: 'STS AssumeRole',
+    nodes: ['principal gọi sts:AssumeRole', 'trust policy của role cho phép?', 'STS trả credential tạm (15 phút–12 giờ)', 'principal dùng quyền của role'],
+    steps: [
+      { to: 1, label: 'trust policy = "AI được assume"' },
+      { to: 2, label: 'access key + secret + session token, có thời hạn' },
+      { to: 3, label: 'permission policy = "assume xong LÀM ĐƯỢC GÌ". Biến thể: WithSAML (SSO), WithWebIdentity (OIDC)' },
+    ],
+  },
 },
 {
   cat: 'IAM',
@@ -77,6 +133,16 @@ SS.addQuestions('aws', [
     'Identity policy đi theo "người"; resource policy đi theo "đồ vật". Với cùng account, chỉ cần một trong hai Allow. Cross-account thường cần cả hai phía đồng ý.',
   example:
     'S3 bucket `shared-data` (account A) có bucket policy Allow `s3:GetObject` cho `arn:aws:iam::B:role/analytics`. Role `analytics` ở account B cũng cần identity policy Allow `s3:GetObject` trên bucket đó. Cả hai khớp → đọc được.',
+  viz: {
+    type: 'compare',
+    cols: ['Identity-based policy', 'Resource-based policy'],
+    rows: [
+      ['Gắn vào', 'user / group / role', 'tài nguyên (S3 bucket, SQS, Lambda, KMS key)'],
+      ['Trường Principal', 'không', 'có — "ai được làm gì với tài nguyên này"'],
+      ['Cross-account', 'cần AssumeRole', 'cho phép truy cập trực tiếp không cần AssumeRole'],
+      ['Cùng account', 'chỉ cần một trong hai Allow', 'chỉ cần một trong hai Allow'],
+    ],
+  },
 },
 {
   cat: 'IAM',
@@ -89,6 +155,16 @@ SS.addQuestions('aws', [
     'Boundary là "trần" cho một identity; SCP là "trần" cho cả account. Cả hai chỉ giới hạn. Chúng cho phép phân quyền quản trị mà không sợ leo thang đặc quyền.',
   example:
     'Platform team cấp cho product team quyền `iam:CreateRole` nhưng kèm điều kiện `iam:PermissionsBoundary` phải = `dev-boundary`. Product team tạo role cho app của họ thoải mái, nhưng role đó không bao giờ đụng được tới billing hay IAM admin.',
+  viz: {
+    type: 'compare',
+    cols: ['Permission boundary', 'SCP (Service Control Policy)'],
+    rows: [
+      ['Trần cho', 'một identity (user/role)', 'cả account / OU — kể cả root'],
+      ['Cấp quyền?', 'không — chỉ giới hạn', 'không — chỉ giới hạn'],
+      ['Quyền hiệu dụng', 'giao(identity policy, boundary)', 'giao(mọi policy, SCP)'],
+      ['Dùng để', 'uỷ quyền tạo role an toàn (không leo thang đặc quyền)', 'chặn region, chặn tắt CloudTrail, tách prod/dev'],
+    ],
+  },
 },
 {
   cat: 'Organizations',
@@ -101,6 +177,18 @@ SS.addQuestions('aws', [
     'Organizations là cấu trúc quản trị nhiều account; SCP là "luật liên bang" áp lên từng account, không ai trong account vượt qua được — kể cả admin.',
   example:
     'OU `Production` có SCP: chỉ cho phép region `ap-southeast-1` và `us-east-1`, Deny `cloudtrail:StopLogging`, Deny `ec2:*` với instance type không nằm trong danh sách duyệt. Dev nghịch ngợm cũng không mở được region lạ hay tắt audit.',
+  viz: {
+    type: 'tree',
+    title: 'AWS Organizations + SCP',
+    root: {
+      label: 'SCP = "luật liên bang" — không ai trong account vượt qua, kể cả admin',
+      children: [
+        { label: 'Organizations', note: 'quản lý nhiều account, gộp billing, cây OU' },
+        { label: 'SCP gắn vào OU/account', note: 'trần quyền cho toàn account — KHÔNG cấp quyền, chỉ giới hạn' },
+        { label: 'Ví dụ dùng', note: 'chặn region, chặn cloudtrail:StopLogging, ép tag, tách prod/dev bằng OU' },
+      ],
+    },
+  },
 },
 {
   cat: 'Bảo mật',
@@ -113,6 +201,16 @@ SS.addQuestions('aws', [
     'AWS lo phần "cloud"; bạn lo phần "trong cloud". Càng dùng dịch vụ managed cao cấp, phần bạn phải lo càng nhỏ — nhưng cấu hình sai (bucket public) luôn là lỗi của khách.',
   example:
     'Rò rỉ dữ liệu S3 gần như luôn do khách hàng đặt bucket public hoặc IAM policy quá rộng — không phải AWS bị hack. Với RDS, khách không cần patch MySQL nhưng vẫn phải đặt mật khẩu mạnh và không mở security group ra 0.0.0.0/0.',
+  viz: {
+    type: 'compare',
+    cols: ['AWS — security OF the cloud', 'Khách — security IN the cloud'],
+    rows: [
+      ['Lo gì', 'hạ tầng vật lý, phần cứng, mạng nền, virtualization', 'IAM, security group, mã hoá dữ liệu, bảo mật ứng dụng'],
+      ['EC2', 'hypervisor, host', 'patch OS, cấu hình'],
+      ['RDS', 'patch engine', 'schema, quyền, mật khẩu'],
+      ['S3/DynamoDB', 'tất cả trừ dưới đây', 'chỉ IAM + cấu hình + phân loại dữ liệu'],
+    ],
+  },
 },
 {
   cat: 'Well-Architected',
@@ -129,6 +227,21 @@ SS.addQuestions('aws', [
     'Một bộ câu hỏi review kiến trúc theo 6 góc nhìn. Không phải checklist bắt buộc mà là khung để nhận ra đánh đổi và nợ kiến trúc trước khi nó thành sự cố.',
   example:
     'Well-Architected Review phát hiện: RDS single-AZ (Reliability), security group mở 22 ra internet (Security), instance m5.4xlarge dùng 8% CPU (Cost). Ba việc cần làm rõ ràng, xếp ưu tiên theo rủi ro.',
+  viz: {
+    type: 'tree',
+    title: 'Well-Architected Framework — 6 trụ cột',
+    root: {
+      label: 'Khung để nhận ra đánh đổi và nợ kiến trúc trước khi thành sự cố',
+      children: [
+        { label: 'Operational Excellence', note: 'IaC, observability, runbook' },
+        { label: 'Security', note: 'least privilege, mã hoá, phát hiện, bảo vệ theo lớp' },
+        { label: 'Reliability', note: 'multi-AZ, auto scaling, tự phục hồi, DR' },
+        { label: 'Performance Efficiency', note: 'chọn đúng tài nguyên, serverless, đo & điều chỉnh' },
+        { label: 'Cost Optimization', note: 'right-sizing, Reserved/Savings/Spot, tắt cái không dùng' },
+        { label: 'Sustainability', note: 'giảm tài nguyên và năng lượng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Bảo mật',
@@ -141,6 +254,16 @@ SS.addQuestions('aws', [
     'CMK mã hoá các data key; data key mã hoá dữ liệu. Xoay CMK hoặc thu hồi quyền dùng CMK là vô hiệu hoá mọi dữ liệu — điểm kiểm soát tập trung.',
   example:
     'S3 SSE-KMS: mỗi object được mã hoá bằng một data key riêng, data key đó mã hoá bằng CMK của bạn. Xoá quyền `kms:Decrypt` trên CMK khỏi một role → role đó không đọc được object nào trong bucket, dù có `s3:GetObject`.',
+  viz: {
+    type: 'flow',
+    title: 'Envelope encryption',
+    nodes: ['xin data key từ KMS', 'nhận plaintext key + encrypted key (bằng CMK)', 'mã hoá dữ liệu bằng plaintext key', 'vứt plaintext, lưu encrypted key cạnh dữ liệu', 'giải mã: gửi encrypted key cho KMS'],
+    steps: [
+      { to: 2, label: 'CMK không bao giờ rời KMS; CMK mã hoá các data key, data key mã hoá dữ liệu' },
+      { to: 3, label: 'không gọi KMS cho từng byte → giảm chi phí/độ trễ' },
+      { to: 4, label: 'xoay CMK hoặc thu hồi kms:Decrypt = vô hiệu hoá mọi dữ liệu' },
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -152,6 +275,16 @@ SS.addQuestions('aws', [
     'Parameter Store cho config và secret đơn giản, rẻ. Secrets Manager khi cần xoay vòng tự động và quản lý vòng đời secret nghiêm ngặt (DB credential, API key đối tác).',
   example:
     'Feature flag, endpoint URL, log level → Parameter Store (`/myapp/prod/...`). Mật khẩu DB production cần xoay 30 ngày/lần → Secrets Manager với rotation Lambda, ứng dụng đọc secret mỗi lần tạo connection pool.',
+  viz: {
+    type: 'compare',
+    cols: ['SSM Parameter Store', 'Secrets Manager'],
+    rows: [
+      ['Mục đích', 'config & secret đơn giản', 'chuyên cho secret'],
+      ['Automatic rotation', 'không', 'có (Lambda xoay RDS/Redshift/DocumentDB)'],
+      ['Chi phí', 'Standard tier miễn phí', 'phí theo secret + API call'],
+      ['Dùng cho', 'feature flag, endpoint, log level', 'DB credential, API key đối tác'],
+    ],
+  },
 },
 {
   cat: 'Quan sát & tuân thủ',
@@ -164,6 +297,14 @@ SS.addQuestions('aws', [
     'CloudTrail = ai làm gì (hành động). CloudWatch = hệ thống đang thế nào (trạng thái). Config = tài nguyên được cấu hình ra sao theo thời gian (cấu trúc). Ba góc nhìn bổ sung nhau.',
   example:
     'Sự cố "port DB bỗng mở ra internet": Config cho biết security group đổi lúc 3:14 sáng; CloudTrail cho biết `ec2:AuthorizeSecurityGroupIngress` được gọi bởi role CI; CloudWatch cho thấy sau đó có lưu lượng lạ tới cổng 3306.',
+  viz: {
+    type: 'compare',
+    cols: ['CloudTrail', 'CloudWatch', 'AWS Config'],
+    rows: [
+      ['Trả lời', 'AI làm gì (API call, IP, khi nào)', 'hệ thống đang thế nào (CPU, lỗi 5xx)', 'tài nguyên cấu hình ra sao theo thời gian'],
+      ['Dùng cho', 'audit bảo mật, điều tra "ai xoá bucket?"', 'sức khoẻ, hiệu năng, alarm', 'tuân thủ, lịch sử cấu hình'],
+    ],
+  },
 },
 {
   cat: 'IAM',
@@ -180,6 +321,17 @@ SS.addQuestions('aws', [
     'Cùng một dòng code chạy được ở laptop (profile), CI (env var/OIDC) và production (instance/task role) mà không đổi — SDK tự dò. Mục tiêu: production không bao giờ tới nhánh "access key".',
   example:
     'Local: `aws sso login` → SDK dùng SSO profile. Trên ECS: không có env var, không có file → SDK lấy task role qua container credential endpoint. Không nhánh nào cần key vĩnh viễn.',
+  viz: {
+    type: 'layers',
+    title: 'Credential provider chain (dừng ở nguồn đầu tiên tìm thấy)',
+    layers: [
+      { name: 'Tham số trong code', tag: 'ưu tiên cao' },
+      { name: 'Biến môi trường', note: 'AWS_ACCESS_KEY_ID, AWS_SESSION_TOKEN' },
+      { name: '~/.aws/credentials & config', note: 'profile, SSO, assume-role' },
+      { name: 'Container credentials', note: 'ECS task role qua endpoint metadata' },
+      { name: 'Instance profile (EC2 IMDS) / IRSA (EKS)', tag: 'production' },
+    ],
+  },
 },
 {
   cat: 'Hạ tầng toàn cầu',
@@ -192,6 +344,16 @@ SS.addQuestions('aws', [
     'Regional là mặc định và là ranh giới cách ly lỗi + tuân thủ. Chỉ một nhóm nhỏ dịch vụ điều khiển/phân phối là global. Thiết kế DR nghĩa là nhân bản tài nguyên regional sang region khác.',
   example:
     'Sự cố region `us-east-1`: IAM và Route 53 (global) vẫn hoạt động, bạn có thể đổi Route 53 failover trỏ sang region dự phòng nơi bạn đã nhân bản EC2/RDS/S3.',
+  viz: {
+    type: 'compare',
+    cols: ['Regional (mặc định)', 'Global / edge'],
+    rows: [
+      ['Tài nguyên tồn tại', 'trong một region, endpoint có tên region', 'không gắn region cụ thể'],
+      ['Dữ liệu', 'không tự rời region (ranh giới tuân thủ)', '—'],
+      ['Ví dụ', 'EC2, RDS, S3 (bucket regional, tên global)', 'IAM, Route 53, CloudFront, Organizations, Shield'],
+      ['Khi region us-east-1 sự cố', 'phải có DR ở region khác', 'IAM & Route 53 vẫn hoạt động'],
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -207,6 +369,20 @@ SS.addQuestions('aws', [
     'Root là "chìa khoá vạn năng" của một account — chỉ dùng cho vài tác vụ bắt buộc (đóng account, đổi support plan, một số cấu hình billing). Còn lại khoá kỹ và giám sát.',
   example:
     'EventBridge rule: bất kỳ CloudTrail event nào có `userIdentity.type = Root` → SNS gửi cảnh báo tới team security ngay lập tức. Root chỉ nên xuất hiện vài lần mỗi năm.',
+  viz: {
+    type: 'tree',
+    title: 'Bảo vệ root account — "chìa khoá vạn năng"',
+    root: {
+      label: 'Chỉ dùng cho vài tác vụ bắt buộc (đóng account, đổi support plan)',
+      children: [
+        { label: 'Bật MFA (ưu tiên hardware key)' },
+        { label: 'KHÔNG tạo access key cho root; có thì xoá' },
+        { label: 'Không dùng root hằng ngày — tạo IAM admin riêng' },
+        { label: 'CloudTrail + alarm cho MỌI hành động root' },
+        { label: 'Trong Organizations: SCP giới hạn cả root của account con' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -219,6 +395,19 @@ SS.addQuestions('aws', [
     'Quota là ràng buộc thật ảnh hưởng khả năng scale. Coi nó như một phần capacity planning — biết quota hiện tại, mức tiêu thụ, và lead time xin tăng.',
   example:
     'Chuẩn bị sự kiện flash sale: Lambda concurrency mặc định 1.000/region. Dự kiến 5.000 concurrent → xin tăng lên 10.000 trước 2 tuần, đồng thời đặt **reserved concurrency** cho function quan trọng để không bị function khác "ăn" hết quota.',
+  viz: {
+    type: 'tree',
+    title: 'Service quotas — một phần của capacity planning',
+    root: {
+      label: 'Biết quota hiện tại, mức tiêu thụ, và lead time xin tăng',
+      children: [
+        { label: 'Loại tăng được', note: 'mở ticket / Service Quotas console' },
+        { label: 'Loại cứng', note: 'không đổi — thiết kế để không phụ thuộc' },
+        { label: 'Theo dõi', note: 'CloudWatch + Service Quotas' },
+        { label: 'Trước launch lớn', note: 'xin tăng TRƯỚC 1–2 tuần; reserved concurrency cho function quan trọng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Organizations',
@@ -235,6 +424,20 @@ SS.addQuestions('aws', [
     'Account là ranh giới cách ly mạnh nhất trên AWS (mạnh hơn IAM, VPC, tag). Multi-account = dùng ranh giới đó để phân tách rủi ro, chi phí và quyền hạn.',
   example:
     'Cấu trúc: account `management` (billing, Organizations), `log-archive` (CloudTrail tập trung, chỉ ghi), `security` (GuardDuty, audit), rồi `prod`/`staging`/`dev` cho mỗi sản phẩm. Kỹ sư không có quyền trực tiếp vào `prod` — deploy qua pipeline.',
+  viz: {
+    type: 'tree',
+    title: 'Multi-account (landing zone)',
+    root: {
+      label: 'Account = ranh giới cách ly mạnh nhất trên AWS (hơn IAM/VPC/tag)',
+      children: [
+        { label: 'Blast radius', note: 'sự cố/nhầm lẫn ở dev không đụng prod' },
+        { label: 'Bảo mật & tuân thủ', note: 'SCP khác theo OU; account bị xâm nhập được cô lập' },
+        { label: 'Billing rõ ràng theo account' },
+        { label: 'Quota riêng mỗi account' },
+        { label: 'Công cụ: Control Tower / Landing Zone Accelerator' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -249,6 +452,18 @@ SS.addQuestions('aws', [
     'Tag biến "một đống tài nguyên" thành dữ liệu có cấu trúc để tính tiền, phân quyền và tự động hoá. Không có chiến lược tag nhất quán thì cost report và ABAC đều vô dụng.',
   example:
     'Bắt buộc mọi tài nguyên có `team`, `env`, `app`. Cuối tháng: Cost Explorer group by `team` → hoá đơn 12.000$ trong đó team A 7.000$, team B 5.000$ — trách nhiệm chi phí rõ ràng thay vì một con số chung.',
+  viz: {
+    type: 'tree',
+    title: 'Tag — biến "đống tài nguyên" thành dữ liệu có cấu trúc',
+    root: {
+      label: 'Cần chiến lược tag nhất quán, ép bằng SCP / Config rule',
+      children: [
+        { label: 'Phân bổ chi phí', note: 'cost allocation tags → Cost Explorer group by team/env/project' },
+        { label: 'Kiểm soát truy cập (ABAC)', note: 'Condition aws:ResourceTag/team → chỉ sửa tài nguyên team mình' },
+        { label: 'Tự động hoá', note: 'tắt EC2 có auto-stop=true ngoài giờ; backup theo tag' },
+      ],
+    },
+  },
 },
 {
   cat: 'Bảo mật',
@@ -261,5 +476,15 @@ SS.addQuestions('aws', [
     'IRSA đưa least-privilege xuống tận cấp pod: mỗi workload có role riêng, không chia sẻ quyền qua node. Là chuẩn để pod truy cập S3/DynamoDB/SQS an toàn.',
   example:
     'Pod `image-processor` cần ghi vào bucket `thumbnails`: tạo IAM role chỉ có `s3:PutObject` trên bucket đó, gắn vào service account `image-processor-sa`, pod dùng SA đó. Pod khác cùng node không có quyền này.',
+  viz: {
+    type: 'flow',
+    title: 'IRSA — least-privilege xuống tận cấp pod',
+    nodes: ['pod dùng ServiceAccount (annotation role-arn)', 'nhận web identity token', 'SDK AssumeRoleWithWebIdentity', 'credential tạm đúng quyền của role đó'],
+    steps: [
+      { to: 0, label: 'trước IRSA: mọi pod dùng chung instance role của node (quá rộng)' },
+      { to: 1, label: 'EKS chạy một OIDC provider; map SA ↔ IAM role' },
+      { to: 3, label: 'pod khác cùng node không có quyền này. EKS Pod Identity là cách mới đơn giản hơn' },
+    ],
+  },
 },
 ]);
