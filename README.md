@@ -79,3 +79,10 @@ SS.addQuestions('java', [
 
 `id` sinh tự động từ hash nội dung câu hỏi (ổn định khi thêm/sắp xếp lại).
 Chạy lại `node src/build.mjs` — build sẽ dừng nếu thiếu field hoặc trùng id.
+
+Tuỳ chọn thêm cho mỗi câu:
+
+- `related: ['java-xxxx', ...]` — ghi đè thủ công danh sách câu liên quan (mặc định tự suy ra).
+- `viz: { type, ... }` — hình minh hoạ tương tác. `type` là một trong: `compare`, `layers`,
+  `tree`, `bars`, `flow`, `sequence`, `states`, `cycle`, `timeline`, `quadrant`
+  (xem `assets/viz/viz-static.js` và `assets/viz/viz-anim.js` để biết cấu trúc dữ liệu từng loại).
