@@ -24,14 +24,14 @@ npm run serve
 
 Đã có sẵn workflow `.github/workflows/deploy.yml` (build bằng Node, deploy qua GitHub Pages).
 
-1. Tạo một repo trên GitHub (ví dụ `interview-vault`), rồi:
+1. Tạo một repo trên GitHub (ví dụ `iv-process`), rồi:
    ```bash
-   git remote add origin https://github.com/<username>/interview-vault.git
+   git remote add origin https://github.com/<username>/iv-process.git
    git push -u origin main
    ```
 2. Trên GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 3. Mỗi lần push lên nhánh `main`, workflow tự build và deploy.
-   URL: `https://<username>.github.io/interview-vault/`
+   URL: `https://<username>.github.io/iv-process/`
    (workflow tự lấy đúng base URL, không cần sửa gì).
 
 > Nếu muốn dùng làm **user site** (`<username>.github.io`): đặt tên repo là `<username>.github.io`
