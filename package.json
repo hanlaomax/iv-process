@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "500+ câu hỏi phỏng vấn cấp độ Middle (Java/Spring Boot, Kafka, AWS, Redis, SQL) — trang tĩnh, tối ưu SEO.",
-  "homepage": "https://USERNAME.github.io/interview-vault",
+  "homepage": "https://hanlaomax.github.io/interview-vault",
   "scripts": {
     "build": "node src/build.mjs",
     "serve": "node src/build.mjs && node src/serve.mjs",
