@@ -22,7 +22,7 @@
   --code-ink: #a6e3b0;
 
   --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-read: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+  --font-read: "Lora", ui-serif, Georgia, Cambria, "Times New Roman", serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
 
   --measure: 68ch;

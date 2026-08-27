@@ -27,7 +27,7 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords)}">` : ''}
 <link rel="icon" href="${FAVICON}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,600&display=swap">
 <link rel="stylesheet" href="${o.root}assets/styles.css">
 <link rel="sitemap" type="application/xml" href="${o.root}sitemap.xml">
 <script>(function(){try{var t=localStorage.getItem('iv-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}})();</script>
