@@ -13,6 +13,19 @@ SS.addQuestions('redis', [
     'Đơn luồng biến "atomicity" và "không lock" thành mặc định. Nút thắt là RAM và network, không phải CPU — nên lệnh O(N) lớn (KEYS, lớn) sẽ chặn *mọi* client.',
   example:
     'Bộ đếm lượt xem: `INCR post:123:views` — nguyên tử, không race, ~100k ops/s trên một core. Nhưng `KEYS *` trên 10 triệu key chặn server vài giây → mọi request khác treo. Dùng `SCAN` thay thế.',
+  viz: {
+    type: 'tree',
+    title: 'Redis đơn luồng mà nhanh — nút thắt là RAM & network, không phải CPU',
+    root: {
+      label: 'Đơn luồng biến atomicity + không lock thành mặc định',
+      children: [
+        { label: 'Toàn bộ dữ liệu trong RAM', note: 'không đụng đĩa cho read' },
+        { label: 'Đơn luồng → không lock, không context switch, mỗi lệnh nguyên tử' },
+        { label: 'I/O multiplexing (epoll)', note: 'xử lý hàng nghìn kết nối' },
+        { label: 'Hệ quả', note: 'lệnh O(N) lớn (KEYS) chặn MỌI client' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -28,6 +41,19 @@ SS.addQuestions('redis', [
     'String không chỉ là chuỗi — nó là "ô nhớ nguyên tử" hỗ trợ số học và thao tác bit. `INCR` và `SET NX EX` là hai công cụ được dùng nhiều nhất.',
   example:
     'Rate limit đơn giản: `INCR rate:user:1:minute` rồi `EXPIRE rate:user:1:minute 60` (lần đầu); nếu giá trị > 100 thì chặn. Daily active users: `SETBIT dau:2024-06-01 <userId> 1`, cuối ngày `BITCOUNT` cho số DAU với ~vài trăm KB/ngày.',
+  viz: {
+    type: 'tree',
+    title: 'String = "ô nhớ nguyên tử" (không chỉ chuỗi, tối đa 512MB)',
+    root: {
+      label: 'INCR và SET NX EX là hai công cụ dùng nhiều nhất',
+      children: [
+        { label: 'Cache blob JSON', note: 'SET user:1 "{...}" EX 3600' },
+        { label: 'Counter nguyên tử', note: 'INCR / INCRBY — đếm view, rate limit, sinh id' },
+        { label: 'Bitmap', note: 'SETBIT/BITCOUNT — trạng thái nhị phân hàng triệu user tiết kiệm RAM' },
+        { label: 'Lock', note: 'SET lock:x token NX EX 30' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -42,6 +68,16 @@ SS.addQuestions('redis', [
     'Hash là "object/record" trong Redis — dùng khi bạn có nhiều thuộc tính của cùng một thực thể và muốn sửa từng thuộc tính. Nhỏ thì còn siêu tiết kiệm RAM.',
   example:
     'Giỏ hàng: `HSET cart:user:1 sku_A 2 sku_B 1`, `HINCRBY cart:user:1 sku_A 1` (tăng số lượng), `HDEL cart:user:1 sku_B`, `HGETALL cart:user:1`. Thay vì serialize/deserialize cả JSON mỗi lần đổi số lượng.',
+  viz: {
+    type: 'compare',
+    cols: ['Hash (HSET user:1 name ... age ...)', 'Nhiều String (user:1:name, user:1:age)'],
+    rows: [
+      ['Bộ nhớ', 'nhỏ → listpack compact', 'overhead một key/entry'],
+      ['Thao tác một phần', 'HGET / HINCRBY một field', 'phải quản lý nhiều key'],
+      ['Gom logic', 'xoá / set TTL cho cả object', 'phải xoá từng key'],
+      ['Là gì', '"object/record" trong Redis', '—'],
+    ],
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -57,6 +93,19 @@ SS.addQuestions('redis', [
     'List tối ưu cho thao tác **hai đầu** (queue, feed có giới hạn). Cho hàng đợi bền vững/nhiều consumer group thì Streams tốt hơn.',
   example:
     'Feed "bài mới nhất": mỗi khi có post, `LPUSH feed:follower:X postId` cho mọi follower + `LTRIM feed:follower:X 0 499`. Đọc feed = `LRANGE feed:follower:X 0 19`. Bounded, O(1) ghi, O(K) đọc.',
+  viz: {
+    type: 'tree',
+    title: 'List (quicklist) — tối ưu thao tác HAI ĐẦU',
+    root: {
+      label: 'LPUSH/RPUSH O(1); LINDEX O(N) — đừng dùng như array',
+      children: [
+        { label: 'Queue / stack', note: 'LPUSH + RPOP (hoặc BRPOP blocking)' },
+        { label: 'Timeline/feed giới hạn', note: 'LPUSH + LTRIM feed 0 999 (giữ 1000 mới nhất)' },
+        { label: 'Log gần đây, activity stream' },
+        { label: 'Hàng đợi bền vững / nhiều consumer group', note: '→ Streams tốt hơn' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -69,6 +118,19 @@ SS.addQuestions('redis', [
     'Set trả lời nhanh "phần tử này có trong nhóm không?" và các câu hỏi giao/hợp/hiệu giữa các nhóm — mà không cần kéo dữ liệu về app để xử lý.',
   example:
     '"Bạn chung của A và B": `SINTER friends:A friends:B`. "Người xem video X nhưng chưa mua": `SDIFF viewers:X buyers:X`. "Bài viết có cả tag redis và cache": `SINTER tag:redis tag:cache`.',
+  viz: {
+    type: 'tree',
+    title: 'Set — tập phần tử duy nhất, không thứ tự',
+    root: {
+      label: 'Trả lời nhanh "phần tử này có trong nhóm không?" + giao/hợp/hiệu',
+      children: [
+        { label: 'SADD / SREM / SISMEMBER (O(1)) / SCARD' },
+        { label: 'SINTER (giao)', note: '"bạn chung của A và B"' },
+        { label: 'SUNION (hợp) / SDIFF (hiệu)', note: '"người xem X nhưng chưa mua"' },
+        { label: 'Use case', note: 'tag, bạn bè, "ai đã like", chống trùng, chọn ngẫu nhiên' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -81,6 +143,16 @@ SS.addQuestions('redis', [
     'ZSet = "danh sách luôn được sắp xếp, có thể truy vấn theo hạng hoặc theo khoảng score". Là cấu trúc linh hoạt nhất của Redis, giải quyết leaderboard, hàng đợi có ưu tiên và rate limit chính xác.',
   example:
     'Delayed queue: `ZADD jobs <runAtEpoch> jobId`. Worker mỗi giây: `ZRANGEBYSCORE jobs -inf <now> LIMIT 0 10` lấy job đến hạn, xử lý, `ZREM`. Leaderboard: `ZINCRBY game:leaderboard 10 player:5`, `ZREVRANGE game:leaderboard 0 9 WITHSCORES` cho top 10.',
+  viz: {
+    type: 'flow',
+    title: 'ZSet — "danh sách luôn được sắp xếp" (skiplist + hash, O(log N))',
+    nodes: ['ZADD jobs <runAtEpoch> jobId', 'worker mỗi giây: ZRANGEBYSCORE jobs -inf <now> LIMIT 0 10', 'xử lý job đến hạn', 'ZREM'],
+    steps: [
+      { to: 0, label: 'score = timestamp thực thi → delayed queue' },
+      { to: 1, label: 'lấy job đến hạn theo khoảng score' },
+      { to: 3, label: 'cùng cấu trúc giải quyết: leaderboard (score=điểm), sliding window rate limit (score=timestamp), top-N' },
+    ],
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -93,6 +165,16 @@ SS.addQuestions('redis', [
     'HLL đổi độ chính xác tuyệt đối lấy bộ nhớ hằng số cực nhỏ. Dùng khi bạn chỉ cần *con số đếm distinct gần đúng*, không cần danh sách.',
   example:
     'Đếm "số IP/user duy nhất truy cập mỗi trang mỗi ngày" cho hàng triệu trang: một Set sẽ tốn GB. `PFADD uv:page:123:2024-06-01 <userId>` → 12KB/trang/ngày. `PFCOUNT` cho unique visitor; `PFMERGE` để cộng dồn theo tuần.',
+  viz: {
+    type: 'compare',
+    cols: ['Set', 'HyperLogLog'],
+    rows: [
+      ['Bộ nhớ cho 1 tỉ phần tử', 'GB', '12KB CỐ ĐỊNH'],
+      ['Độ chính xác', 'tuyệt đối', 'ước lượng (sai số ~0.81%)'],
+      ['Kiểm tra "X có trong tập?"', 'được (SISMEMBER)', 'KHÔNG — không lưu phần tử thật'],
+      ['Dùng khi', 'cần danh sách + kiểm tra thành viên', 'chỉ cần con số đếm distinct gần đúng'],
+    ],
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -105,6 +187,16 @@ SS.addQuestions('redis', [
     'Pub/Sub = broadcast không đảm bảo. List = queue đơn giản một chiều. Streams = "Kafka mini trong Redis": bền, có group, có ack, replay được.',
   example:
     'Thông báo realtime tới UI đang mở (mất cũng không sao): Pub/Sub. Hàng đợi task cần đảm bảo xử lý, nhiều worker, retry message lỗi: Streams với consumer group — `XADD`, `XREADGROUP`, `XACK`, và job cron `XAUTOCLAIM` message treo quá lâu.',
+  viz: {
+    type: 'compare',
+    cols: ['Pub/Sub', 'List (như queue)', 'Streams'],
+    rows: [
+      ['Lưu trữ', 'không — subscriber offline → mất', 'có, nhưng RPOP xoá luôn', 'log append-only, có MAXLEN'],
+      ['Nhiều consumer', 'broadcast', 'chỉ 1 nhận', 'consumer groups chia tải'],
+      ['ACK / replay', 'không', 'không', 'XACK, XPENDING, XCLAIM, replay theo id'],
+      ['Là gì', 'broadcast không đảm bảo', 'queue một chiều đơn giản', '"Kafka mini trong Redis"'],
+    ],
+  },
 },
 {
   cat: 'TTL & key',
@@ -119,6 +211,16 @@ SS.addQuestions('redis', [
     'Key hết hạn không biến mất ngay lập tức về mặt bộ nhớ — nó được dọn khi bị chạm tới hoặc khi vòng quét ngẫu nhiên bắt được. Cẩn thận `SET` làm mất TTL đã đặt.',
   example:
     'Session `SET session:abc "<data>" EX 1800`. Gia hạn khi user hoạt động: `EXPIRE session:abc 1800` (sliding). Nếu update data bằng `SET session:abc "<new>"` mà quên `KEEPTTL` → session thành vĩnh viễn, rò rỉ bộ nhớ dần.',
+  viz: {
+    type: 'flow',
+    title: 'TTL / expiration',
+    nodes: ['EXPIRE / SET ... EX', 'Lazy: khi client truy cập key hết hạn → xoá, trả nil', 'Active: mỗi ~100ms sample key có TTL, xoá cái hết hạn', 'SET (không KEEPTTL) → XOÁ TTL'],
+    steps: [
+      { to: 1, label: 'key hết hạn không biến mất ngay về mặt bộ nhớ' },
+      { to: 2, label: 'nếu tỉ lệ hết hạn cao thì lặp lại vòng quét' },
+      { to: 3, label: 'cẩn thận: ghi đè giá trị bằng SET làm mất TTL đã đặt → rò rỉ bộ nhớ' },
+    ],
+  },
 },
 {
   cat: 'TTL & key',
@@ -131,6 +233,16 @@ SS.addQuestions('redis', [
     '`KEYS` và các lệnh O(N) lớn là "vũ khí tự sát" trên server đơn luồng. `SCAN` chia công việc thành nhiều bước nhỏ, không làm nghẽn client khác.',
   example:
     'Cần xoá mọi key `session:*` của một user: `SCAN 0 MATCH session:user:1:* COUNT 200` trong vòng lặp, `UNLINK` (xoá bất đồng bộ) từng batch. Không bao giờ `KEYS session:*` rồi `DEL`.',
+  viz: {
+    type: 'compare',
+    cols: ['KEYS pattern', 'SCAN cursor MATCH pattern COUNT 100'],
+    rows: [
+      ['Cách hoạt động', 'quét toàn bộ keyspace một lần, O(N)', 'iterator — trả một phần key + cursor'],
+      ['Chặn server?', 'CÓ — treo vài giây với hàng triệu key', 'không (mỗi lần làm một ít việc)'],
+      ['Đảm bảo', '—', 'key tồn tại suốt scan sẽ được trả (có thể trùng)'],
+      ['Tương tự cho collection', '—', 'HSCAN, SSCAN, ZSCAN'],
+    ],
+  },
 },
 {
   cat: 'Hiệu năng',
@@ -143,6 +255,16 @@ SS.addQuestions('redis', [
     'Pipeline tối ưu **độ trễ mạng** (gộp RTT). Transaction đảm bảo **tính nguyên tử** (không xen kẽ). Hai mục đích khác nhau — thường dùng pipeline nhiều hơn.',
   example:
     'Nạp 10.000 cặp key-value lúc warm cache: không pipeline = 10.000 RTT (~mỗi cái 0.5ms → 5s). Pipeline theo lô 500 = 20 RTT → ~10ms. Với client như lettuce/redis-py, bật pipeline/batch mode.',
+  viz: {
+    type: 'compare',
+    cols: ['Pipelining', 'MULTI/EXEC (transaction)'],
+    rows: [
+      ['Tối ưu', 'độ trễ mạng (gộp RTT)', 'tính nguyên tử (không xen kẽ)'],
+      ['Nguyên tử?', 'KHÔNG — lệnh client khác có thể xen', 'CÓ — chạy liên tiếp không bị xen'],
+      ['Rollback', '—', 'không — lệnh lỗi logic, các lệnh khác vẫn chạy'],
+      ['Dùng khi', 'batch lệnh nhỏ (thường xuyên hơn)', 'cần đảm bảo nhóm lệnh không bị chen ngang'],
+    ],
+  },
 },
 {
   cat: 'Nguyên tử',
@@ -155,6 +277,16 @@ SS.addQuestions('redis', [
     'MULTI/EXEC = "chạy nhóm lệnh này không ai chen ngang". WATCH thêm "và huỷ nếu dữ liệu tôi dựa vào đã đổi". Không có rollback nên phải tự kiểm tra điều kiện trước.',
   example:
     'Trừ số dư an toàn: `WATCH balance:1` → `GET balance:1` (giả sử 100) → nếu đủ tiền: `MULTI` → `DECRBY balance:1 30` → `EXEC`. Nếu client khác vừa đổi `balance:1` → `EXEC` trả nil → lặp lại. Hoặc đơn giản hơn: dùng Lua.',
+  viz: {
+    type: 'flow',
+    title: 'MULTI/EXEC + WATCH = CAS / optimistic lock',
+    nodes: ['WATCH balance:1', 'GET balance:1 (kiểm tra điều kiện)', 'MULTI → lệnh QUEUED', 'EXEC', 'key bị client khác sửa trước EXEC → EXEC trả nil → retry'],
+    steps: [
+      { to: 0, label: 'đánh dấu theo dõi key TRƯỚC MULTI' },
+      { to: 3, label: 'EXEC chạy toàn bộ liên tiếp, nguyên tử — không có rollback' },
+      { to: 4, label: 'phải tự kiểm tra điều kiện trước; hoặc dùng Lua cho đơn giản' },
+    ],
+  },
 },
 {
   cat: 'Nguyên tử',
@@ -169,6 +301,19 @@ SS.addQuestions('redis', [
     'Lua = "gộp nhiều thao tác đọc-nghĩ-ghi thành một lệnh nguyên tử phía server" — giải quyết được race mà pipeline/transaction đơn giản không làm được (vì có logic điều kiện ở giữa).',
   example:
     'Rate limit token bucket chính xác: một script Lua đọc số token còn lại + timestamp, tính token hồi theo thời gian trôi qua, nếu đủ thì trừ 1 và trả OK, không đủ trả DENY — tất cả nguyên tử, không race dù nghìn request đồng thời.',
+  viz: {
+    type: 'tree',
+    title: 'Lua scripting — gộp "đọc-nghĩ-ghi" thành MỘT lệnh nguyên tử',
+    root: {
+      label: 'EVAL / EVALSHA — giải race mà pipeline/transaction đơn giản không làm được',
+      children: [
+        { label: 'Nguyên tử', note: 'chạy như một lệnh, không client nào xen vào' },
+        { label: 'Phải deterministic', note: 'không dùng random/time tuỳ tiện — dùng ARGV truyền vào' },
+        { label: 'Mọi key khai báo trong KEYS[]', note: 'để tương thích Cluster' },
+        { label: 'Không chạy script dài', note: 'nó CHẶN server' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -181,6 +326,19 @@ SS.addQuestions('redis', [
     'Bitmap = "mảng boolean khổng lồ nén cực chặt", lý tưởng cho trạng thái nhị phân theo user-id liên tục. Kết hợp `BITOP` để trả lời câu hỏi tập hợp trên hàng triệu user gần như tức thì.',
   example:
     '"User hoạt động cả 7 ngày trong tuần": `BITOP AND result dau:d1 dau:d2 ... dau:d7` rồi `BITCOUNT result`. "Hoạt động ít nhất 1 ngày": `BITOP OR`. Mỗi ngày một bitmap ~125KB cho 1M user.',
+  viz: {
+    type: 'tree',
+    title: 'Bitmap — "mảng boolean khổng lồ nén cực chặt"',
+    root: {
+      label: 'offset = user-id → mỗi user 1 bit; 1M user ≈ 125KB',
+      children: [
+        { label: 'SETBIT / GETBIT / BITCOUNT / BITPOS' },
+        { label: 'BITOP AND/OR/XOR/NOT', note: '"user hoạt động cả 7 ngày": BITOP AND rồi BITCOUNT' },
+        { label: 'Use case', note: 'DAU, "đã xem thông báo chưa", A/B bucket, feature access' },
+        { label: 'Giới hạn', note: 'offset phải dày đặc — id lớn/thưa → tốn RAM (String cấp phát tới offset đó)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nguyên tử',
@@ -195,6 +353,19 @@ SS.addQuestions('redis', [
     'Lock cần ba tính chất trong một thao tác: loại trừ (`NX`), tự hết hạn (`EX`), và giải phóng an toàn (token + Lua). `SET ... NX EX` gộp hai cái đầu; token lo cái thứ ba.',
   example:
     'Cron job chạy trên 3 instance, chỉ muốn 1 chạy: `SET cron:daily-report <uuid> NX EX 300`. Ai set được thì chạy; xong thì `EVAL "if redis.call(\'get\',KEYS[1])==ARGV[1] then return redis.call(\'del\',KEYS[1]) end" 1 cron:daily-report <uuid>`.',
+  viz: {
+    type: 'tree',
+    title: 'SET key value NX EX 30 — lock đúng cách (một lệnh nguyên tử)',
+    root: {
+      label: 'Lock cần 3 tính chất trong một thao tác',
+      children: [
+        { label: 'NX — loại trừ', note: 'chỉ set nếu key chưa tồn tại → chỉ một client giành được' },
+        { label: 'EX 30 — tự hết hạn', note: 'client giữ lock chết → lock không kẹt vĩnh viễn' },
+        { label: 'token + Lua — giải phóng an toàn', note: 'kiểm tra token của mình mới xoá, tránh xoá nhầm lock client khác' },
+        { label: 'Cách SAI', note: 'SETNX rồi EXPIRE riêng — client chết giữa hai lệnh → lock vĩnh viễn' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tổng quan',
@@ -209,6 +380,19 @@ SS.addQuestions('redis', [
     'Module mở rộng Redis từ "key-value + cấu trúc" sang document store, search engine, probabilistic data structure — giảm nhu cầu thêm hệ thống riêng cho các bài toán đó.',
   example:
     'Chống xử lý trùng event mà không lưu hết id: `BF.ADD seen:events <eventId>` + `BF.EXISTS` — vài MB cho hàng chục triệu id, chấp nhận false positive nhỏ. Autocomplete/search sản phẩm: RediSearch index trên hash sản phẩm.',
+  viz: {
+    type: 'tree',
+    title: 'Redis modules (Redis Stack / Redis 8)',
+    root: {
+      label: 'Mở rộng từ key-value sang document/search/probabilistic — giảm nhu cầu hệ thống riêng',
+      children: [
+        { label: 'RedisJSON', note: 'JSON.SET / JSON.GET path — thao tác document JSON native' },
+        { label: 'RediSearch', note: 'full-text + secondary index + vector similarity (RAG)' },
+        { label: 'RedisBloom', note: 'Bloom/Cuckoo filter, Count-Min Sketch, Top-K' },
+        { label: 'RedisTimeSeries', note: 'chuỗi thời gian với downsampling, retention' },
+      ],
+    },
+  },
 },
 {
   cat: 'Hiệu năng',
@@ -224,6 +408,17 @@ SS.addQuestions('redis', [
     'Collection nhỏ được lưu ở dạng nén (listpack/intset) — rất tiết kiệm bộ nhớ. Giữ collection dưới ngưỡng (chia nhỏ key) có thể giảm RAM đáng kể.',
   example:
     'Lưu 10 triệu object nhỏ: dùng 10 triệu hash key `user:{id}` với ~5 field → mỗi cái listpack, tổng RAM thấp hơn nhiều so với để field vượt ngưỡng thành hashtable. `OBJECT ENCODING user:1` trả `listpack`.',
+  viz: {
+    type: 'compare',
+    cols: ['Collection nhỏ (< ngưỡng)', 'Vượt ngưỡng'],
+    rows: [
+      ['Hash/List/ZSet/Set', 'listpack (mảng liền mạch, compact)', 'hashtable / skiplist "thật"'],
+      ['Set toàn số nguyên', 'intset', 'hashtable'],
+      ['RAM', 'rất tiết kiệm', 'tốn hơn'],
+      ['Tốc độ với N lớn', '—', 'nhanh hơn'],
+      ['Ngưỡng', 'hash-max-listpack-entries 128 / -value 64', 'chia nhỏ key để giữ dưới ngưỡng'],
+    ],
+  },
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -236,6 +431,15 @@ SS.addQuestions('redis', [
     'Geo cho phép truy vấn không gian (bán kính, gần nhất) ngay trong Redis với latency ms — đủ cho nhiều bài toán "gần tôi" mà không cần PostGIS.',
   example:
     'App gọi xe: mỗi tài xế online cập nhật `GEOADD drivers:online <lon> <lat> driver:123` mỗi vài giây. Khi có cuốc: `GEOSEARCH drivers:online FROMLONLAT <pickupLon> <pickupLat> BYRADIUS 3 km ASC COUNT 10` → 10 tài xế gần nhất.',
+  viz: {
+    type: 'flow',
+    title: 'Redis Geo (ZSet với score = geohash)',
+    nodes: ['GEOADD drivers:online <lon> <lat> driver:123', 'score được mã hoá geohash trong ZSet', 'GEOSEARCH ... FROMLONLAT ... BYRADIUS 3 km ASC COUNT 10', '10 điểm gần nhất, sắp theo khoảng cách'],
+    steps: [
+      { to: 1, label: 'vì là ZSet nên có ZREM để xoá điểm, EXPIRE cả key' },
+      { to: 3, label: 'truy vấn không gian (bán kính, gần nhất) latency ms — không cần PostGIS' },
+    ],
+  },
 },
 {
   cat: 'TTL & key',
@@ -252,6 +456,19 @@ SS.addQuestions('redis', [
     'Key là namespace phẳng — bạn tự áp cấu trúc bằng quy ước `:`. Thiết kế tốt giúp `SCAN MATCH` theo nhóm, tránh xung đột, và cho phép invalidate theo version.',
   example:
     'Đổi cấu trúc object user cache: thay vì đi xoá từng key, bump prefix `user:v3:{id}`. Code đọc `user:v3:...`, các key `user:v2:*` cũ tự hết hạn theo TTL rồi biến mất — không cần thao tác xoá hàng loạt.',
+  viz: {
+    type: 'tree',
+    title: 'Quy ước đặt tên key (namespace phẳng — dùng ":" phân cách)',
+    root: {
+      label: '<app>:<entity>:<id>:<attribute> — shop:cart:user:1042',
+      children: [
+        { label: 'Tiền tố app/service', note: 'nhiều hệ dùng chung một Redis không đụng nhau' },
+        { label: 'Nhúng version vào key cache', note: 'v2:... → bump prefix để "vô hiệu hoá hàng loạt"' },
+        { label: 'Key ngắn gọn', note: 'key dài × hàng triệu = tốn RAM đáng kể' },
+        { label: 'Tránh khoảng trắng / ký tự đặc biệt' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tổng quan',
@@ -267,5 +484,14 @@ SS.addQuestions('redis', [
     'Trên server đơn luồng, một lệnh O(N) với N lớn làm treo *toàn bộ*. Biết lệnh nào là O(N) và luôn giới hạn phạm vi (`SCAN`, `LRANGE 0 99`, `ZRANGEBYSCORE ... LIMIT`).',
   example:
     'Code review bắt gặp `HGETALL cart:user:1` khi cart có thể có 5000 item → thay bằng `HSCAN` hoặc thiết kế lại. `DEL bigset` (10M phần tử) treo 2s → dùng `UNLINK bigset` (giải phóng ở thread nền).',
+  viz: {
+    type: 'compare',
+    cols: ['An toàn — O(1) / O(log N)', 'Nguy hiểm nếu N lớn — O(N) chặn server'],
+    rows: [
+      ['Lệnh', 'GET/SET, HGET/HSET, INCR, LPUSH/RPOP, SADD/SISMEMBER, ZADD/ZRANK', 'KEYS, SMEMBERS, HGETALL, LRANGE 0 -1, ZRANGE 0 -1'],
+      ['Cũng tránh', '—', 'SORT / SINTERSTORE trên set lớn; DEL key cực lớn (→ UNLINK); FLUSHALL sync'],
+      ['Cách đúng', '—', 'luôn giới hạn phạm vi: SCAN, LRANGE 0 99, ZRANGEBYSCORE ... LIMIT'],
+    ],
+  },
 },
 ]);

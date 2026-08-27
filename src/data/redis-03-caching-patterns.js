@@ -10,6 +10,16 @@ SS.addQuestions('redis', [
     'Cache-aside: ứng dụng chủ động quản lý cache, DB là nguồn sự thật, cache chỉ là bản sao có thể mất. Phổ biến nhất vì đơn giản và chịu lỗi tốt.',
   example:
     '`getUser(id)`: `redis.get("user:"+id)` → miss → `db.findUser(id)` → `redis.set("user:"+id, json, "EX", 300)`. `updateUser`: ghi DB xong `redis.del("user:"+id)`. Lần đọc tiếp theo nạp lại bản mới.',
+  viz: {
+    type: 'flow',
+    title: 'Cache-aside (lazy loading) — phổ biến nhất',
+    nodes: ['app GET Redis', 'hit → trả về', 'miss → đọc DB', 'SET Redis (kèm TTL) → trả về', 'write: update DB → XOÁ key cache'],
+    steps: [
+      { to: 1, label: 'chỉ cache dữ liệu thực sự được đọc' },
+      { to: 3, label: 'cache miss đầu tiên = 1 DB + 1 ghi Redis (latency cao)' },
+      { to: 4, label: 'cache độc lập với DB (Redis chết vẫn chạy, chỉ chậm); có cửa sổ stale + nguy cơ stampede' },
+    ],
+  },
 },
 {
   cat: 'Pattern',
@@ -22,6 +32,15 @@ SS.addQuestions('redis', [
     'Cache-aside/read-through: khác nhau ở "ai chứa logic nạp". Write-through đổi tốc độ ghi lấy nhất quán; write-behind đổi độ bền lấy tốc độ ghi.',
   example:
     'Write-behind hợp cho counter/metric chịu mất mát nhỏ: `INCR views:post:123` trong Redis, mỗi 10s một job flush tổng vào DB. Write-through hợp cho dữ liệu cần cache và DB luôn khớp (ít dùng vì phức tạp).',
+  viz: {
+    type: 'compare',
+    cols: ['Cache-aside / Read-through', 'Write-through', 'Write-behind'],
+    rows: [
+      ['Khác nhau ở', 'ai chứa logic nạp (app vs cache layer)', 'app ghi cache → cache ĐỒNG BỘ ghi DB', 'app ghi cache → cache BẤT ĐỒNG BỘ flush DB theo lô'],
+      ['Đánh đổi', '—', 'nhất quán, nhưng write chậm hơn', 'write cực nhanh, RỦI RO mất dữ liệu nếu cache chết trước flush'],
+      ['Dùng cho', 'phổ biến nhất', 'cache & DB luôn khớp', 'counter/metric chịu mất mát nhỏ'],
+    ],
+  },
 },
 {
   cat: 'Nhất quán',
@@ -51,6 +70,18 @@ SS.addQuestions('redis', [
     'Penetration = "miss có chủ đích/vô hạn". Null caching chặn lặp lại cùng một id không tồn tại; bloom filter chặn cả không gian id không tồn tại với bộ nhớ nhỏ.',
   example:
     'API `/product/{id}` bị quét id ngẫu nhiên: thêm `BF.EXISTS product:bloom <id>` (bloom chứa mọi product id thật). Bloom nói "không" → 404 tức thì. Bloom nói "có thể" → tra cache/DB bình thường. False positive nhỏ chỉ khiến vài request thừa xuống DB.',
+  viz: {
+    type: 'tree',
+    title: 'Cache penetration — "miss có chủ đích/vô hạn" (id không có trong cả cache lẫn DB)',
+    root: {
+      label: 'Mọi request đều miss cache và đập vào DB',
+      children: [
+        { label: 'Null caching', note: 'cache cả kết quả "không tìm thấy" với TTL ngắn (SET user:X "__NULL__" EX 60)' },
+        { label: 'Bloom filter', note: 'giữ bloom các id THỰC SỰ tồn tại; bloom nói "chắc chắn không" → 404 ngay' },
+        { label: 'Validate input', note: 'id đúng format/khoảng trước khi tra' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nhất quán',
@@ -68,6 +99,18 @@ SS.addQuestions('redis', [
     'Avalanche = mất một lượng lớn cache cùng lúc (do TTL đồng loạt hoặc Redis down). Jitter chống cái đầu; HA + circuit breaker chống cái sau.',
   example:
     'Job warm cache mỗi đêm `SET ... EX 3600` cho 100k key → 1 giờ sau tất cả hết hạn trong vài giây → DB sập. Sửa: `EX (3600 + rand(0..600))` → key hết hạn rải đều trong 10 phút.',
+  viz: {
+    type: 'tree',
+    title: 'Cache avalanche — mất một lượng lớn cache CÙNG LÚC',
+    root: {
+      label: 'Hai kịch bản, hai cách chống',
+      children: [
+        { label: 'Nhiều key hết hạn cùng lúc (nạp hàng loạt cùng TTL)', note: 'chống: TTL jitter — EX (base + random(0, spread))' },
+        { label: 'Redis chết / restart → toàn bộ cache biến mất', note: 'chống: Redis HA (Sentinel/Cluster)' },
+        { label: 'Bổ sung', note: 'circuit breaker / rate limit ở tầng DB; cache warming có kiểm soát' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nhất quán',
@@ -81,6 +124,15 @@ SS.addQuestions('redis', [
     'Xoá cache đẩy trách nhiệm "giá trị đúng" về DB. Ghi đè cache trực tiếp mở ra race giữa các writer. Update-DB-rồi-delete-cache là mẫu an toàn phổ biến (dù vẫn có cửa sổ hiếm).',
   example:
     'Sửa giá sản phẩm: `UPDATE products SET price=... WHERE id=5` → `redis.del("product:5")`. Không làm `redis.set("product:5", newValue)` — nếu hai admin sửa cùng lúc, cache có thể kẹt giá của người "ghi cache sau nhưng DB trước".',
+  viz: {
+    type: 'compare',
+    cols: ['Xoá (invalidate) key — nên', 'Ghi đè key sau update DB'],
+    rows: [
+      ['Race giữa writer', 'ít hơn — lần đọc kế tiếp nạp lại từ DB', 'T1 ghi v2, T2 ghi v3, T2 set cache v3, T1 set cache v2 → stale'],
+      ['Trách nhiệm "giá trị đúng"', 'đẩy về DB (nguồn sự thật)', 'cache tự giữ'],
+      ['Thứ tự an toàn', 'update DB TRƯỚC, rồi xoá cache', '—'],
+    ],
+  },
 },
 {
   cat: 'Nhất quán',
@@ -95,6 +147,18 @@ SS.addQuestions('redis', [
     'Không có cách nào làm cache-DB nhất quán tuyệt đối rẻ. TTL là "sàn an toàn" bắt buộc. CDC-based invalidation là giải pháp mạnh nhất vì tách việc xoá cache khỏi code ghi.',
   example:
     'Hệ thống quan trọng: mọi thay đổi bảng `product` → binlog → Kafka → consumer `redis.del("product:"+id)`. App chỉ ghi DB, không tự lo cache. Kèm TTL 10 phút phòng consumer trễ.',
+  viz: {
+    type: 'tree',
+    title: 'Dual-write cache-DB — hai thao tác không nguyên tử',
+    root: {
+      label: 'Crash giữa "ghi DB" và "xoá cache" → cache stale mãi',
+      children: [
+        { label: 'TTL trên mọi key cache', note: 'SÀN AN TOÀN bắt buộc — stale tự hết hạn' },
+        { label: 'Xoá cache qua CDC (Debezium → Kafka)', note: 'giải pháp mạnh nhất — tách việc xoá cache khỏi code ghi, đúng cả khi app crash' },
+        { label: 'Delayed double delete', note: 'xoá, update DB, chờ vài trăm ms, xoá lần nữa (dọn giá trị reader kịp nạp)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Pattern',
@@ -108,6 +172,16 @@ SS.addQuestions('redis', [
     'L1 cắt được cả latency network và tải Redis cho các key **cực nóng**, đổi lấy độ trễ nhất quán (mỗi instance có thể lệch nhau vài giây). Chỉ thêm L1 cho số ít key hot nhất.',
   example:
     'Feature flags đọc hàng chục nghìn lần/s mỗi pod: L1 Caffeine TTL 5s + subscribe channel `flags:changed` để invalidate ngay khi admin đổi. Redis (L2) chỉ nhận ~1 req/pod/5s thay vì hàng chục nghìn.',
+  viz: {
+    type: 'flow',
+    title: 'Multi-level cache (L1 local + L2 Redis)',
+    nodes: ['đọc L1 (in-process, latency ns)', 'miss → đọc L2 (Redis, chia sẻ)', 'miss → DB', 'điền cả L2 và L1'],
+    steps: [
+      { to: 0, label: 'L1 cắt cả latency network và tải Redis cho key CỰC NÓNG' },
+      { to: 3, label: 'đổi lấy độ trễ nhất quán — mỗi instance có thể lệch vài giây' },
+      { to: 3, label: 'invalidation L1: pub/sub Redis "key X đã đổi" → mọi instance xoá; hoặc L1 TTL rất ngắn (1–5s)' },
+    ],
+  },
 },
 {
   cat: 'Rate limiting',
@@ -121,6 +195,15 @@ SS.addQuestions('redis', [
     'Fixed window rẻ nhưng cho burst gấp đôi ở biên. Sliding window chính xác hơn. Token bucket cho phép burst mượt và là lựa chọn phổ biến cho API — hiện thực nguyên tử bằng Lua.',
   example:
     'API limit 100 req/phút/user: token bucket Lua với capacity 100, refill 100/60 token/s. User im lặng 1 phút → đầy 100 token, có thể burst 100 request rồi phải giãn ra. Nguyên tử nên 500 request đồng thời vẫn đếm đúng.',
+  viz: {
+    type: 'compare',
+    cols: ['Fixed window', 'Sliding window log', 'Sliding window counter', 'Token bucket (Lua)'],
+    rows: [
+      ['Cách', 'INCR rate:{user}:{minute} + EXPIRE', 'ZSet score=timestamp, ZREMRANGEBYSCORE + ZCARD', 'nội suy cửa sổ hiện tại + trước', 'lưu (tokens, lastRefill), tính token hồi'],
+      ['Chính xác', 'burst 2× ở biên', 'chính xác', 'gần chính xác', 'chính xác + burst có kiểm soát'],
+      ['Chi phí', 'rẻ nhất', 'tốn RAM (mọi timestamp)', 'rẻ', 'rẻ, phổ biến cho API'],
+    ],
+  },
 },
 {
   cat: 'Distributed lock',
@@ -133,6 +216,15 @@ SS.addQuestions('redis', [
     'Redis lock đủ tốt cho "hiệu quả" (tránh làm việc trùng). Cho "đúng đắn" (không được phép hai client cùng ghi), cần fencing token ở phía tài nguyên — chỉ lock thôi không đủ an toàn tuyệt đối.',
   example:
     'Cron chạy một-node: `SET NX PX` là đủ (chạy trùng chỉ tốn tài nguyên). Ghi file/DB mà tuyệt đối không được hai writer: lock + fencing token, storage kiểm tra `token > lastSeenToken` trước khi ghi.',
+  viz: {
+    type: 'compare',
+    cols: ['SET NX PX (lock đơn giản)', 'Redlock (N master độc lập)', 'Fencing token'],
+    rows: [
+      ['Cơ chế', 'giành key + Lua kiểm token khi giải phóng', 'giành lock ở đa số N/2+1 node', 'số tăng dần kèm mỗi lần cấp lock'],
+      ['An toàn', 'đủ cho "hiệu quả" (tránh làm việc trùng)', 'gây tranh luận (GC pause / clock drift)', 'đúng cả khi client zombie'],
+      ['Cho', 'cron một-node', 'chịu mất vài node Redis', 'tuyệt đối không hai writer — tài nguyên từ chối token cũ'],
+    ],
+  },
 },
 {
   cat: 'Pattern',
@@ -144,6 +236,16 @@ SS.addQuestions('redis', [
     'Cache có giá trị khi (chi phí tạo lại × tần suất đọc) cao và (tần suất thay đổi) thấp. Hit rate thấp nghĩa là cache đang gây hại (thêm latency + RAM mà không tiết kiệm gì).',
   example:
     'Cache: trang sản phẩm (đọc 1000:1 so với ghi), kết quả "sản phẩm liên quan" (tính đắt). Không cache: feed cá nhân hoá realtime của mỗi user (mỗi lần khác nhau, hit rate ~0), số dư tài khoản (đọc thẳng DB hoặc dùng cơ chế riêng).',
+  viz: {
+    type: 'compare',
+    cols: ['Nên cache', 'Không nên cache'],
+    rows: [
+      ['Đọc/ghi', 'đọc nhiều - ghi ít', 'thay đổi liên tục + cần chính xác tuyệt đối'],
+      ['Chi phí tạo lại', 'đắt (aggregate, join, gọi service ngoài chậm)', 'rẻ hoặc đọc một lần rồi thôi (cache pollution)'],
+      ['Hit rate', 'cao', 'thấp → cache đang GÂY HẠI (thêm latency + RAM)'],
+      ['Ví dụ', 'profile, catalog, config, "sản phẩm liên quan"', 'feed cá nhân hoá realtime, số dư tài khoản'],
+    ],
+  },
 },
 {
   cat: 'Rate limiting',
@@ -158,6 +260,19 @@ SS.addQuestions('redis', [
     'Session trong Redis cho scale ngang (mọi pod đọc chung), logout tức thì (xoá key), và TTL tự dọn. Đổi lại Redis trở thành thành phần quan trọng cần HA.',
   example:
     'Spring Session + Redis: `spring.session.store-type=redis`, `spring.session.timeout=30m`. Mỗi request chạm session → TTL reset về 30m. Admin ban user → xoá mọi `session:*` của user đó → lần request tiếp theo họ bị đá ra.',
+  viz: {
+    type: 'tree',
+    title: 'Session store trong Redis',
+    root: {
+      label: 'Client giữ session id trong cookie (Secure, HttpOnly, SameSite)',
+      children: [
+        { label: 'Key session:{id}', note: 'value: hash/JSON chứa userId, roles, csrf token' },
+        { label: 'TTL = thời gian sống; EXPIRE mỗi request → sliding expiration' },
+        { label: 'Redis HA', note: 'mất session = mọi user bị đăng xuất' },
+        { label: 'Logout', note: 'DEL session:{id}; "mọi thiết bị" = lưu user:{id}:sessions set rồi xoá hết' },
+      ],
+    },
+  },
 },
 {
   cat: 'Pattern',
@@ -173,6 +288,16 @@ SS.addQuestions('redis', [
     'Warming đổi một đợt tải có kiểm soát (lúc bạn chọn) lấy việc tránh một đợt tải không kiểm soát (lúc user tới). Chỉ cần cho các hệ mà cold cache thực sự nguy hiểm.',
   example:
     'E-commerce deploy lúc 2h sáng: sau khi Redis mới lên, chạy `warmCache()` nạp 5000 sản phẩm bán chạy + config + danh mục. 6h sáng traffic tới → hit rate đã ~85% thay vì 0%.',
+  viz: {
+    type: 'flow',
+    title: 'Cache warming',
+    nodes: ['Redis restart / deploy / thêm node → cache trống', 'cold start: tải dồn xuống DB, latency cao', 'chủ động nạp trước key nóng đã biết', 'traffic tới → hit rate đã cao'],
+    steps: [
+      { to: 2, label: 'job lúc khởi động nạp top-N sản phẩm/config; hoặc replay traffic log theo pattern thật' },
+      { to: 3, label: 'đổi một đợt tải có kiểm soát (lúc bạn chọn) lấy việc tránh đợt tải không kiểm soát' },
+      { to: 3, label: 'kèm stampede protection để cold start không sập DB' },
+    ],
+  },
 },
 {
   cat: 'Nhất quán',
@@ -187,6 +312,18 @@ SS.addQuestions('redis', [
     'Negative caching chống penetration nhưng tạo cửa sổ "dữ liệu mới nhưng cache nói chưa có". Giữ TTL ngắn và invalidate khi tạo mới.',
   example:
     'User đăng ký username `alice`: trước đó nhiều lần check `alice` chưa tồn tại → negative cache `username:alice = "free"` TTL 30s. Khi `alice` đăng ký xong → `DEL username:alice` (hoặc set giá trị thật) để người khác không thấy "còn trống".',
+  viz: {
+    type: 'tree',
+    title: 'Negative caching — cache cả kết quả "không có gì"',
+    root: {
+      label: 'Chống penetration nhưng tạo cửa sổ "dữ liệu mới nhưng cache nói chưa có"',
+      children: [
+        { label: 'Rủi ro: TTL quá dài', note: 'khi dữ liệu THỰC SỰ được tạo, user vẫn thấy "không tồn tại"' },
+        { label: 'Rủi ro: nhầm sentinel ("__NULL__") với dữ liệu thật' },
+        { label: 'Giải pháp', note: 'TTL ngắn (30–60s) + XOÁ negative key khi resource được tạo' },
+      ],
+    },
+  },
 },
 {
   cat: 'Rate limiting',
@@ -201,6 +338,16 @@ SS.addQuestions('redis', [
     'Redis `SET NX` cấp "quyền xử lý" cho đúng một request mang key đó; lưu kèm response để retry sau này nhận lại kết quả cũ thay vì tác động lần hai.',
   example:
     'Payment API: client timeout rồi retry cùng key → server thấy `idem:{key}` đã có response `{"paymentId": "p_123", "status": "success"}` → trả lại y hệt, không charge lần nữa. Nếu request đầu vẫn đang chạy → 409, client backoff.',
+  viz: {
+    type: 'flow',
+    title: 'Idempotency key trong Redis',
+    nodes: ['SET idem:{key} "PROCESSING" NX EX 86400', 'set được → xử lý, rồi SET idem:{key} <response> EX 86400', 'không set được → GET idem:{key}', '"PROCESSING" → 409 (client retry sau)', 'là response → trả NGUYÊN response cũ'],
+    steps: [
+      { to: 0, label: 'SET NX cấp "quyền xử lý" cho đúng một request' },
+      { to: 4, label: 'retry cùng key → nhận lại kết quả cũ thay vì tác động lần hai' },
+      { to: 4, label: 'TTL đủ dài để bao phủ mọi lần client có thể retry' },
+    ],
+  },
 },
 {
   cat: 'Pattern',
@@ -215,6 +362,19 @@ SS.addQuestions('redis', [
     'ZSet giải quyết leaderboard gần như trực tiếp: cập nhật điểm O(log N), lấy top-N O(log N + N), lấy hạng O(log N). Thách thức ở quy mô là hot key và RAM, không phải thuật toán.',
   example:
     'Game mobile: `lb:season:5` ZSet ~5M người chơi (~400MB). "Điểm và hạng của tôi + 10 người quanh tôi": `ZSCORE` + `ZREVRANK` + `ZREVRANGE (rank-5) (rank+5)`. Reset mùa: đổi sang `lb:season:6`, key cũ `EXPIRE` sau khi tổng kết.',
+  viz: {
+    type: 'tree',
+    title: 'Leaderboard realtime với Sorted Set',
+    root: {
+      label: 'ZSet giải quyết gần như trực tiếp (cập nhật/top-N/hạng đều O(log N))',
+      children: [
+        { label: 'ZINCRBY / ZREVRANGE 0 9 (top 10) / ZREVRANK (hạng của tôi) / ZSCORE' },
+        { label: 'Nhiều leaderboard theo thời gian', note: 'lb:daily:2024-06-01, lb:weekly:... với TTL' },
+        { label: 'Hàng chục triệu user', note: 'một ZSet vẫn ổn; RAM lớn → chỉ giữ top-K + hạng gần đúng cho đuôi' },
+        { label: 'Cluster', note: 'một leaderboard = một key = một slot → hot key; chia theo region/segment' },
+      ],
+    },
+  },
 },
 {
   cat: 'Pattern',
@@ -230,6 +390,16 @@ SS.addQuestions('redis', [
     'Đọc từ RAM local (nhanh nhất), cập nhật qua pub/sub (gần realtime khi đổi), reload định kỳ (bảo hiểm cho tính không tin cậy của pub/sub). Ba lớp cho vừa nhanh vừa đúng.',
   example:
     'Bật/tắt tính năng "checkout mới" cho 100 pod: admin toggle → `PUBLISH config:changed feature.new-checkout` → trong ~ms mọi pod cập nhật L1, request tiếp theo dùng giá trị mới. Không có pub/sub thì phải chờ TTL 60s.',
+  viz: {
+    type: 'flow',
+    title: 'Feature flag / config — 3 lớp: nhanh + đúng',
+    nodes: ['mỗi instance giữ bản sao in-memory (L1) toàn bộ config', 'nạp lần đầu từ Redis/DB', 'subscribe channel config:changed', 'admin đổi → ghi Redis + PUBLISH config:changed <key>', 'mọi instance nhận → reload L1', 'fallback: reload định kỳ (60s)'],
+    steps: [
+      { to: 0, label: 'đọc từ RAM local — nhanh nhất' },
+      { to: 4, label: 'cập nhật qua pub/sub — gần realtime khi đổi (~ms)' },
+      { to: 5, label: 'reload định kỳ — bảo hiểm cho tính không tin cậy của pub/sub' },
+    ],
+  },
 },
 {
   cat: 'Nhất quán',
@@ -243,6 +413,18 @@ SS.addQuestions('redis', [
     'Versioning biến "invalidate nhiều key" thành "đổi một số". Không cần tìm và xoá — key cũ trở nên không ai tra tới và TTL dọn chúng.',
   example:
     'Đổi thuật toán render giá (mọi cache giá sai): bump `cache:pricing:v2` → v3. Code đọc key `cache:pricing:v3:{sku}` → toàn miss → nạp lại bằng logic mới. Key `v2` không ai đọc, hết hạn rồi biến mất. Không cần `SCAN` + `DEL` hàng triệu key.',
+  viz: {
+    type: 'tree',
+    title: 'Cache key versioning — biến "invalidate nhiều key" thành "đổi một số"',
+    root: {
+      label: 'Key cũ trở nên không ai tra tới, TTL dọn chúng',
+      children: [
+        { label: 'Global version', note: 'cache:v{N}:... — bump N = coi như xoá toàn bộ cache' },
+        { label: 'Per-entity version', note: 'product:{id}:v{ver} với ver từ updated_at — update entity → key mới' },
+        { label: 'Dependency key', note: 'list:products:{queryHash} phụ thuộc products:version; bump → mọi list cache hết hiệu lực ngầm' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nhất quán',
@@ -258,6 +440,19 @@ SS.addQuestions('redis', [
     'Hot key phá vỡ giả định "tải phân bố đều theo key". Giải pháp là thêm một tầng trước Redis (L1) hoặc biến một key thành nhiều bản để phân tán điểm truy cập.',
   example:
     'Flash sale: giá + tồn kho của 1 sản phẩm đọc 80k/s. Thêm L1 Caffeine TTL 1s ở mỗi pod (20 pod) → Redis chỉ nhận ~20 req/s cho key đó. Tồn kho cần realtime hơn thì nhân 8 bản key và đọc random.',
+  viz: {
+    type: 'tree',
+    title: 'Hot key trong cache — thêm một tầng trước Redis, hoặc biến 1 key thành nhiều bản',
+    root: {
+      label: 'Phá vỡ giả định "tải phân bố đều theo key"',
+      children: [
+        { label: 'L1 local cache TTL ngắn (1–3s)', note: 'cắt phần lớn traffic trước khi tới Redis' },
+        { label: 'Nhân bản key', note: 'price:X:0 .. price:X:9, đọc ngẫu nhiên; ghi cập nhật cả 10' },
+        { label: 'Đọc từ replica cho key đó' },
+        { label: 'Phát hiện', note: 'redis-cli --hotkeys (cần LFU), giám sát ở client/proxy' },
+      ],
+    },
+  },
 },
 {
   cat: 'Pattern',
@@ -272,5 +467,14 @@ SS.addQuestions('redis', [
     'SWR loại bỏ "latency spike khi hết hạn": client luôn nhận phản hồi nhanh (kể cả hơi cũ), việc làm mới diễn ra ngầm. Kết hợp lock để chỉ một request refresh.',
   example:
     'Trang chủ: soft TTL 60s, hard TTL 600s. Phút thứ 2, request tới → nhận bản 61s tuổi tức thì + trigger refresh nền. Chỉ khi cache "chết hẳn" (10 phút, ví dụ backend lỗi liên tục) mới có miss đồng bộ.',
+  viz: {
+    type: 'flow',
+    title: 'Stale-while-revalidate — loại bỏ latency spike khi hết hạn',
+    nodes: ['lưu kèm soft TTL (nên làm mới) < hard TTL (thực sự hết hạn)', 'còn trong soft TTL → trả về bình thường', 'quá soft, chưa hard → TRẢ NGAY giá trị cũ + kích hoạt nạp lại NỀN', 'quá hard TTL → miss thật, nạp đồng bộ'],
+    steps: [
+      { to: 2, label: 'client luôn nhận phản hồi nhanh (kể cả hơi cũ); việc làm mới diễn ra ngầm' },
+      { to: 2, label: 'một request giành lock để refresh — chỉ một request tính lại' },
+    ],
+  },
 },
 ]);
