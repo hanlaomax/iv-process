@@ -10,6 +10,16 @@ SS.addQuestions('design-patterns', [
     'Strategy = "cắm thuật toán từ ngoài vào". Nó biến `if type == A ... else if type == B ...` thành "chọn strategy phù hợp và gọi nó". Nền tảng của Open-Closed: thêm thuật toán mới = thêm class, không sửa client.',
   example:
     'Nén file: `Compressor` giữ một `CompressionStrategy` (`Zip`, `Gzip`, `Lz4`). `compressor.compress(file)` gọi strategy hiện tại. Thêm `ZstdStrategy` không đụng `Compressor`. `Comparator` trong Java chính là Strategy cho việc so sánh.',
+  viz: {
+    type: 'flow',
+    title: '"Cắm thuật toán từ ngoài vào" — nền tảng của Open-Closed',
+    nodes: ['Client (Checkout) giữ một ShippingStrategy', 'gọi strategy.cost(order)', 'Đổi strategy runtime / chọn theo context', 'Thêm thuật toán mới = thêm class'],
+    steps: [
+      { to: 1, label: 'Biến if type==A ... else if type==B ... thành "chọn strategy và gọi nó"' },
+      { to: 2, label: 'StandardShipping, ExpressShipping — mỗi cái một class, test riêng' },
+      { to: 3, label: 'Không sửa client. Comparator trong Java chính là Strategy' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -26,6 +36,17 @@ SS.addQuestions('design-patterns', [
     'Strategy trả tiền bằng số class + gián tiếp; nó "mua" khả năng mở rộng không sửa code cũ và test cô lập. Với logic đơn giản, ổn định, một chỗ → `switch` thắng. Đo bằng "nhánh này có thay đổi/lặp/phức tạp không?".',
   example:
     'Tính phí theo `PlanType` (FREE/PRO/ENTERPRISE), mỗi loại là công thức nhiều bước + tra bảng giá riêng + hay thêm plan mới → Strategy (hoặc enum với abstract `calculateFee()`). Ngược lại, `switch(status) { case ACTIVE -> "green"; ... }` — giữ nguyên switch.',
+  viz: {
+    type: 'compare',
+    corner: 'Tình huống',
+    cols: ['Strategy (class / enum abstract method)', 'switch / Map<Enum, Function>'],
+    rows: [
+      ['Mỗi nhánh phức tạp (state, phụ thuộc riêng)', 'đáng tách', 'không phù hợp'],
+      ['Danh sách nhánh hay thay đổi/mở rộng', 'thêm class, không sửa file cũ', 'sửa file mỗi lần'],
+      ['Cần test từng nhánh riêng', 'dễ', 'khó'],
+      ['2–3 nhánh đơn giản, ổn định, một chỗ', 'quá nặng', 'rõ ràng hơn, ít file'],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -38,6 +59,16 @@ SS.addQuestions('design-patterns', [
     'Observer = "publish–subscribe trong một process". Subject không biết observer là ai, chỉ biết "có ai đó muốn được báo". Nền tảng của event handling, reactive, data binding, MVC.',
   example:
     'Excel: ô A1 = `B1 + C1`. Ô A1 (observer) subscribe B1, C1 (subject). Đổi B1 → B1 notify → A1 tính lại. UI framework: nút "Save" observe form state → tự enable/disable. `PropertyChangeListener` trong JavaBeans.',
+  viz: {
+    type: 'flow',
+    title: '"Publish–subscribe trong một process"',
+    nodes: ['Observer.subscribe(subject)', 'Subject state thay đổi', 'subject.notifyAll(event)', 'Mỗi observer.onEvent(e) — tự cập nhật'],
+    steps: [
+      { to: 0, label: 'Subject giữ List<Observer>' },
+      { to: 2, label: 'Subject không biết observer là ai, chỉ biết "có ai đó muốn được báo"' },
+      { to: 3, label: 'Nền tảng của event handling, reactive, data binding, MVC' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -51,6 +82,17 @@ SS.addQuestions('design-patterns', [
     'Observer: subject tự quản subscriber, gọi trực tiếp (in-process, sync). Pub/Sub: một bus ở giữa, publisher/subscriber độc lập hoàn toàn. Event-driven: pub/sub ở quy mô hệ thống phân tán với broker bền.',
   example:
     'In-process: `orderService` có `List<OrderListener>`, gọi `listener.onOrderPlaced()` (Observer). Spring: `applicationEventPublisher.publishEvent(new OrderPlaced())` → bất kỳ `@EventListener` nào nhận (Pub/Sub qua ApplicationContext bus). Phân tán: publish `OrderPlaced` lên Kafka (Event-driven).',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Observer (GoF)', 'Pub/Sub (event bus)', 'Event-driven architecture'],
+    rows: [
+      ['Ai giữ danh sách subscriber', 'subject giữ trực tiếp', 'broker/bus trung gian', 'message broker (Kafka)'],
+      ['Đồng bộ / async', 'đồng bộ', 'có thể async', 'async'],
+      ['Phạm vi', 'trong-process', 'có thể xuyên process', 'phân tán, bền'],
+      ['Coupling', 'nhẹ (subject biết interface Observer)', 'publisher/subscriber không biết nhau', 'service không biết nhau'],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -62,6 +104,16 @@ SS.addQuestions('design-patterns', [
     'Template Method = "khung cố định, chỗ trống cho subclass điền". Nó đảo ngược quyền điều khiển: superclass gọi method của subclass ("Hollywood principle"). Dùng khi nhiều biến thể chia sẻ *cùng một quy trình* nhưng khác vài bước.',
   example:
     'JUnit: `runTest()` (template) gọi `setUp()` → `test method` → `tearDown()`. Bạn override `setUp`/`tearDown`. Spring `AbstractController`, servlet `HttpServlet.service()` gọi `doGet`/`doPost`. `InputStream.read(byte[])` gọi `read()` abstract.',
+  viz: {
+    type: 'flow',
+    title: '"Khung cố định, chỗ trống cho subclass điền" (Hollywood principle)',
+    nodes: ['run() — template method (final: không override)', 'read() — abstract (subclass điền)', 'validate() — có default, override được', 'save() — abstract', 'notifyDone() — hook, mặc định rỗng'],
+    steps: [
+      { to: 0, label: 'Bước bất biến nằm trong superclass' },
+      { to: 1, label: 'Superclass GỌI method của subclass' },
+      { to: 4, label: 'Dùng khi nhiều biến thể chia sẻ cùng quy trình, khác vài bước' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -75,6 +127,17 @@ SS.addQuestions('design-patterns', [
     'Template Method: "kế thừa để điền chỗ trống trong quy trình". Strategy: "composition để cắm thuật toán từ ngoài". Cùng bài toán, Strategy thường là lựa chọn hiện đại hơn (favor composition, đổi runtime).',
   example:
     'Xử lý payment với các bước chung (validate → charge → record → notify): Template Method nếu chỉ khác bước `charge` theo provider và số provider cố định. Strategy nếu muốn đổi provider runtime hoặc test từng bước độc lập.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Template Method', 'Strategy'],
+    rows: [
+      ['Cơ chế', 'kế thừa (subclass override method)', 'composition (client giữ object strategy)'],
+      ['Thời điểm', 'tĩnh (compile-time)', 'đổi được runtime'],
+      ['Đổi được gì', 'chỉ các bước được cho phép, không đổi khung', 'toàn bộ thuật toán, tổ hợp linh hoạt'],
+      ['Hợp khi', 'biến thể ít, cố định, nhiều code chung', 'đổi runtime, tránh kế thừa sâu, test cô lập'],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -87,6 +150,20 @@ SS.addQuestions('design-patterns', [
     'Command = "biến động từ thành danh từ". Một khi thao tác là object, bạn có thể lưu, truyền, xếp hàng, hoãn, hoàn tác, ghi log nó — những thứ không làm được với một lời gọi method trực tiếp.',
   example:
     'Editor: mỗi hành động (gõ, xoá, định dạng) là một Command với `execute()` + `undo()`, đẩy vào stack → Ctrl+Z. Task queue: mỗi job là một Command serialize được, đẩy vào Redis/DB, worker `execute()`. GUI: mỗi menu item/nút gắn một Command.',
+  viz: {
+    type: 'tree',
+    title: '"Biến động từ thành danh từ" — thao tác là object',
+    root: {
+      label: 'Object chứa receiver + tham số + method — tách "phát lệnh" khỏi "thực hiện lệnh"',
+      children: [
+        { label: 'Hàng đợi lệnh', note: 'job serialize được, đẩy vào Redis/DB, worker execute()' },
+        { label: 'Log / replay', note: '' },
+        { label: 'Undo/redo', note: 'thêm undo()' },
+        { label: 'Transaction (nhóm lệnh), macro (composite command)', note: '' },
+        { label: 'Retry, chạy lệnh ở thread khác', note: '' },
+      ],
+    },
+  },
 },
 {
   cat: 'Behavioral',
@@ -104,6 +181,16 @@ SS.addQuestions('design-patterns', [
     'Undo/redo = hai stack + command biết tự đảo ngược. Command đơn giản lưu "giá trị cũ"; command phức tạp lưu Memento (ảnh chụp). Redo stack bị xoá khi có nhánh lịch sử mới.',
   example:
     '`SetCellCommand(cell, newValue)`: `execute()` lưu `oldValue = cell.get()` rồi `cell.set(newValue)`. `undo()`: `cell.set(oldValue)`. Spreadsheet giữ `Deque<Command> undo, redo`. Xoá 100 dòng → `DeleteRowsCommand` lưu Memento của 100 dòng đó để undo.',
+  viz: {
+    type: 'flow',
+    title: 'Hai stack + command biết tự đảo ngược',
+    nodes: ['execute() — thực hiện + lưu oldValue / Memento', 'push vào undo stack', 'Ctrl+Z: pop → undo() → push sang redo stack', 'Ctrl+Y: pop redo → execute() → push lại undo', 'Thao tác mới (không phải redo) → xoá redo stack'],
+    steps: [
+      { to: 1, label: 'Command đơn giản lưu "giá trị cũ"' },
+      { to: 2, label: 'Command phức tạp lưu Memento (snapshot phần bị ảnh hưởng)' },
+      { to: 4, label: 'Redo stack bị xoá khi có nhánh lịch sử mới' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -116,6 +203,19 @@ SS.addQuestions('design-patterns', [
     'State = "state machine hướng đối tượng". Mỗi trạng thái biết: hành vi hợp lệ của nó + chuyển sang trạng thái nào. Thêm trạng thái mới = thêm một class, không sửa `switch` ở 10 method.',
   example:
     'Đơn hàng: `PENDING → PAID → SHIPPED → DELIVERED`, có thể `CANCELLED`. Mỗi state cho phép/cấm các thao tác khác nhau. `PendingState.cancel()` OK; `ShippedState.cancel()` từ chối. Máy bán hàng, TCP connection, document workflow, game character state.',
+  viz: {
+    type: 'states',
+    title: 'State machine hướng đối tượng — mỗi state là một class',
+    start: 0,
+    states: ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
+    transitions: [
+      { from: 0, to: 1, label: 'pay()' },
+      { from: 1, to: 2, label: 'ship()' },
+      { from: 2, to: 3, label: 'deliver()' },
+      { from: 0, to: 4, label: 'cancel() OK' },
+      { from: 1, to: 4, label: 'cancel() + refund' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -129,6 +229,17 @@ SS.addQuestions('design-patterns', [
     'Strategy = thuật toán hoán đổi được, client chọn. State = giai đoạn vòng đời, các state tự chuyển tiếp nhau theo sự kiện. Nếu các "chiến lược" của bạn tự chuyển sang nhau → đó là State.',
   example:
     'Strategy: `PaymentMethod` (Card/PayPal/Crypto) — user chọn, không tự đổi. State: `DraftPost → PublishedPost → ArchivedPost` — `publish()` gọi trên draft tự chuyển sang published; published không cho `publish()` nữa.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Strategy', 'State'],
+    rows: [
+      ['Các object interface', 'độc lập, không biết nhau', 'biết nhau (state này chuyển sang state kia)'],
+      ['Ai điều khiển việc đổi', 'client chọn, thường không đổi trong vòng đời', 'chính các state (hoặc context) theo sự kiện'],
+      ['Client', '"biết" mình đang chọn cái gì', 'không quan tâm state hiện tại'],
+      ['Câu hỏi', '"làm việc X bằng cách nào"', '"object đang ở giai đoạn nào của vòng đời"'],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -142,6 +253,16 @@ SS.addQuestions('design-patterns', [
     'Đừng dùng thư viện state machine cho 3 trạng thái (enum đủ), cũng đừng nhồi workflow 20 trạng thái vào `switch` (dùng State pattern hoặc thư viện). Kích thước và độ phức tạp quyết định.',
   example:
     'Trạng thái task đơn giản (`TODO → DOING → DONE`): enum với `Set<Status> allowedNext`. Quy trình phê duyệt đơn nghỉ phép (nhiều cấp duyệt, timeout tự escalate, có thể rút lại): Spring StateMachine hoặc Temporal workflow.',
+  viz: {
+    type: 'layers',
+    title: 'Kích thước và độ phức tạp quyết định',
+    dir: 'up',
+    layers: [
+      { name: 'Enum + transition table', tag: 'đơn giản', note: 'vài trạng thái + chuyển đơn giản — Map<State, Set<State>> hoặc enum.next(Event)' },
+      { name: 'State pattern (một class/state)', tag: '', note: 'mỗi state nhiều hành vi phức tạp + thao tác được phép/cấm khác nhau' },
+      { name: 'Thư viện state machine', tag: 'Spring StateMachine, XState', note: 'state phân cấp, parallel region, guard, action, visualization, persistence' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -154,6 +275,16 @@ SS.addQuestions('design-patterns', [
     'CoR = "pipeline handler, mỗi mắt xích tự quyết xử lý hay đẩy tiếp". Tách người gửi khỏi người xử lý; cho phép cấu hình chuỗi linh hoạt. Cẩn thận: request có thể đi hết chuỗi mà không ai xử lý.',
   example:
     'Servlet Filter chain, Spring Security filter chain, middleware trong Express/ASP.NET Core. Xử lý exception: `NullHandler → ValidationHandler → BusinessHandler → DefaultHandler`. Duyệt chi phí: nhân viên < 1tr → trưởng nhóm < 10tr → giám đốc → HĐQT.',
+  viz: {
+    type: 'flow',
+    title: '"Pipeline handler, mỗi mắt xích tự quyết xử lý hay đẩy tiếp"',
+    nodes: ['Request', 'Handler 1: xử lý hoặc chuyển tiếp', 'Handler 2', 'Handler 3', 'Default handler'],
+    steps: [
+      { to: 1, label: 'Duyệt chi phí: nhân viên < 1tr → trưởng nhóm < 10tr → giám đốc' },
+      { to: 3, label: 'Thêm/bớt/đổi thứ tự bước dễ dàng; tách người gửi khỏi người xử lý' },
+      { to: 4, label: 'Cẩn thận: request có thể đi hết chuỗi mà không ai xử lý' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -167,6 +298,17 @@ SS.addQuestions('design-patterns', [
     'Middleware = CoR + khả năng chạy logic *sau* khi phần còn lại của chuỗi hoàn tất (nhờ `next()` là lời gọi lồng nhau, không phải "chuyển tiếp rồi quên"). Đây là mô hình pipeline phổ biến nhất trong web framework.',
   example:
     'Express: `app.use(logger)`, `app.use(auth)`, `app.use(bodyParser)`. Mỗi cái gọi `next()`. `auth` middleware: kiểm tra token → không hợp lệ thì `res.status(401)` (dừng chuỗi), hợp lệ thì `next()`. `logger` đo thời gian cả request nhờ code sau `next()`.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['CoR cổ điển (GoF)', 'Middleware / filter'],
+    rows: [
+      ['Mỗi handler', 'xử lý HOẶC chuyển tiếp (một trong hai)', 'code trước next() → next() → code sau next()'],
+      ['Chạy logic SAU khi chuỗi hoàn tất', 'không', 'có (next() là lời gọi lồng nhau)'],
+      ['Bọc được (như Decorator around)?', 'không', 'có — đo thời gian cả request'],
+      ['Sửa request/response, dừng chuỗi', 'hạn chế', 'có'],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -181,6 +323,19 @@ SS.addQuestions('design-patterns', [
     'Iterator tách "cách duyệt" khỏi "cách lưu trữ" và cho phép duyệt **lazy** (không nạp hết vào bộ nhớ). Đó là lý do nó vẫn nền tảng: `Stream`, generator, pagination iterator đều là Iterator.',
   example:
     'Đọc 10GB log: `LogFileIterator implements Iterator<LogLine>` đọc từng dòng khi `next()` được gọi → xử lý được file lớn hơn RAM. API pagination: `PagedIterator` tự động gọi trang tiếp theo khi hết trang hiện tại — client chỉ `for (var item : pagedResults)`.',
+  viz: {
+    type: 'tree',
+    title: 'Tách "cách duyệt" khỏi "cách lưu trữ" + cho phép duyệt lazy',
+    root: {
+      label: 'Ngôn ngữ có sẵn (Iterable, generator) — nhưng pattern vẫn quan trọng khi:',
+      children: [
+        { label: 'Custom traversal', note: 'cây theo BFS/DFS/in-order; duyệt có filter/transform lazy' },
+        { label: 'Lazy / vô hạn', note: 'đọc file lớn từng dòng, phân trang API, stream vô hạn' },
+        { label: 'Ẩn nguồn', note: 'cùng interface iterator dù dữ liệu từ RAM, DB, hay network' },
+        { label: 'Vẫn nền tảng', note: 'Stream, generator, pagination iterator đều là Iterator' },
+      ],
+    },
+  },
 },
 {
   cat: 'Behavioral',
@@ -193,6 +348,16 @@ SS.addQuestions('design-patterns', [
     'Mediator = "trạm điều phối". Thay vì mỗi component biết mọi component khác, tất cả biết mediator. Tương tác trở nên rõ ràng (ở một chỗ) và component tái dùng được (không dính vào nhau).',
   example:
     'Form phức tạp: khi "quốc gia" đổi → cập nhật dropdown "tỉnh", ẩn/hiện field "state", đổi format số điện thoại, revalidate. Không để mỗi field biết mọi field khác — một `FormMediator` xử lý `onCountryChanged()`. Chat room: user gửi message tới room (mediator), room broadcast — user không giữ list user khác.',
+  viz: {
+    type: 'flow',
+    title: '"Trạm điều phối" — đổi coupling n×n thành n×1',
+    nodes: ['Nhiều object tương tác chằng chịt (n×n)', 'Đặt một Mediator ở giữa', 'Các object chỉ nói với mediator', 'Mediator điều phối tương tác (logic tập trung)'],
+    steps: [
+      { to: 0, label: 'Mỗi cái giữ tham chiếu tới nhiều cái khác' },
+      { to: 2, label: 'Component tái dùng được (không dính vào nhau)' },
+      { to: 3, label: 'Nhược: mediator có thể phình thành "god object"' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -205,6 +370,17 @@ SS.addQuestions('design-patterns', [
     'Observer: "báo cho ai quan tâm" (phi tập trung, không logic điều phối). Mediator: "điều phối tương tác theo quy tắc" (tập trung, có logic). Observer là kênh; Mediator là bộ não.',
   example:
     'Observer: `stockPrice` thay đổi → notify các widget hiển thị. Mediator: trong một dialog, khi checkbox "gửi email" được tick → mediator enable field "email", set field "phương thức" = EMAIL, disable field "SMS" — logic "khi X thì Y, Z" nằm ở mediator.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Observer', 'Mediator'],
+    rows: [
+      ['Quan hệ', 'một-nhiều, một chiều', 'nhiều-nhiều, hai chiều'],
+      ['Logic điều phối', 'không — subject không quan tâm observer làm gì', 'có — chứa quy tắc "khi X thì Y, Z"'],
+      ['Vai trò', 'kênh ("báo cho ai quan tâm")', 'bộ não ("điều phối theo quy tắc")'],
+      ['Kết hợp', 'component notify mediator (kiểu Observer), mediator điều phối (kiểu Mediator)', ''],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -219,6 +395,16 @@ SS.addQuestions('design-patterns', [
     'Observer tạo một reference ngầm từ subject (thường sống lâu) tới observer (thường sống ngắn). Không unsubscribe = leak. Đây là bug phổ biến nhất khi dùng Observer/listener thủ công.',
   example:
     'Activity Android đăng ký `LocationListener` với `LocationManager` (singleton, sống mãi) nhưng quên gỡ khi Activity destroy → Activity không được GC, cả view tree của nó rò rỉ. Xoay màn hình vài lần → OutOfMemory. Sửa: `removeUpdates(listener)` trong `onDestroy`.',
+  viz: {
+    type: 'flow',
+    title: 'Reference ngầm từ subject (sống lâu) tới observer (sống ngắn)',
+    nodes: ['Subject giữ strong reference tới observer', 'Observer bị "bỏ quên", không unsubscribe', 'Observer không bao giờ được GC → memory leak', 'Observer "chết" vẫn nhận event và xử lý sai'],
+    steps: [
+      { to: 2, label: 'Lapsed listener problem — bug phổ biến nhất với Observer thủ công' },
+      { to: 3, label: 'Phòng: luôn unsubscribe trong dispose()/onDestroy/@PreDestroy' },
+      { to: 3, label: 'Hoặc: WeakReference; framework lifecycle-aware (LifecycleObserver, CompositeDisposable)' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -231,6 +417,19 @@ SS.addQuestions('design-patterns', [
     'Interpreter là pattern **ít dùng nhất** của GoF. Nó hợp lý cho DSL cực nhỏ và cố định. Ngữ pháp thật sự → dùng công cụ chuyên dụng, đừng tự viết một class cho mỗi luật.',
   example:
     'Rule "hiển thị banner": DSL `age > 18 AND (country == "VN" OR isVip)`. Parse thành AST gồm `AndExpr`, `OrExpr`, `GreaterThan`, `Equals`, `Variable`. `expr.interpret(userContext)` → boolean. Đủ nhỏ và ổn định để tự viết. Nếu DSL phình thêm hàm, vòng lặp → chuyển sang nhúng scripting.',
+  viz: {
+    type: 'tree',
+    title: 'Pattern ít dùng nhất của GoF',
+    root: {
+      label: 'Ngữ pháp cho một ngôn ngữ nhỏ + interpreter duyệt AST',
+      children: [
+        { label: 'Dùng khi: DSL đơn giản, ỔN ĐỊNH', note: 'biểu thức boolean/số học, rule engine đơn giản, query filter, template' },
+        { label: 'Mỗi luật ngữ pháp = một class', note: 'interpret(context) đệ quy' },
+        { label: 'KHÔNG dùng khi ngữ pháp phức tạp/hay đổi', note: 'parser generator (ANTLR) + Visitor' },
+        { label: 'Hoặc nhúng ngôn ngữ script có sẵn', note: 'Groovy, JS — interpreter thủ công không scale với ngữ pháp lớn' },
+      ],
+    },
+  },
 },
 {
   cat: 'Behavioral',
@@ -247,6 +446,17 @@ SS.addQuestions('design-patterns', [
     'Sync observer: hệ quả là một phần của giao dịch. Async observer: hệ quả là phản ứng độc lập, best-effort. Nhầm (gửi email sync trong transaction) → email chậm làm treo request, hoặc email đã gửi rồi transaction rollback.',
   example:
     'Spring: `order.place()` phát `OrderPlaced`. `InventoryHandler` — nếu trừ kho phải nguyên tử với đơn hàng → sync, cùng transaction. `EmailHandler`, `AnalyticsHandler` → `@TransactionalEventListener(AFTER_COMMIT)` + `@Async` — chạy sau khi đơn hàng chắc chắn đã commit, không làm chậm response.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Observer đồng bộ', 'Observer bất đồng bộ'],
+    rows: [
+      ['Chặn subject?', 'có — observer chậm làm chậm subject', 'không'],
+      ['Cùng transaction?', 'có — observer lỗi có thể rollback thao tác chính', 'không (dùng AFTER_COMMIT)'],
+      ['Debug', 'dễ — lỗi biết ngay', 'khó — cần retry/lỗi riêng'],
+      ['Dùng cho', 'side-effect phải thành công CÙNG thao tác chính (trừ kho)', 'side-effect độc lập (email, cache, analytics)'],
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -263,5 +473,17 @@ SS.addQuestions('design-patterns', [
     'GoF viết cho ngôn ngữ chỉ có class (C++/Java cũ). Nhiều pattern là "cách mô phỏng first-class function bằng class". Có lambda rồi thì dùng lambda — nhưng vẫn nên biết tên pattern để giao tiếp và để nhận ra khi cần class đầy đủ (state, nhiều method).',
   example:
     'Trước Java 8: `Collections.sort(list, new Comparator<User>() { public int compare(...) {...} })` (Strategy dạng anonymous class). Java 8+: `list.sort(comparing(User::getAge).thenComparing(User::getName))`. Cùng pattern Strategy, ngắn hơn 5 lần.',
+  viz: {
+    type: 'compare',
+    corner: 'Pattern',
+    cols: ['GoF cổ điển (class)', 'Lambda / first-class function'],
+    rows: [
+      ['Strategy', 'class implements interface một-method', 'truyền lambda: list.sort((a,b) -> ...)'],
+      ['Command', 'class Command', 'Runnable / Supplier / method reference'],
+      ['Template Method', 'subclass override method', 'truyền các bước làm tham số (higher-order function)'],
+      ['Observer', 'interface Observer', 'List<Consumer<Event>>'],
+      ['Factory Method', 'subclass', 'Supplier<T> / constructor reference'],
+    ],
+  },
 },
 ]);

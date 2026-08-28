@@ -11,6 +11,16 @@ SS.addQuestions('design-patterns', [
     'Repository = "bộ sưu tập object domain, không cần biết chúng nằm ở đâu". Nó tách domain khỏi persistence (DIP), cho phép test không DB, và tập trung query logic thay vì rải SQL khắp service.',
   example:
     '`OrderService` phụ thuộc `OrderRepository` (interface). Prod: `JpaOrderRepository`. Test: `InMemoryOrderRepository` với một `Map`. Đổi từ Postgres sang DynamoDB → viết `DynamoOrderRepository`, domain và service không đổi một dòng.',
+  viz: {
+    type: 'flow',
+    title: '"Bộ sưu tập object domain, không cần biết chúng nằm ở đâu"',
+    nodes: ['Domain / service code', 'OrderRepository (interface)', 'JpaOrderRepository / InMemoryOrderRepository (infra)', 'Trả domain object đầy đủ hành vi (aggregate root)'],
+    steps: [
+      { to: 1, label: 'Interface giống collection: findById, save, findByCustomer' },
+      { to: 2, label: 'Prod: JPA; Test: Map — không cần DB' },
+      { to: 3, label: 'Không phải row/DTO. Tập trung query logic thay vì rải SQL khắp service' },
+    ],
+  },
 },
 {
   cat: 'Enterprise',
@@ -23,6 +33,18 @@ SS.addQuestions('design-patterns', [
     'DAO nói ngôn ngữ của database ("row của bảng orders"). Repository nói ngôn ngữ của domain ("đơn hàng của khách hàng X"). Repository là DAO + ngữ nghĩa domain + biên giới aggregate.',
   example:
     'DAO: `orderDao.selectById(5)` → `OrderRow`; `orderItemDao.selectByOrderId(5)` → `List<OrderItemRow>`; service tự ghép. Repository: `orderRepository.findById(new OrderId(5))` → `Order` đầy đủ (gồm items, đã dựng thành aggregate) với method `order.cancel()`.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['DAO', 'Repository'],
+    rows: [
+      ['Gần với', 'bảng / nguồn dữ liệu', 'domain'],
+      ['Method', 'insert, update, selectById, selectAll', 'findActiveSubscriptions, save(order) — ngôn ngữ nghiệp vụ'],
+      ['Trả về', 'row / record / DTO', 'aggregate đầy đủ hành vi'],
+      ['Nhiều bảng cho một khái niệm', 'một DAO một bảng', 'repository lo việc ghép'],
+      ['Tư duy', 'data-centric', 'domain-centric (= DAO + ngữ nghĩa domain + biên aggregate)'],
+    ],
+  },
 },
 {
   cat: 'Enterprise',
@@ -35,6 +57,16 @@ SS.addQuestions('design-patterns', [
     'Unit of Work = "gom mọi thay đổi của một use case, ghi một lần". Bạn (hoặc ORM) không ghi từng thay đổi ngay mà tích luỹ và commit nguyên tử. EntityManager/DbContext là hiện thân của pattern này.',
   example:
     '`@Transactional void processOrder() { Order o = repo.findById(id); o.markPaid(); Customer c = custRepo.findById(o.customerId()); c.addLoyaltyPoints(10); }` — không có `save()` nào. Hibernate (UoW) theo dõi `o` và `c` dirty, khi method kết thúc → một transaction, hai UPDATE, đúng thứ tự.',
+  viz: {
+    type: 'flow',
+    title: '"Gom mọi thay đổi của một use case, ghi một lần"',
+    nodes: ['Use case bắt đầu', 'Theo dõi object: new / dirty / removed', 'Commit', 'Flush tất cả trong MỘT transaction'],
+    steps: [
+      { to: 1, label: 'Không ghi ngay từng thay đổi — tích luỹ (Hibernate dirty checking)' },
+      { to: 3, label: 'Batch, đúng thứ tự (parent trước child), tránh ghi trùng' },
+      { to: 3, label: 'JPA Persistence Context / EntityManager / DbContext = hiện thân của pattern này' },
+    ],
+  },
 },
 {
   cat: 'Enterprise',
@@ -52,6 +84,19 @@ SS.addQuestions('design-patterns', [
     'DTO là "hình dạng dữ liệu tại ranh giới" — độc lập với "hình dạng để xử lý nghiệp vụ" (domain) và "hình dạng để lưu trữ" (entity/row). Ba lớp này tiến hoá với nhịp khác nhau; trộn chúng khiến mọi thay đổi lan rộng.',
   example:
     '`Order` entity (JPA, quan hệ với `Customer`, `Payment`, audit fields). API GET `/orders/5` trả `OrderResponse{ id, status, total, itemCount, customerName }`. Thêm audit column vào entity → API không đổi. Client không thấy `Payment` details.',
+  viz: {
+    type: 'tree',
+    title: 'Ba lớp (DTO / domain / entity) tiến hoá với nhịp khác nhau',
+    root: {
+      label: 'DTO = hình dạng dữ liệu tại ranh giới (phẳng, không hành vi)',
+      children: [
+        { label: 'Tách API contract khỏi domain model', note: 'refactor domain không phá client' },
+        { label: 'Không lộ field nội bộ/nhạy cảm', note: '' },
+        { label: 'Tránh lazy-loading exception, vòng lặp serialize', note: 'quan hệ hai chiều' },
+        { label: 'Mỗi endpoint trả đúng shape nó cần', note: 'aggregate từ nhiều nguồn; giảm dữ liệu truyền' },
+      ],
+    },
+  },
 },
 {
   cat: 'DDD',
@@ -64,6 +109,18 @@ SS.addQuestions('design-patterns', [
     'Entity = "cái này là ai" (định danh quan trọng). Value Object = "cái này là bao nhiêu / cái gì" (giá trị quan trọng, danh tính không). VO bất biến, tự validate, mang hành vi liên quan → code an toàn và biểu cảm hơn primitive.',
   example:
     '`Order` (entity, id=5) có `Money total` và `Address shippingAddress` (value objects). `new Money(100, "USD").plus(new Money(50, "USD"))` = `Money(150, USD)`; cộng khác currency → throw. `Email.of("bad")` → throw ngay lúc tạo, không phải lúc dùng.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Entity', 'Value Object'],
+    rows: [
+      ['Định danh', 'có (id) xuyên suốt vòng đời', 'không'],
+      ['Bằng nhau khi', 'cùng id (dù thuộc tính khác)', 'mọi thuộc tính bằng nhau'],
+      ['Mutable?', 'có thể', 'nên bất biến'],
+      ['Câu hỏi', '"cái này là ai"', '"cái này là bao nhiêu / cái gì"'],
+      ['Ví dụ', 'Customer, Order', 'Money, Address, Email, DateRange (giải Primitive Obsession)'],
+    ],
+  },
 },
 {
   cat: 'DDD',
@@ -80,6 +137,20 @@ SS.addQuestions('design-patterns', [
     'Aggregate = "đơn vị nhất quán giao dịch". Root là người gác cổng enforce mọi quy tắc bên trong. Giữ aggregate nhỏ; giữa các aggregate là eventual consistency. Đây là khái niệm DDD quan trọng nhất về mặt kỹ thuật.',
   example:
     '`Order` (root) chứa `List<OrderLine>` (entity con) và `Money total`. Invariant "total = sum(lines)" do `Order` enforce — không ai sửa `OrderLine` trực tiếp, phải `order.addLine(...)`. `Order` tham chiếu `Customer` bằng `CustomerId`, không giữ object `Customer`. Sửa order + trừ kho = 2 aggregate → order phát `OrderPlaced`, inventory xử lý sau.',
+  viz: {
+    type: 'tree',
+    title: '"Đơn vị nhất quán giao dịch" — khái niệm DDD quan trọng nhất về kỹ thuật',
+    root: {
+      label: 'Aggregate Root là người gác cổng, enforce mọi invariant bên trong',
+      children: [
+        { label: 'Code ngoài chỉ tham chiếu tới root', note: 'mọi thao tác đi qua root (order.addLine())' },
+        { label: 'Một transaction chỉ sửa MỘT aggregate', note: 'aggregate khác → eventual consistency qua domain event' },
+        { label: 'Repository chỉ cho aggregate root', note: '' },
+        { label: 'Tham chiếu giữa aggregate bằng id', note: 'Order giữ CustomerId, không object Customer' },
+        { label: 'Aggregate nhỏ', note: 'chỉ gồm cái phải nhất quán tức thì' },
+      ],
+    },
+  },
 },
 {
   cat: 'DDD',
@@ -96,6 +167,16 @@ SS.addQuestions('design-patterns', [
     'Domain event làm cho "cái gì đã xảy ra" thành first-class. Nó tách "quy tắc thay đổi state" (trong aggregate) khỏi "hệ quả của thay đổi đó" (email, cập nhật read model, tích hợp) — mỗi hệ quả là một handler độc lập.',
   example:
     '`order.place()` → aggregate thêm `OrderPlaced` vào danh sách event. Repository save → publish. Handler AFTER_COMMIT: `InventoryHandler` trừ kho (hoặc phát event xuyên service), `EmailHandler` gửi xác nhận, `AnalyticsHandler` ghi metric. Thêm "gửi SMS" = thêm một handler.',
+  viz: {
+    type: 'flow',
+    title: 'Tách "quy tắc thay đổi state" khỏi "hệ quả của thay đổi"',
+    nodes: ['Aggregate tạo event khi state đổi', 'Thu thập trên aggregate (order.domainEvents())', 'Persist aggregate (cùng transaction)', 'Publish event', 'Handler độc lập: Inventory, Email, Analytics (AFTER_COMMIT)'],
+    steps: [
+      { to: 0, label: 'Domain event = "điều gì đó có ý nghĩa nghiệp vụ đã xảy ra" — quá khứ, bất biến' },
+      { to: 3, label: 'In-process: @TransactionalEventListener; cross-service: outbox → broker' },
+      { to: 4, label: 'Thêm "gửi SMS" = thêm một handler' },
+    ],
+  },
 },
 {
   cat: 'Enterprise',
@@ -112,6 +193,19 @@ SS.addQuestions('design-patterns', [
     'Specification biến "if lồng nhau về điều kiện nghiệp vụ" thành object đặt tên, ghép được, test được, tái dùng ở validate + filter + query. Rule sống ở domain, không rải trong service/repository.',
   example:
     'Spring Data JPA: `Specification<Order> recent = (root, q, cb) -> cb.greaterThan(root.get("createdAt"), lastWeek);` `Specification<Order> highValue = ...;` → `orderRepo.findAll(recent.and(highValue))` sinh SQL `WHERE created_at > ? AND total > ?`. Cùng spec dùng để validate một order đơn lẻ.',
+  viz: {
+    type: 'tree',
+    title: 'Rule sống ở domain, không rải trong service/repository',
+    root: {
+      label: 'Đóng gói điều kiện nghiệp vụ thành object ghép được (and/or/not), test được',
+      children: [
+        { label: 'Validation', note: '"đơn hàng có đủ điều kiện checkout không"' },
+        { label: 'Selection từ collection', note: 'customers.stream().filter(spec::isSatisfiedBy)' },
+        { label: 'Query', note: 'Spring Data JPA Specification → dịch sang WHERE clause' },
+        { label: 'Cùng một rule ở cả ba chỗ', note: 'validate + in-memory filter + DB query' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -125,6 +219,20 @@ SS.addQuestions('design-patterns', [
     'Hexagonal = "lõi nghiệp vụ ở giữa, công nghệ ở rìa, nối bằng interface (port) mà lõi sở hữu". Đổi REST→gRPC hay Postgres→Mongo = đổi adapter, lõi bất biến. Test lõi = mock các port, không cần hạ tầng.',
   example:
     'Lõi: `PlaceOrderUseCase` (driving port) dùng `OrderRepository` + `PaymentGateway` (driven port). Adapter: `OrderController` (REST) gọi use case; `KafkaOrderConsumer` cũng gọi use case; `JpaOrderRepository` implements repo port; `StripePaymentAdapter` implements payment port. Lõi không có `@RestController`, `@Entity`, `import stripe`.',
+  viz: {
+    type: 'tree',
+    title: '"Lõi ở giữa, công nghệ ở rìa, nối bằng interface (port) mà lõi sở hữu"',
+    root: {
+      label: 'Quy tắc phụ thuộc: mọi thứ trỏ VÀO TRONG — lõi không import gì của adapter',
+      children: [
+        { label: 'Driving port', note: 'API lõi cho phía ngoài gọi vào (use case)' },
+        { label: 'Driven port', note: 'lõi cần gì từ hạ tầng (OrderRepository, PaymentGateway)' },
+        { label: 'Driving adapter', note: 'REST controller, CLI, message consumer gọi use case' },
+        { label: 'Driven adapter', note: 'JPA repository, Stripe HTTP client implements port' },
+        { label: 'Đổi REST→gRPC / Postgres→Mongo', note: '= đổi adapter, lõi bất biến. Test lõi = mock port' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -140,6 +248,16 @@ SS.addQuestions('design-patterns', [
     'Clean/Onion/Hexagonal cùng một ý: **nghiệp vụ ở trung tâm, không phụ thuộc framework; phụ thuộc luôn hướng vào lõi ổn định**. Framework là "chi tiết" cắm vào, không phải nền tảng bạn xây trên.',
   example:
     'Use case `TransferMoney` không import Spring, JPA, Jackson. Nó dùng `AccountRepository` (interface nó tự định nghĩa). `SpringJpaAccountRepository` (vòng ngoài) implements interface đó. Bạn có thể chạy/test toàn bộ logic transfer mà không khởi động Spring hay DB.',
+  viz: {
+    type: 'layers',
+    title: 'Các vòng đồng tâm — phụ thuộc CHỈ hướng vào trong',
+    layers: [
+      { name: 'Frameworks & Drivers', tag: 'ngoài cùng', note: 'DB, web framework, UI, thiết bị — "chi tiết" cắm vào' },
+      { name: 'Interface Adapters', tag: '', note: 'controller, presenter, gateway — chuyển đổi dữ liệu giữa use case và framework' },
+      { name: 'Use Cases', tag: '', note: 'quy tắc nghiệp vụ ứng dụng; điều phối entities; định nghĩa interface cho tầng ngoài' },
+      { name: 'Entities', tag: 'trong cùng', note: 'quy tắc nghiệp vụ doanh nghiệp, thuần, không phụ thuộc gì' },
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -152,6 +270,17 @@ SS.addQuestions('design-patterns', [
     'Layered để domain phụ thuộc infra (xuống dưới) → domain bị nhiễm công nghệ. Hexagonal đảo hướng đó: infra phụ thuộc domain → domain sạch, testable, framework-independent. Cùng số "tầng", khác hướng mũi tên ở chỗ quan trọng nhất.',
   example:
     'Layered: `OrderService` (domain) `import com.acme.persistence.OrderRepositoryImpl` hoặc ít nhất biết về JPA. Hexagonal: `OrderService` chỉ biết `OrderRepository` (interface trong package domain); `OrderRepositoryImpl` ở package infrastructure `import` ngược lên domain.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Layered (N-tier)', 'Hexagonal'],
+    rows: [
+      ['Hướng phụ thuộc', 'từ trên xuống: Domain → Infrastructure', 'Infrastructure → Domain (đảo, DIP)'],
+      ['Domain', 'dính công nghệ (repository impl, ORM)', 'hoàn toàn thuần'],
+      ['Đổi DB', 'ảnh hưởng domain', 'đổi adapter, domain bất biến'],
+      ['Test domain', 'cần DB', 'mock port, không hạ tầng'],
+    ],
+  },
 },
 {
   cat: 'Enterprise',
@@ -167,6 +296,19 @@ SS.addQuestions('design-patterns', [
     'Service Layer = "danh mục các thao tác ứng dụng có thể làm" + nơi quản lý transaction và điều phối. Với domain model tốt, nó mỏng (điều phối). Với anemic model, nó phình (chứa cả logic — anti-pattern).',
   example:
     '`OrderService.placeOrder(cmd)`: `@Transactional` → load `Cart` aggregate, `cart.checkout()` (rule ở đây), `orderRepo.save(order)`, publish `OrderPlaced`. 8 dòng điều phối. Rule "giỏ trống không checkout được", "áp giới hạn số lượng" nằm trong `Cart`, không trong service.',
+  viz: {
+    type: 'tree',
+    title: 'Domain model tốt → service mỏng (điều phối). Anemic → service phình (anti-pattern)',
+    root: {
+      label: '"Danh mục các thao tác ứng dụng" + quản lý transaction',
+      children: [
+        { label: 'Điều phối domain object + repository', note: 'mỗi method = một giao dịch nghiệp vụ hoàn chỉnh' },
+        { label: 'Quản lý transaction', note: '@Transactional ở đây' },
+        { label: 'Cross-cutting mức use case', note: 'authorization, event publishing sau commit' },
+        { label: 'KHÔNG chứa', note: 'business rule (→ domain), chi tiết HTTP (→ controller), SQL (→ repository)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Enterprise',
@@ -178,6 +320,18 @@ SS.addQuestions('design-patterns', [
     'Active Record: object tự lo persistence (nhanh, đơn giản, coupling). Data Mapper: tách persistence ra mapper (domain thuần, phù hợp domain phức tạp/DDD). Chọn theo độ phức tạp domain: CRUD app → Active Record; rich domain → Data Mapper.',
   example:
     'Active Record: `$order = Order::find(5); $order->status = "PAID"; $order->save();`. Data Mapper (JPA): `Order order = em.find(Order.class, 5); order.markPaid();` — `Order` không có `save()`; `EntityManager` (mapper) theo dõi và flush. `Order` không import gì về DB.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Active Record', 'Data Mapper'],
+    rows: [
+      ['Object', 'vừa mang dữ liệu vừa tự lưu (user.save())', 'thuần, không biết DB; mapper riêng chuyển đổi'],
+      ['Object ↔ bảng', '1-1 với row', 'độc lập schema'],
+      ['Code / độ phức tạp', 'ít, đơn giản', 'nhiều hơn (mapping layer)'],
+      ['Test', 'khó (coupling DB)', 'domain test không cần DB'],
+      ['Hợp với', 'CRUD app (Rails AR, Eloquent)', 'rich domain / DDD (Hibernate, Doctrine)'],
+    ],
+  },
 },
 {
   cat: 'Enterprise',
@@ -193,6 +347,16 @@ SS.addQuestions('design-patterns', [
     'ACL bảo vệ tính toàn vẹn của mô hình domain bạn khi phải "nói chuyện" với một mô hình bạn không kiểm soát. Trả giá dịch thuật ở một chỗ, đổi lấy việc phần còn lại không bị nhiễm khái niệm/nợ của hệ ngoài.',
   example:
     'Service `loyalty` mới tích hợp CRM cũ: CRM trả `MEMBER_TIER = "G"` (gold), ngày `20240115`, điểm là string. ACL `CrmMemberTranslator`: `"G"` → `Tier.GOLD` enum, `"20240115"` → `LocalDate`, string → `int`. Domain `loyalty` chỉ thấy `Member { Tier tier; LocalDate joinedAt; int points; }` sạch sẽ.',
+  viz: {
+    type: 'flow',
+    title: 'Trả giá dịch thuật ở một chỗ — phần còn lại không bị nhiễm nợ của hệ ngoài',
+    nodes: ['Hệ ngoài: model khác biệt / kém chất lượng', 'Adapter (SOAP client, file parser)', 'Translator (model ngoài ↔ model của bạn)', '(Facade — interface gọn)', 'Domain sạch'],
+    steps: [
+      { to: 1, label: 'legacy, đối tác, hoặc một bounded context khác' },
+      { to: 2, label: '"G" → Tier.GOLD; "20240115" → LocalDate; string → int' },
+      { to: 4, label: 'Member { Tier tier; LocalDate joinedAt; int points; } — ACL = module hoặc service riêng' },
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -208,6 +372,20 @@ SS.addQuestions('design-patterns', [
     'Domain thuần = có thể compile & test domain **không cần** Spring, JPA, hay bất kỳ framework nào. Framework là plugin ở rìa. Giá: một lớp mapping. Lợi: domain dễ test, dễ hiểu, sống sót qua các lần đổi framework.',
   example:
     'Package `com.acme.order.domain`: chỉ `Order`, `OrderLine`, `Money`, `OrderRepository` (interface) — zero import framework. Package `com.acme.order.infrastructure`: `OrderJpaEntity` (có `@Entity`), `OrderJpaRepository implements OrderRepository`, `OrderMapper` (domain ↔ entity). ArchUnit test chặn domain import `jakarta.persistence`.',
+  viz: {
+    type: 'tree',
+    title: 'Domain thuần = compile & test KHÔNG cần Spring, JPA, framework nào',
+    root: {
+      label: 'Framework là plugin ở rìa. Giá: một lớp mapping',
+      children: [
+        { label: 'Không annotation framework trong domain', note: 'không @Entity, @Component, @JsonProperty trên domain object' },
+        { label: 'Không import thư viện hạ tầng', note: 'JPA, Jackson, Spring, driver DB — trong package domain' },
+        { label: 'Interface (port) do domain định nghĩa', note: 'implementation ở infra' },
+        { label: 'Plain constructor / value object', note: 'không phụ thuộc DI container để tạo domain object' },
+        { label: 'Enforce bằng ArchUnit', note: 'chặn domain dependOn org.springframework / jakarta.persistence' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -222,6 +400,16 @@ SS.addQuestions('design-patterns', [
     'CQRS: "một model để đảm bảo tính đúng khi ghi, model khác để trả lời nhanh khi đọc". Chấp nhận hai model (và eventual consistency giữa chúng) để mỗi bên được tối ưu riêng. Chi phí lớn — chỉ khi lợi ích rõ ràng.',
   example:
     'Ngân hàng: write side `Account` aggregate enforce "không âm", ghi từng giao dịch. Read side: `AccountStatementView` (số dư + 50 giao dịch gần nhất, denormalized), `MonthlyReportView` (tổng hợp theo tháng) — cập nhật từ event `MoneyTransferred`. Query statement không đụng aggregate, không tính lại từ event.',
+  viz: {
+    type: 'flow',
+    title: '"Model để đảm bảo tính đúng khi ghi, model khác để trả lời nhanh khi đọc"',
+    nodes: ['Command → load aggregate → thực thi rule', 'Lưu + phát event', 'Projection cập nhật read model (nhiều view)', 'Query = SELECT read model (denormalized, đúng shape UI)'],
+    steps: [
+      { to: 0, label: 'Write side: model chuẩn hoá, enforce invariant' },
+      { to: 2, label: 'Mức nhẹ (cùng DB, view riêng) → nặng (DB riêng, async → eventual consistency)' },
+      { to: 3, label: 'Chi phí lớn — CHỈ khi đọc/ghi có yêu cầu rất khác. KHÔNG cho CRUD đơn giản' },
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -236,6 +424,19 @@ SS.addQuestions('design-patterns', [
     'Outbox biến "2 write vào 2 hệ thống" thành "1 write nguyên tử vào DB (gồm cả event) + 1 relay đáng tin". Là mảnh ghép nền tảng cho mọi kiến trúc event-driven cần đảm bảo "state đổi ⟺ event được phát".',
   example:
     '`PlaceOrderUseCase`: `@Transactional` { `orderRepo.save(order)`; `outboxRepo.save(OutboxMessage.from(order.domainEvents()))` }. Debezium theo dõi bảng `outbox` của service → mỗi INSERT publish lên Kafka topic tương ứng. Order lưu được ⟺ event `OrderPlaced` chắc chắn sẽ ra broker.',
+  viz: {
+    type: 'tree',
+    title: '"1 write nguyên tử vào DB (gồm cả event) + 1 relay đáng tin"',
+    root: {
+      label: 'Biến "2 write vào 2 hệ thống" thành đảm bảo "state đổi ⟺ event được phát"',
+      children: [
+        { label: 'Trong use case (@Transactional)', note: 'ghi aggregate + ghi bản ghi event vào bảng outbox (cùng transaction, cùng DB)' },
+        { label: 'Relay (tách biệt)', note: 'đọc outbox (polling / CDC) → publish lên broker → đánh dấu đã gửi' },
+        { label: 'Consumer phía nhận', note: 'idempotent (inbox / dedup) vì relay là at-least-once' },
+        { label: 'Vị trí', note: 'outbox = infra của service; relay = background job hoặc Debezium connector riêng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -249,6 +450,16 @@ SS.addQuestions('design-patterns', [
     'Giá trị lớn của CQRS + event: read model là "phái sinh" — có bug hay cần đổi, **xoá và dựng lại từ event**. Điều kiện tiên quyết: event được giữ lại và projection idempotent.',
   example:
     'Read model `OrderSummary` tính sai `discountTotal` do bug. Sửa code projection → dựng bảng `order_summary_v2` bằng replay toàn bộ topic `orders` từ đầu (2 giờ). Khi v2 bắt kịp realtime → đổi query sang v2, drop v1. Người dùng không thấy gián đoạn.',
+  viz: {
+    type: 'flow',
+    title: 'Read model là "phái sinh" — có bug hay cần đổi, xoá và dựng lại từ event',
+    nodes: ['Bug projection / cần view mới', 'Sửa code projection', 'Dựng read model v2 song song bằng replay từ đầu stream', 'v2 bắt kịp realtime → chuyển query sang v2, drop v1'],
+    steps: [
+      { to: 2, label: 'Điều kiện: event được LƯU GIỮ (event store / Kafka retention đủ dài)' },
+      { to: 3, label: 'Blue-green projection — không downtime' },
+      { to: 3, label: 'Projection phải idempotent (lưu "đã xử lý tới offset nào")' },
+    ],
+  },
 },
 {
   cat: 'DDD',
@@ -265,6 +476,18 @@ SS.addQuestions('design-patterns', [
     'Đây là đánh đổi "thực dụng vs thuần khiết". Gộp: nhanh, đủ cho phần lớn app. Tách: domain model tự do tiến hoá độc lập với schema và framework, đáng giá khi domain là tài sản cốt lõi và phức tạp.',
   example:
     'CRUD admin panel: entity JPA làm luôn domain object — không cần tách. Core banking domain (`Account` với hàng chục quy tắc, `Money` VO, event sourcing một phần): tách `Account` (thuần) khỏi `AccountRow`/`AccountEventEntity`, mapper ở tầng infra.',
+  viz: {
+    type: 'compare',
+    corner: 'Đánh đổi "thực dụng vs thuần khiết"',
+    cols: ['Gộp (domain = JPA entity)', 'Tách (domain thuần + mapper)'],
+    rows: [
+      ['Code', 'ít — không mapping layer', 'hai class song song + mapper (MapStruct)'],
+      ['Domain dính JPA?', 'có (annotation, lazy loading, no-arg constructor, hạn chế immutability)', 'không import framework'],
+      ['Schema ↔ domain', 'bị ép khớp', 'tiến hoá độc lập'],
+      ['Test không JPA', 'khó', 'được'],
+      ['Chọn khi', 'domain đơn giản / CRUD', 'domain phức tạp, nhiều invariant, sống lâu, DDD nghiêm túc'],
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -277,5 +500,16 @@ SS.addQuestions('design-patterns', [
     'Saga = "transaction dài với các bước bù trừ" thay cho ACID xuyên service. Choreography cho quy trình ngắn, tách rời; orchestration cho quy trình dài, nhiều bước, cần theo dõi trạng thái (nhất là liên quan tiền bạc).',
   example:
     'Đặt tour (orchestration): `TourBookingSaga` state machine — `reserveFlight` → `reserveHotel` → `chargePayment`. `chargePayment` fail → saga chạy `cancelHotel`, `cancelFlight`, kết thúc FAILED. Orchestrator lưu trạng thái saga trong DB → crash giữa chừng thì resume được.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Choreography saga', 'Orchestration saga'],
+    rows: [
+      ['Điều phối viên', 'không — mỗi service nghe event, làm phần mình, phát event tiếp', 'saga orchestrator (state machine, thường persistent)'],
+      ['Luồng', '"nổi lên" — khó nhìn tổng thể, dễ phụ thuộc chu trình', 'tường minh ở một chỗ; dễ quan sát/sửa'],
+      ['Hạ tầng', 'ít', 'thêm một thành phần (Temporal, Camunda)'],
+      ['Hợp với', 'quy trình ngắn, tách rời', 'quy trình dài, nhiều bước, theo dõi trạng thái (tiền bạc)'],
+    ],
+  },
 },
 ]);

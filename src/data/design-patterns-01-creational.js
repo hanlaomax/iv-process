@@ -13,6 +13,19 @@ SS.addQuestions('design-patterns', [
     'Pattern là công cụ giao tiếp và tái dùng kinh nghiệm, không phải mục tiêu. "Áp pattern" trước khi có vấn đề = over-engineering. Nhận ra pattern *đang hình thành* trong code rồi mới đặt tên/tinh chỉnh thì tốt hơn.',
   example:
     'Code review: "hàm này nhận một object có method `execute()`, lưu vào list, chạy sau" — đó chính là Command pattern, dù không ai cố ý. Đặt tên interface là `Command`, thêm `undo()` khi cần. Ngược lại, viết `AbstractFactoryProviderStrategy` cho một `if` hai nhánh là lạm dụng.',
+  viz: {
+    type: 'tree',
+    title: 'Pattern là công cụ giao tiếp, không phải mục tiêu',
+    root: {
+      label: 'GoF: 23 mẫu, 3 nhóm',
+      children: [
+        { label: 'Creational (5)', note: 'cách tạo object — Singleton, Factory Method, Abstract Factory, Builder, Prototype' },
+        { label: 'Structural (7)', note: 'cách ghép object/class — Adapter, Decorator, Proxy, Facade, Composite, Bridge, Flyweight' },
+        { label: 'Behavioral (11)', note: 'cách object tương tác — Strategy, Observer, Template Method, Command, State, Chain, Iterator, Mediator, Visitor, Memento, Interpreter' },
+        { label: 'KHÔNG dùng khi', note: 'vấn đề chưa xuất hiện (YAGNI); pattern làm code phức tạp hơn; ngôn ngữ đã có cơ chế (lambda thay Strategy)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Creational',
@@ -27,6 +40,17 @@ SS.addQuestions('design-patterns', [
     'Enum singleton hoặc holder idiom giải quyết mọi góc cạnh (lazy, thread-safe, serialize, reflection). Double-checked locking là "bẫy phỏng vấn" — biết nhưng ưu tiên hai cách kia.',
   example:
     '```\nclass Logger {\n  private Logger() {}\n  private static class Holder { static final Logger I = new Logger(); }\n  public static Logger getInstance() { return Holder.I; }\n}\n```\nHolder chỉ được JVM nạp lúc `getInstance()` đầu tiên → lazy + không cần khoá.',
+  viz: {
+    type: 'compare',
+    corner: 'Cách',
+    cols: ['Enum singleton', 'Holder idiom', 'Double-checked locking', 'Eager'],
+    rows: [
+      ['Lazy', 'không', 'có', 'có', 'không'],
+      ['Thread-safe', 'có', 'có (class loading)', 'chỉ khi có volatile', 'có'],
+      ['Chống reflection / serialize', 'có', 'không', 'không', 'không'],
+      ['Đánh giá', 'khuyến nghị (Effective Java)', 'khuyến nghị', '"bẫy phỏng vấn" — dễ viết sai', 'đơn giản, tạo cả khi không dùng'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -42,6 +66,17 @@ SS.addQuestions('design-patterns', [
     'Vấn đề không phải "một instance" mà là "truy cập toàn cục qua static". DI giữ tính duy nhất (do container), bỏ đi global access và làm phụ thuộc tường minh + testable.',
   example:
     'Thay `class OrderService { void run() { Db.getInstance().save(...); } }` bằng `class OrderService { private final Db db; OrderService(Db db) {...} }`. Container tạo một `Db` duy nhất, tiêm vào. Test: `new OrderService(mockDb)`.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Singleton cổ điển (getInstance)', 'DI (scope singleton)'],
+    rows: [
+      ['Số instance', 'một', 'một (container quản lý)'],
+      ['Truy cập', 'global static — coupling ẩn, không trong chữ ký', 'tiêm qua constructor — phụ thuộc lộ rõ'],
+      ['Test', 'không mock được, shared state giữa test', 'new Service(mockDb)'],
+      ['SRP', 'vi phạm — class tự lo vòng đời của mình', 'container lo vòng đời'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -54,6 +89,16 @@ SS.addQuestions('design-patterns', [
     'Factory Method đảo ngược quyền chọn class cụ thể: superclass định nghĩa *quy trình*, subclass cắm vào *sản phẩm cụ thể*. Là "Template Method áp cho việc tạo object".',
   example:
     '`abstract class Dialog { abstract Button createButton(); void render() { createButton().onClick(...); } }`. `WindowsDialog` tạo `WindowsButton`, `WebDialog` tạo `HtmlButton`. Code render dùng chung, chỉ khác loại button do subclass quyết.',
+  viz: {
+    type: 'flow',
+    title: '"Template Method áp cho việc tạo object"',
+    nodes: ['Creator.doWork() — quy trình chung', 'gọi createProduct() (abstract)', 'Subclass override → chọn class cụ thể', 'Client dùng Product qua interface'],
+    steps: [
+      { to: 0, label: 'Superclass định nghĩa quy trình' },
+      { to: 2, label: 'ConcreteCreatorA → new ProductA; WindowsDialog → WindowsButton' },
+      { to: 3, label: 'Tách "logic dùng object" khỏi "logic tạo object"' },
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -69,6 +114,17 @@ SS.addQuestions('design-patterns', [
     'Factory Method tạo một thứ; Abstract Factory tạo một bộ thứ đi cùng nhau và đảm bảo chúng **tương thích** (không lẫn MacButton với WinCheckbox).',
   example:
     'App chạy đa nền tảng: inject `GuiFactory` phù hợp lúc khởi động (`macOS` → `MacFactory`). Mọi UI component được tạo qua factory đó → giao diện nhất quán, thêm nền tảng Linux = thêm một `LinuxFactory`.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Factory Method', 'Abstract Factory'],
+    rows: [
+      ['Tạo ra', 'MỘT sản phẩm', 'MỘT HỌ sản phẩm liên quan'],
+      ['Cơ chế', 'kế thừa (override method)', 'composition (client giữ một factory)'],
+      ['Đảm bảo', '—', 'các sản phẩm tương thích (không lẫn MacButton với WinCheckbox)'],
+      ['Quan hệ', '—', 'Abstract Factory thường chứa nhiều Factory Method'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -82,6 +138,16 @@ SS.addQuestions('design-patterns', [
     'Đừng nhảy thẳng vào Abstract Factory. Bắt đầu bằng constructor hoặc simple factory; leo lên Factory Method khi cần subclass mở rộng loại; lên Abstract Factory khi có *nhiều họ* sản phẩm phải nhất quán.',
   example:
     'Parse config theo định dạng: Simple Factory `ParserFactory.forExtension(".json")` với switch là đủ. Nếu bạn có "họ" gồm parser + serializer + validator theo từng định dạng và chúng phải khớp nhau → Abstract Factory.',
+  viz: {
+    type: 'layers',
+    title: 'Độ phức tạp tăng dần — đừng nhảy thẳng vào Abstract Factory',
+    dir: 'up',
+    layers: [
+      { name: 'Simple Factory', tag: 'không phải GoF', note: 'class/method với switch/if trả object theo tham số — thêm loại phải sửa factory (vi phạm OCP). Đa số trường hợp là đủ' },
+      { name: 'Factory Method', tag: 'GoF', note: 'method tạo object được override bởi subclass — thêm loại = thêm subclass, không sửa code cũ' },
+      { name: 'Abstract Factory', tag: 'GoF', note: 'tạo HỌ object liên quan; client chọn một concrete factory — khi có nhiều họ phải nhất quán' },
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -98,6 +164,16 @@ SS.addQuestions('design-patterns', [
     'Builder = "constructor có tên tham số + optional + immutable + validation một chỗ". Nó giải quyết vấn đề "constructor 8 tham số, không biết tham số thứ 5 là gì".',
   example:
     '`new HttpRequest("GET", "/api", null, headers, null, 30, true, false)` → không đọc được. `HttpRequest.builder().method(GET).url("/api").header("Auth", tok).timeout(30).build()` → rõ ràng, chỉ set cái cần, `build()` kiểm tra url không null.',
+  viz: {
+    type: 'flow',
+    title: '"Constructor có tên tham số + optional + immutable + validation một chỗ"',
+    nodes: ['builder()', 'set từng field (fluent, .withX() trả this)', 'build() — validate invariant', 'Object bất biến, luôn hợp lệ'],
+    steps: [
+      { to: 1, label: 'Chỉ set cái cần — optional bỏ qua' },
+      { to: 2, label: 'Kiểm bắt buộc có gì, giá trị hợp lệ không → ném lỗi với message rõ' },
+      { to: 3, label: 'Dùng khi ≥ 4–5 tham số, hoặc nhiều optional, hoặc cần immutable' },
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -111,6 +187,18 @@ SS.addQuestions('design-patterns', [
     'Builder lấy tính đọc được của setter và tính an toàn (immutable, nhất quán, validate) của constructor — với chi phí một ít boilerplate. Đáng dùng khi ≥ 4–5 tham số hoặc cần immutability.',
   example:
     '`Pizza`: size bắt buộc, topping tuỳ chọn nhiều loại. Setter → có thể quên set size, hoặc dùng pizza khi mới set nửa. Builder → `Pizza.builder().size(LARGE).addTopping(CHEESE).addTopping(HAM).build()` trả về pizza hoàn chỉnh, bất biến.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Telescoping constructor', 'JavaBeans (setter)', 'Builder'],
+    rows: [
+      ['Đọc được', 'không (đếm tham số, dễ nhầm thứ tự)', 'có', 'có'],
+      ['Immutable', 'có', 'KHÔNG', 'có'],
+      ['Trạng thái nửa vời', 'không', 'có (giữa các setter)', 'không'],
+      ['Validate', 'trong constructor', 'rải rác / không', 'dồn vào build()'],
+      ['Chi phí', 'bùng nổ số constructor', 'ít code', 'boilerplate (hoặc Lombok @Builder)'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -126,6 +214,19 @@ SS.addQuestions('design-patterns', [
     'Prototype = "tạo bằng sao chép mẫu". Hữu ích khi cấu hình một object phức tạp/đắt và cần nhiều biến thể của nó. Trong Java, hiện thực bằng copy constructor, không phải `Cloneable`.',
   example:
     'Editor đồ hoạ: người dùng cấu hình một "brush" phức tạp (nhiều tham số). Nhấn "nhân bản" → clone brush đó rồi chỉnh vài tham số, thay vì dựng lại từ mặc định. Game: `enemyPrototype` được clone để spawn hàng loạt enemy giống nhau.',
+  viz: {
+    type: 'tree',
+    title: '"Tạo bằng sao chép mẫu"',
+    root: {
+      label: 'Clone một prototype có sẵn thay vì new + cấu hình lại từ đầu',
+      children: [
+        { label: 'Khởi tạo tốn kém', note: 'query DB, tính toán, đọc file — cần nhiều bản gần giống' },
+        { label: 'Loại object không biết trước lúc compile', note: 'giữ registry các prototype, clone khi cần' },
+        { label: 'Tránh hệ thống factory class song song với product class', note: '' },
+        { label: 'Java', note: 'dùng copy constructor / method copy(), không Cloneable. Chú ý shallow vs deep copy' },
+      ],
+    },
+  },
 },
 {
   cat: 'Creational',
@@ -141,6 +242,16 @@ SS.addQuestions('design-patterns', [
     'Object pool chỉ đáng khi chi phí *tạo/huỷ* vượt xa chi phí *quản lý pool*. Với connection/thread thì đúng. Với object thường trong ngôn ngữ có GC hiện đại thì thường phản tác dụng (object pooling là "quá khứ" của Java thời GC chậm).',
   example:
     'HikariCP: pool 20 connection DB. Mỗi request `borrow` một connection, xong `return`. Tạo connection TCP + TLS + auth mất ~50ms → pool tránh chi phí đó cho mỗi query. Ngược lại, "pool `StringBuilder`" là ý tưởng tồi.',
+  viz: {
+    type: 'compare',
+    corner: 'Đối tượng',
+    cols: ['Nên pool', 'Không nên pool'],
+    rows: [
+      ['Ví dụ', 'connection DB/HTTP, thread, parser lớn, buffer, kết nối hardware', 'POJO, StringBuilder, object nhẹ'],
+      ['Chi phí tạo/huỷ', 'rất đắt (TCP + TLS + auth ~50ms)', 'rẻ (cấp phát + minor GC)'],
+      ['Cân nhắc', 'chi phí tạo/huỷ >> chi phí quản lý pool', 'quản lý pool + rủi ro object "bẩn" (state cũ) lấn át'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -156,6 +267,17 @@ SS.addQuestions('design-patterns', [
     'DI = "đừng gọi cho tôi, tôi sẽ gọi cho bạn" áp cho phụ thuộc. Constructor injection biến hợp đồng phụ thuộc thành một phần của chữ ký class — không thể tạo object ở trạng thái thiếu phụ thuộc.',
   example:
     '`class ReportService { private final PdfRenderer r; private final Clock clock; ReportService(PdfRenderer r, Clock clock) {...} }`. Test: `new ReportService(mockRenderer, Clock.fixed(...))` — kiểm soát cả renderer lẫn thời gian, không cần Spring.',
+  viz: {
+    type: 'compare',
+    corner: 'Kiểu inject',
+    cols: ['Constructor (khuyến nghị)', 'Setter', 'Field (annotation)'],
+    rows: [
+      ['field final', 'được', 'không', 'không'],
+      ['Object hợp lệ sau khi tạo', 'luôn (phụ thuộc bắt buộc)', 'có thể thiếu', 'có thể thiếu'],
+      ['Test không container', 'dễ (new Service(mock))', 'khá', 'khó'],
+      ['Dùng cho', 'phụ thuộc bắt buộc', 'optional / thay runtime', 'gọn nhưng ẩn phụ thuộc'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -172,6 +294,17 @@ SS.addQuestions('design-patterns', [
     'Cả hai đảo ngược việc *tạo* phụ thuộc. Nhưng Service Locator vẫn để class chủ động *đi lấy* (coupling với locator, phụ thuộc ẩn); DI để phụ thuộc được *đưa tới* (không coupling, tường minh). DI thắng.',
   example:
     'Android cũ dùng `context.getSystemService(...)` (service locator). Code hiện đại (Hilt/Dagger) chuyển sang constructor injection → dependency của một ViewModel hiện rõ trong constructor, test dễ.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Service Locator', 'Dependency Injection'],
+    rows: [
+      ['Lấy phụ thuộc', 'class TỰ hỏi locator (ServiceLocator.get(Db.class))', 'class NHẬN từ ngoài'],
+      ['Phụ thuộc', 'ẩn — không trong chữ ký', 'lộ rõ — trong constructor'],
+      ['Coupling', 'mọi class coupling với locator', 'không class nào biết cơ chế wiring'],
+      ['Test', 'phải cấu hình locator (global state)', 'truyền mock trực tiếp'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -188,6 +321,20 @@ SS.addQuestions('design-patterns', [
     'Static factory method cho bạn tên có ý nghĩa, kiểm soát instance (cache/singleton), và linh hoạt kiểu trả về — những thứ constructor không làm được. Quy ước: `of`, `from`, `valueOf`, `getInstance`, `create`.',
   example:
     '`List.of(1, 2, 3)` — có tên rõ, trả về một immutable list implementation nội bộ, có thể tối ưu (list rỗng dùng singleton). `new ArrayList<>(...)` không làm được các điều đó.',
+  viz: {
+    type: 'tree',
+    title: 'Quy ước tên: of, from, valueOf, getInstance, create',
+    root: {
+      label: 'Ưu điểm so với constructor',
+      children: [
+        { label: 'Có tên', note: 'BigInteger.probablePrime(...) rõ hơn new BigInteger(int, int, Random)' },
+        { label: 'Không bắt buộc tạo object mới', note: 'trả instance cache (Integer.valueOf), enforce instance control' },
+        { label: 'Trả về subtype', note: 'Collections.unmodifiableList(...) trả implementation ẩn' },
+        { label: 'Chọn class trả về theo tham số', note: 'EnumSet.of(...) → RegularEnumSet hoặc JumboEnumSet' },
+        { label: 'Nhược', note: 'khó phân biệt với method thường; không public constructor → không subclass được' },
+      ],
+    },
+  },
 },
 {
   cat: 'Creational',
@@ -202,6 +349,16 @@ SS.addQuestions('design-patterns', [
     'Holder idiom là cách lazy-init static an toàn nhất trong Java: bạn "mượn" đảm bảo thread-safe của cơ chế class-loading thay vì tự viết khoá. Cho instance field, cân nhắc chỉ eager-init nếu chi phí nhỏ.',
   example:
     'Một `ObjectMapper` cấu hình phức tạp, đắt, nhưng không phải request nào cũng cần: đặt trong `Holder` → chỉ tạo khi endpoint dùng JSON đầu tiên được gọi, và tạo đúng một lần dù 100 request đồng thời.',
+  viz: {
+    type: 'flow',
+    title: 'Mượn đảm bảo thread-safe của cơ chế class-loading thay vì tự viết khoá',
+    nodes: ['get() được gọi lần đầu', 'JVM nạp static nested class Holder', 'Khởi tạo static final I = new Heavy() — một lần, thread-safe', 'Trả Holder.I (mọi lần sau: instant)'],
+    steps: [
+      { to: 1, label: 'Holder không nạp khi class ngoài nạp — chỉ khi được tham chiếu' },
+      { to: 2, label: 'JVM đảm bảo class init chạy đúng một lần dù 100 luồng' },
+      { to: 3, label: 'Lazy + thread-safe + không synchronized' },
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -214,6 +371,17 @@ SS.addQuestions('design-patterns', [
     'Multiton = "Singleton theo khoá". Registry = "danh bạ runtime". Cả hai hữu ích cho tập object cố định/plugin nhưng mang theo nhược điểm của global state — dùng có kiểm soát, ưu tiên inject collection.',
   example:
     '`Charset.forName("UTF-8")` (multiton — mỗi charset một instance dùng chung). Framework plugin: `HandlerRegistry.register("payment", new PaymentHandler())` rồi `registry.get(eventType).handle(e)`. Trong Spring, thay bằng inject `Map<String, Handler>` (Spring tự gom các bean).',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Multiton', 'Registry'],
+    rows: [
+      ['Là gì', '"Singleton theo khoá" — mỗi khoá đúng một instance', '"danh bạ runtime" — đăng ký & tra cứu theo khoá'],
+      ['Ví dụ', 'Currency.getInstance("USD"), Charset.forName(...)', 'HandlerRegistry.register("payment", ...)'],
+      ['Rủi ro', 'global mutable state, khó test, coupling ẩn', 'như trên'],
+      ['Thay thế', 'DI + Map được inject (Spring tự gom Map<String, Handler>)', ''],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -228,6 +396,19 @@ SS.addQuestions('design-patterns', [
     'Spring hiện thực hầu hết creational pattern cho bạn: container là factory + registry + DI, `@Bean`/`FactoryBean` là các factory method có thể cắm logic, scope là instance control. Ít khi cần tự viết factory class.',
   example:
     '`@Bean public DataSource dataSource() { return DataSourceBuilder.create()....build(); }` — factory method tạo `DataSource` (class thư viện). `@Bean RestClient restClient(RestClient.Builder b) { return b.baseUrl(...).build(); }` — Builder + factory method kết hợp.',
+  viz: {
+    type: 'tree',
+    title: 'Spring hiện thực hầu hết creational pattern cho bạn',
+    root: {
+      label: 'ApplicationContext / BeanFactory = factory + registry + DI container',
+      children: [
+        { label: '@Bean method', note: 'factory method — Spring gọi để tạo bean, logic khởi tạo tuỳ ý (class bên thứ ba)' },
+        { label: 'FactoryBean<T>', note: 'inject → Spring trả T do getObject() tạo (SqlSessionFactoryBean)' },
+        { label: '@Scope("prototype")', note: 'mỗi lần lấy tạo mới — Prototype ở cấp container' },
+        { label: 'ObjectProvider / @Lookup', note: 'lấy instance mới theo yêu cầu — prototype-in-singleton' },
+      ],
+    },
+  },
 },
 {
   cat: 'Creational',
@@ -244,6 +425,16 @@ SS.addQuestions('design-patterns', [
     'Điểm mấu chốt: **validation dồn vào `build()`**, object đích **hoàn toàn bất biến**, không có đường nào tạo được object không hợp lệ. Builder mutable là "vùng đệm" trước khi đóng băng.',
   example:
     '```\npublic record DateRange(LocalDate from, LocalDate to) {\n  public DateRange {           // compact constructor\n    if (to.isBefore(from)) throw new IllegalArgumentException("to < from");\n  }\n}\n```\nKhông thể tạo `DateRange` với `to` trước `from`. Với nhiều field optional thì thêm builder gọi constructor này.',
+  viz: {
+    type: 'flow',
+    title: 'Không có đường nào tạo được object không hợp lệ',
+    nodes: ['Builder mutable — "vùng đệm"', 'withX() trả this (fluent)', 'build() kiểm invariant', 'constructor private nhận builder → object final + copy phòng thủ'],
+    steps: [
+      { to: 1, label: 'Field mutable trong builder, chưa đóng băng' },
+      { to: 2, label: 'Bắt buộc có gì? giá trị hợp lệ? → ném IllegalStateException với message rõ' },
+      { to: 3, label: 'Object đích: mọi field final, không setter, List.copyOf. Java hiện đại: record + compact constructor' },
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -260,6 +451,20 @@ SS.addQuestions('design-patterns', [
     'Pattern thêm gián tiếp; gián tiếp có chi phí (đọc hiểu, điều hướng). Chỉ "trả tiền" cho gián tiếp khi nó mua được sự linh hoạt bạn *đang cần*, không phải linh hoạt tưởng tượng.',
   example:
     'Codebase có `UserFactory`, `UserFactoryImpl`, `UserFactoryProvider`, `DefaultUserFactoryProvider` — chỉ để `new User(name, email)`. Xoá hết, gọi `new User(...)` hoặc `User.of(...)`. Nếu ngày mai cần `AdminUser` → lúc đó mới thêm factory, mất 10 phút.',
+  viz: {
+    type: 'tree',
+    title: 'Chỉ "trả tiền" cho gián tiếp khi nó mua được linh hoạt bạn ĐANG cần',
+    root: {
+      label: 'Dấu hiệu lạm dụng creational pattern',
+      children: [
+        { label: 'Factory chỉ có return new X()', note: 'không thêm giá trị gì' },
+        { label: 'AbstractFactoryProviderBuilderStrategy cho 1 implementation', note: '' },
+        { label: 'Interface + factory "phòng khi sau này có impl thứ hai"', note: 'YAGNI — refactor rẻ, thêm khi thực sự cần' },
+        { label: 'Builder cho class 2 field; Prototype/pool cho object nhẹ', note: '' },
+        { label: 'Nhảy 5 file mới thấy chỗ object thực sự được tạo', note: '' },
+      ],
+    },
+  },
 },
 {
   cat: 'Creational',
@@ -272,6 +477,17 @@ SS.addQuestions('design-patterns', [
     'Monostate giấu tính "một state chung" sau vẻ ngoài của một class thường. Ít lộ liễu hơn Singleton nhưng cùng bản chất global state — và cái ẩn thì nguy hiểm hơn cái lộ. Hiếm khi là lựa chọn tốt; DI vẫn hơn.',
   example:
     'Java `java.util.Calendar` cũ có yếu tố monostate qua static config. Thực tế: nếu thấy mình muốn "Singleton nhưng cần polymorphism/tạo tự do", hãy dùng DI với scope singleton thay vì monostate.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Singleton', 'Monostate'],
+    rows: [
+      ['Số instance', 'kiểm soát — đúng một', 'tạo tự do (new), nhưng field static → state chung'],
+      ['Cách dùng', 'getInstance()', 'như object bình thường + polymorphism'],
+      ['Bản chất', 'global state — lộ liễu', 'global state — ẩn (nguy hiểm hơn vì khó thấy)'],
+      ['Lựa chọn tốt hơn', 'DI scope singleton', 'DI scope singleton'],
+    ],
+  },
 },
 {
   cat: 'Creational',
@@ -284,5 +500,17 @@ SS.addQuestions('design-patterns', [
     'DIP là "hãy phụ thuộc vào interface". DI là "hãy nhận interface đó từ bên ngoài". IoC là khái niệm bao trùm "ai điều khiển ai". DI phục vụ DIP; DIP + DI cho code lỏng lẻo, testable.',
   example:
     '`OrderService` (cấp cao) không `import EmailSender` (cấp thấp, cụ thể). Nó định nghĩa interface `Notifier` (DIP — abstraction thuộc về tầng cao). `EmailNotifier` implements `Notifier`. Container inject `EmailNotifier` vào `OrderService` (DI). Container điều khiển việc tạo & wiring (IoC).',
+  viz: {
+    type: 'tree',
+    title: 'DI phục vụ DIP; IoC là khái niệm bao trùm',
+    root: {
+      label: '"Ai điều khiển ai" và "phụ thuộc vào cái gì"',
+      children: [
+        { label: 'IoC (Inversion of Control)', note: 'nguyên tắc rộng — framework gọi code của bạn (Hollywood principle). Gồm template method, event, DI, lifecycle callback' },
+        { label: 'DIP (chữ D trong SOLID)', note: 'module cấp cao không phụ thuộc cấp thấp; cả hai phụ thuộc abstraction' },
+        { label: 'DI (Dependency Injection)', note: 'kỹ thuật cụ thể — cung cấp phụ thuộc từ ngoài (thường qua constructor). Một cách thực hiện IoC' },
+      ],
+    },
+  },
 },
 ]);

@@ -10,6 +10,16 @@ SS.addQuestions('design-patterns', [
     'Visitor = "tách hàng loạt thao tác khỏi hierarchy ổn định". Double dispatch là cơ chế: hai lần gọi ảo để chọn đúng method theo cả (element type, visitor type). Dùng khi element type ít thay đổi, operation thì tăng.',
   example:
     'AST compiler: element `Literal/BinaryOp/Call` (ổn định). Visitor `TypeChecker`, `Optimizer`, `CodeGen`, `PrettyPrinter` (tăng dần). `node.accept(typeChecker)` → `typeChecker.visit((BinaryOp) node)`. Thêm pass mới = một visitor, không đụng AST.',
+  viz: {
+    type: 'flow',
+    title: 'Double dispatch: chọn method theo cả (element type, visitor type)',
+    nodes: ['node.accept(visitor)', 'dispatch theo ELEMENT type (BinaryOp)', 'visitor.visit(this)', 'dispatch theo VISITOR type + overload theo element'],
+    steps: [
+      { to: 1, label: 'Java chỉ single dispatch (theo receiver) → mô phỏng bằng hai lần gọi' },
+      { to: 3, label: 'typeChecker.visit((BinaryOp) node)' },
+      { to: 3, label: 'Đánh đổi: thêm OPERATION rẻ (thêm visitor); thêm ELEMENT TYPE đắt (sửa mọi visitor)' },
+    ],
+  },
 },
 {
   cat: 'Behavioral',
@@ -24,6 +34,19 @@ SS.addQuestions('design-patterns', [
     'Memento = "ảnh chụp trạng thái đóng gói". Điểm mấu chốt: chỉ originator hiểu nội dung memento; caretaker chỉ cầm và trả lại. Nền tảng của undo, checkpoint, snapshot, transaction rollback.',
   example:
     'Editor: `editor.save()` trả `EditorMemento` (nội dung + con trỏ + selection). Undo stack (caretaker) giữ list. Ctrl+Z: `editor.restore(stack.pop())`. Game: quick-save. Kết hợp Command: mỗi command lưu memento để undo thao tác lớn.',
+  viz: {
+    type: 'tree',
+    title: '"Ảnh chụp trạng thái đóng gói" — chỉ originator hiểu nội dung',
+    root: {
+      label: 'Lưu snapshot state nội tại để khôi phục sau, không lộ chi tiết ra ngoài',
+      children: [
+        { label: 'Originator', note: 'object có state cần lưu — save() tạo memento, restore(m) khôi phục' },
+        { label: 'Memento', note: 'giữ snapshot; interface hẹp cho caretaker, interface rộng cho originator' },
+        { label: 'Caretaker', note: 'giữ danh sách memento (undo stack), không nhìn vào bên trong' },
+        { label: 'Nền tảng của', note: 'undo, checkpoint, snapshot, transaction rollback' },
+      ],
+    },
+  },
 },
 {
   cat: 'Behavioral',
@@ -36,6 +59,17 @@ SS.addQuestions('design-patterns', [
     'Null Object thay "không có → null → NPE/check khắp nơi" bằng "không có → object trung tính → code gọi tự nhiên". Đẩy việc xử lý "vắng mặt" vào một chỗ (nơi tạo object) thay vì mọi call site.',
   example:
     '`CustomerRepository.findById(id)` không tìm thấy → trả `Customer.GUEST` (NullObject: `getDiscountRate()` = 0, `getName()` = "Khách vãng lai") thay vì null. Code `applyDiscount(customer.getDiscountRate())` chạy bình thường. (Cẩn thận: chỉ khi "guest" là ngữ nghĩa đúng.)',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Trả null', 'Null Object'],
+    rows: [
+      ['Client', 'if (x != null) khắp nơi', 'gọi trực tiếp x.method()'],
+      ['Rủi ro', 'NPE nếu quên check', 'không'],
+      ['Xử lý "vắng mặt"', 'ở mọi call site', 'một chỗ (nơi tạo object)'],
+      ['Dùng khi', '"không có" là lỗi cần phát hiện', '"không có" hợp lệ + hành vi mặc định rõ (log rỗng, discount 0, khách vãng lai)'],
+    ],
+  },
 },
 {
   cat: 'SOLID',
@@ -48,6 +82,19 @@ SS.addQuestions('design-patterns', [
     'SRP là về **cohesion theo lý do thay đổi**. Gom code thay đổi cùng nhau, tách code thay đổi vì lý do khác nhau. Mục tiêu: một thay đổi yêu cầu chỉ chạm một class.',
   example:
     '`Employee` có `calculatePay()` (kế toán quyết định), `save()` (DBA quyết định), `reportHours()` (HR quyết định) → 3 actor, 3 lý do thay đổi. Tách: `PayCalculator`, `EmployeeRepository`, `HoursReporter`. Đổi công thức lương không risk làm hỏng report.',
+  viz: {
+    type: 'tree',
+    title: 'S — cohesion theo lý do thay đổi',
+    root: {
+      label: 'Một class = một lý do duy nhất để thay đổi (một actor/stakeholder)',
+      children: [
+        { label: 'Không phải "class chỉ làm một việc"', note: 'mà "thay đổi khi và chỉ khi MỘT nhóm yêu cầu thay đổi"' },
+        { label: 'Dấu hiệu vi phạm', note: 'method phục vụ các bên khác nhau (business + DB + report + email); tên có "And"/"Manager"/"Util"' },
+        { label: 'Ví dụ', note: 'Employee.calculatePay() + save() + reportHours() → 3 actor → tách PayCalculator, Repository, Reporter' },
+        { label: 'Mục tiêu', note: 'một thay đổi yêu cầu chỉ chạm một class' },
+      ],
+    },
+  },
 },
 {
   cat: 'SOLID',
@@ -60,6 +107,17 @@ SS.addQuestions('design-patterns', [
     'OCP: dự đoán trục thay đổi có khả năng cao (loại thanh toán, định dạng export, loại thông báo) và đặt abstraction ở đó → thêm biến thể = thêm class. Trục ít thay đổi thì đừng over-abstract.',
   example:
     'Vi phạm: `double area(Shape s) { if (s instanceof Circle) ... else if (s instanceof Square) ... }` — thêm Triangle phải sửa hàm này (và mọi hàm tương tự). Tuân thủ: `Shape.area()` abstract, `Triangle implements Shape` — không đụng code cũ.',
+  viz: {
+    type: 'compare',
+    corner: 'O — Open/Closed',
+    cols: ['Vi phạm (if instanceof / switch)', 'Tuân thủ (abstraction + polymorphism)'],
+    rows: [
+      ['Thêm loại mới (Triangle)', 'sửa area() và mọi hàm tương tự', 'thêm class Triangle implements Shape'],
+      ['Code đã test/production', 'phải sửa (rủi ro)', 'không đụng'],
+      ['Đạt được qua', '—', 'Strategy, Template Method, plugin'],
+      ['Lưu ý', 'đặt abstraction ở trục thay đổi khả năng CAO', 'trục ít thay đổi thì đừng over-abstract'],
+    ],
+  },
 },
 {
   cat: 'SOLID',
@@ -76,6 +134,20 @@ SS.addQuestions('design-patterns', [
     'LSP: kế thừa là "là một loại và cư xử đúng như" chứ không chỉ "tái dùng code". Nếu bạn phải kiểm tra `instanceof` để xử lý riêng subclass, hoặc subclass "gãy" một method của parent → vi phạm LSP, có lẽ không nên kế thừa.',
   example:
     '`class ReadOnlyList extends ArrayList` với `add()` throw `UnsupportedOperationException` → code nhận `List` và gọi `add()` sẽ crash. Vi phạm LSP. Đúng: `ReadOnlyList` không kế thừa `ArrayList`, chỉ implements một interface `Collection` read-only, hoặc composition.',
+  viz: {
+    type: 'tree',
+    title: 'L — kế thừa là "là một loại VÀ cư xử đúng như", không chỉ "tái dùng code"',
+    root: {
+      label: 'Subtype phải thay thế được supertype mà không phá tính đúng',
+      children: [
+        { label: 'Thắt chặt precondition', note: 'yêu cầu input hẹp hơn parent' },
+        { label: 'Nới lỏng postcondition', note: 'đảm bảo ít hơn parent' },
+        { label: 'Phá invariant của parent', note: 'Square extends Rectangle — setWidth cũng đổi height' },
+        { label: 'Ném exception parent không ném / method thành no-op', note: 'ReadOnlyList.add() throw UnsupportedOperationException' },
+        { label: 'Phải instanceof để xử lý riêng subclass?', note: '→ vi phạm LSP, có lẽ không nên kế thừa' },
+      ],
+    },
+  },
 },
 {
   cat: 'SOLID',
@@ -88,6 +160,17 @@ SS.addQuestions('design-patterns', [
     'ISP: interface là hợp đồng theo góc nhìn của **client**, không phải danh mục mọi khả năng của implementation. Interface nhỏ → coupling nhỏ, dễ mock, dễ tiến hoá.',
   example:
     'Java `Collection` từng có xu hướng béo. Thiết kế tốt: `Iterable` (chỉ `iterator()`), tách khỏi `Collection` (thêm `size`, `add`…). Repository: thay `CrudRepository` cho service chỉ đọc bằng một interface `OrderReader { Optional<Order> findById(id); }` — service không thấy `save`/`delete`.',
+  viz: {
+    type: 'compare',
+    corner: 'I — Interface Segregation',
+    cols: ['Interface béo (Worker: work/eat/sleep)', 'Interface nhỏ (Workable, Eatable, Sleepable)'],
+    rows: [
+      ['RobotWorker', 'phải implements eat()/sleep() vô nghĩa', 'chỉ implements Workable'],
+      ['Đổi eat()', 'recompile/ảnh hưởng cả client không quan tâm', 'chỉ ảnh hưởng client cần eat'],
+      ['Interface là hợp đồng theo góc nhìn của', 'implementation (mọi khả năng)', 'client (chỉ cái nó dùng)'],
+      ['Coupling / mock', 'lớn', 'nhỏ, dễ mock, dễ tiến hoá'],
+    ],
+  },
 },
 {
   cat: 'SOLID',
@@ -101,6 +184,16 @@ SS.addQuestions('design-patterns', [
     'DIP: "phụ thuộc vào cái ổn định (abstraction do bạn định nghĩa), không phụ thuộc cái hay đổi (implementation cụ thể, thư viện, DB)". Interface đặt cạnh người *dùng* nó, không cạnh người *implements* nó.',
   example:
     '`OrderService` (cao) cần lưu đơn. Sai: `import PostgresOrderDao`. Đúng: `OrderService` định nghĩa `interface OrderRepository` (trong package của nó); `PostgresOrderRepository` (tầng infra) implements nó và *phụ thuộc ngược lên* package domain. Đổi Postgres → Mongo không đụng domain.',
+  viz: {
+    type: 'flow',
+    title: 'D — hướng phụ thuộc lúc compile bị "đảo" so với hướng gọi lúc runtime',
+    nodes: ['OrderService (tầng cao) định nghĩa interface OrderRepository', 'Interface nằm TRONG package domain — "tôi cần gì"', 'PostgresOrderRepository (tầng infra) implements', 'Infra phụ thuộc NGƯỢC LÊN domain'],
+    steps: [
+      { to: 1, label: 'Abstraction thuộc về tầng cao, không phải tầng thấp' },
+      { to: 3, label: 'Tầng cao KHÔNG import tầng thấp' },
+      { to: 3, label: 'Đổi Postgres → Mongo không đụng domain. "Phụ thuộc cái ổn định, không phụ thuộc cái hay đổi"' },
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -113,6 +206,17 @@ SS.addQuestions('design-patterns', [
     'DRY là về **kiến thức trùng lặp**, không phải **ký tự trùng lặp**. Rule of three: thấy lần thứ ba mới trừu tượng hoá. Wrong abstraction khó gỡ hơn duplication nhiều.',
   example:
     'Hai hàm `validateOrderForm` và `validateProfileForm` tình cờ có 5 dòng giống nhau. Gộp thành `validateForm(data, type)` → sau 6 tháng nó có 8 tham số boolean và 40 dòng `if (type == ORDER)`. Đáng ra cứ để trùng 5 dòng.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['DRY đúng (cùng KIẾN THỨC)', 'Wrong abstraction (tình cờ giống)'],
+    rows: [
+      ['Gộp gì', 'một mẩu kiến thức có nhiều biểu diễn', 'code trông giống nhau nhưng đổi vì lý do khác nhau'],
+      ['Sau vài yêu cầu mới', 'ổn định', 'thêm flag/tham số → phình thành mớ if'],
+      ['Chi phí gỡ', '—', 'khó hơn duplication nhiều'],
+      ['Quy tắc', 'rule of three: lần thứ ba mới trừu tượng hoá', '"duplication is far cheaper than the wrong abstraction"'],
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -125,6 +229,19 @@ SS.addQuestions('design-patterns', [
     'KISS + YAGNI: xây cho vấn đề bạn *có*, không phải vấn đề bạn *tưởng tượng*. Sự linh hoạt không dùng đến là nợ, không phải tài sản. Đơn giản + test tốt cho phép tiến hoá khi vấn đề thật xuất hiện.',
   example:
     'Yêu cầu: lưu file người dùng upload. YAGNI: dùng local disk / một bucket S3. KHÔNG: xây abstraction `StorageProvider` với 4 implementation (S3/GCS/Azure/local), config phức tạp, "phòng khi đổi cloud". 3 năm sau vẫn dùng S3 — abstraction đó chỉ tốn công.',
+  viz: {
+    type: 'tree',
+    title: 'Xây cho vấn đề bạn CÓ, không phải vấn đề bạn tưởng tượng',
+    root: {
+      label: 'Sự linh hoạt không dùng đến là nợ, không phải tài sản',
+      children: [
+        { label: 'KISS', note: 'giải pháp đơn giản nhất đủ giải quyết vấn đề HIỆN TẠI; phức tạp phải kiếm được chỗ đứng' },
+        { label: 'YAGNI', note: 'đừng xây "phòng khi sau này cần" — dự đoán tương lai thường sai; code thừa vẫn phải bảo trì/test/đọc' },
+        { label: 'Làm cho refactor rẻ', note: 'test tốt + ranh giới rõ → dám bắt đầu đơn giản' },
+        { label: 'Ví dụ', note: 'lưu file: dùng S3 trực tiếp, không StorageProvider 4 impl "phòng khi đổi cloud"' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -142,6 +259,18 @@ SS.addQuestions('design-patterns', [
     'Kế thừa nói "tôi LÀ một loại X và thừa hưởng mọi thứ của X". Composition nói "tôi CÓ một X và dùng đúng cái tôi cần". Composition linh hoạt hơn, ít giòn hơn — đó là mặc định; kế thừa là ngoại lệ có lý do.',
   example:
     'Thay `class Car extends Engine` (vô lý) và `class SportsCar extends Car` (cứng): `class Car { private Engine engine; private Transmission transmission; }` — lắp engine V8 hay điện, hộp số tự động hay sàn, đổi runtime, test với mock engine.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Kế thừa (is-a)', 'Composition (has-a)'],
+    rows: [
+      ['Coupling', 'chặt subclass–superclass (fragile base class)', 'qua interface rõ ràng'],
+      ['Thời điểm', 'tĩnh (compile-time)', 'đổi runtime, ghép nhiều hành vi'],
+      ['Nhiều trục biến thể', 'bùng nổ class', 'ghép đúng cái cần'],
+      ['Đóng gói', 'subclass thấy protected member của parent', 'chỉ dùng interface công khai'],
+      ['Khi nào', 'thật sự "is-a" + LSP + hierarchy ổn định', 'mặc định'],
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -154,6 +283,16 @@ SS.addQuestions('design-patterns', [
     'LoD giảm coupling với **cấu trúc** của object khác. "Tell, don\u2019t navigate": bảo object làm việc, đừng đi xuyên qua nó để thao tác trên ruột gan của nó. Cân bằng: đừng tạo hàng loạt method uỷ quyền vô nghĩa cho data object thuần (DTO).',
   example:
     'Vi phạm: `if (user.getAccount().getSubscription().getPlan().isPremium())`. Tuân thủ: `if (user.hasPremiumPlan())` — `User` tự trả lời, cấu trúc `Account/Subscription/Plan` được tự do refactor. (LoD ít áp cho DTO/record thuần dữ liệu.)',
+  viz: {
+    type: 'flow',
+    title: '"Tell, don\'t navigate" — bảo object làm việc, đừng đi xuyên qua ruột gan nó',
+    nodes: ['Train wreck: order.getCustomer().getAddress().getCity().getName()', 'Phụ thuộc cấu trúc nội tại của 4 class', 'Đổi bất kỳ class nào → hỏng', 'Thêm method trung gian: order.getShippingCityName()'],
+    steps: [
+      { to: 1, label: 'Method chỉ nên gọi method của: chính nó, tham số, object nó tạo, field trực tiếp' },
+      { to: 3, label: 'order tự đi lấy, client không cần biết đường đi' },
+      { to: 3, label: 'Cân bằng: đừng tạo hàng loạt method uỷ quyền vô nghĩa cho DTO thuần' },
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -166,6 +305,16 @@ SS.addQuestions('design-patterns', [
     '"Tell, don\u2019t ask" chống **anemic domain model** (object chỉ có getter/setter, logic ở service). Đặt hành vi cạnh dữ liệu → object bảo vệ được invariant của mình, code gọi ngắn gọn và khó dùng sai.',
   example:
     'Anemic: `OrderService.addItem(order, item) { order.getItems().add(item); order.setTotal(order.getTotal().plus(item.price())); }`. Rich: `order.addItem(item)` — `Order` tự cập nhật total, kiểm tra order chưa bị khoá, giới hạn số item. Không ai quên cập nhật total.',
+  viz: {
+    type: 'flow',
+    title: 'Chống anemic domain model — đặt hành vi cạnh dữ liệu',
+    nodes: ['ASK: account.getBalance()', 'Tự quyết định Ở NGOÀI object', 'Logic "trừ tiền" nằm ngoài Account', 'TELL: account.withdraw(amount)'],
+    steps: [
+      { to: 1, label: 'if (account.getBalance() >= amount) { account.setBalance(...) } — feature envy' },
+      { to: 3, label: 'Account tự kiểm tra + trừ, enforce invariant (không âm), có thể throw' },
+      { to: 3, label: 'Object bảo vệ được invariant của mình; code gọi ngắn gọn, khó dùng sai' },
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -179,6 +328,18 @@ SS.addQuestions('design-patterns', [
     'Đây là "hai chỉ số vàng". Cohesion cao: mỗi module có lý do tồn tại rõ ràng. Coupling thấp: bạn có thể hiểu/đổi/test một module mà không phải nạp cả hệ thống vào đầu. Mọi refactoring tốt cải thiện ít nhất một trong hai.',
   example:
     'Low cohesion: `UtilManager` với 40 method không liên quan (format date, gọi API, parse XML, tính thuế). High coupling: `OrderService` đọc trực tiếp bảng `inventory` của service khác. Sửa: tách util theo chủ đề; order gọi inventory qua interface/event.',
+  viz: {
+    type: 'quadrant',
+    title: 'Hai chỉ số vàng — mọi refactoring tốt cải thiện ít nhất một',
+    x: ['coupling cao', 'coupling thấp'],
+    y: ['cohesion thấp', 'cohesion cao'],
+    items: [
+      { label: 'Mục tiêu', qx: 1, qy: 1 },
+      { label: 'God object / UtilManager', qx: 0, qy: 0 },
+      { label: 'Module gọn nhưng dính chặt', qx: 0, qy: 1 },
+      { label: 'Module cô lập nhưng lộn xộn', qx: 1, qy: 0 },
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -191,6 +352,18 @@ SS.addQuestions('design-patterns', [
     'Ba anti-pattern này đều là **thiếu ranh giới / thiếu trách nhiệm rõ ràng**. God object = một chỗ ôm hết; anemic = data và logic bị xé rời; spaghetti = không có chỗ nào rõ ràng. Thuốc chung: xác định trách nhiệm, tách, đặt tên, che chắn bằng test.',
   example:
     'God object `ApplicationManager` (3000 dòng): xử lý user, order, payment, email, report. Tách dần: trích `UserManager`, rồi `OrderProcessor`, rồi... Anemic: `Order` chỉ có setter → gom `addItem/removeItem/applyDiscount/checkout` vào `Order`, service chỉ điều phối.',
+  viz: {
+    type: 'tree',
+    title: 'Thuốc chung: xác định trách nhiệm, tách, đặt tên, che chắn bằng test',
+    root: {
+      label: 'Ba anti-pattern = thiếu ranh giới / thiếu trách nhiệm rõ ràng',
+      children: [
+        { label: 'God Object', note: 'một class biết/làm quá nhiều (nghìn dòng, chục phụ thuộc) → tách theo SRP, trích nhóm method+field liên quan' },
+        { label: 'Anemic Domain Model', note: 'entity chỉ getter/setter, logic ở "service" → lập trình thủ tục đội lốt OOP. Chuyển invariant + hành vi vào entity ("tell, don\'t ask")' },
+        { label: 'Spaghetti code', note: 'luồng rối, không ranh giới, copy-paste khắp nơi → trích hàm, đặt tên, tách module, thêm test rồi refactor dần' },
+      ],
+    },
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -208,6 +381,21 @@ SS.addQuestions('design-patterns', [
     'Smell là "linh cảm được đặt tên". Học danh sách smell + refactoring tương ứng cho bạn từ vựng để nhận ra và diễn đạt vấn đề trong code review, và một menu các bước sửa an toàn.',
   example:
     'Thấy `void sendEmail(String to, String from, String subject, String body, String cc, String bcc, boolean html, int priority)` → Long Parameter List + Data Clumps. Refactor: `EmailMessage` value object + `EmailSender.send(EmailMessage)`.',
+  viz: {
+    type: 'tree',
+    title: '"Linh cảm được đặt tên" — smell + refactoring tương ứng',
+    root: {
+      label: 'Dấu hiệu bề mặt gợi ý vấn đề thiết kế sâu hơn (không phải bug)',
+      children: [
+        { label: 'Long Method / Large Class', note: '→ trích hàm/class' },
+        { label: 'Long Parameter List', note: '→ gom thành object, hoặc Builder' },
+        { label: 'Feature Envy', note: 'method quan tâm dữ liệu class khác → chuyển method sang class đó' },
+        { label: 'Data Clumps', note: 'nhóm field xuất hiện cùng nhau → value object' },
+        { label: 'Primitive Obsession', note: 'String/int cho khái niệm domain (email, money) → tạo type' },
+        { label: 'Shotgun Surgery / Switch lặp theo type', note: '→ gom trách nhiệm / polymorphism' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tổng quan',
@@ -220,6 +408,16 @@ SS.addQuestions('design-patterns', [
     'Pattern = giải pháp tốt, đa ngôn ngữ. Idiom = giải pháp tốt, một ngôn ngữ. Anti-pattern = cái bẫy phổ biến. Biết cả ba: pattern để áp dụng, idiom để viết code "địa phương" tự nhiên, anti-pattern để tránh.',
   example:
     'Pattern: Strategy. Idiom (Java): dùng `Comparator` + method reference cho Strategy so sánh. Anti-pattern: "Golden Hammer" — áp Strategy cho mọi `if` vì "vừa học Strategy". Idiom (Java): `try (var conn = ds.getConnection()) {...}` cho cleanup tài nguyên.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Design pattern', 'Idiom', 'Anti-pattern'],
+    rows: [
+      ['Chất lượng', 'giải pháp tốt, tái sử dụng', 'giải pháp tốt, mức thấp hơn', 'nhìn hợp lý, thực tế phản tác dụng'],
+      ['Phạm vi ngôn ngữ', 'đa ngôn ngữ', 'đặc thù một ngôn ngữ', 'phổ biến (cái bẫy)'],
+      ['Ví dụ', 'Strategy, Observer', 'try-with-resources, RAII, list comprehension, defer', 'God Object, Golden Hammer, Premature Optimization'],
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -232,6 +430,17 @@ SS.addQuestions('design-patterns', [
     'Guard clause đảo "nếu mọi thứ ổn thì làm" thành "nếu có gì sai thì thoát sớm". Phần chính của hàm không bị chôn dưới 4 tầng ngoặc. Đây là refactoring nhỏ nhưng tác động lớn tới khả năng đọc.',
   example:
     '`processPayment`: guard `amount <= 0` → throw; `account.isFrozen()` → throw; `!hasSufficientFunds()` → throw. Sau 3 guard, phần "trừ tiền + ghi giao dịch + phát event" nằm phẳng, đọc như mô tả nghiệp vụ.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['If lồng sâu (arrow code)', 'Guard clause / early return'],
+    rows: [
+      ['Cấu trúc', 'if (ok) { if (ok2) { if (ok3) { ... } } }', 'if (!ok) throw; ... happy path phẳng'],
+      ['Cognitive load', 'phải giữ nhiều điều kiện trong đầu', 'thoát sớm — quên được điều kiện đã qua'],
+      ['Happy path', 'chôn dưới 4 tầng ngoặc', 'ở mức thụt lề thấp nhất, đọc như mô tả nghiệp vụ'],
+      ['Thêm điều kiện mới', 'thêm một tầng lồng', 'thêm một guard'],
+    ],
+  },
 },
 {
   cat: 'Nguyên lý',
@@ -245,6 +454,19 @@ SS.addQuestions('design-patterns', [
     '"Phòng thủ ở biên, tin tưởng bên trong": validate mạnh tại ranh giới (nơi dữ liệu không đáng tin đi vào), rồi dùng type + immutability để giữ dữ liệu bên trong luôn hợp lệ mà không cần check lại mọi nơi.',
   example:
     'Controller validate `CreateOrderRequest` (`@Valid`, business check) → chuyển thành `Order` aggregate hợp lệ. `OrderService`, `OrderRepository` **không** validate lại "email đúng format không" — chúng nhận `Email` value object đã đảm bảo hợp lệ từ lúc tạo.',
+  viz: {
+    type: 'tree',
+    title: '"Phòng thủ ở biên, tin tưởng bên trong"',
+    root: {
+      label: 'Validate mạnh tại ranh giới → type + immutability giữ dữ liệu bên trong luôn hợp lệ',
+      children: [
+        { label: 'Fail fast', note: 'kiểm tiền điều kiện ngay đầu method (Objects.requireNonNull) — lỗi tại nguồn, không NPE bí ẩn 10 frame sau' },
+        { label: 'Validate ở biên', note: 'dữ liệu ngoài (API, file, message) validate MỘT LẦN tại điểm vào; dữ liệu trong được tin tưởng' },
+        { label: 'Immutability', note: 'object bất biến không thể bị đưa vào trạng thái xấu sau khi tạo' },
+        { label: 'Copy phòng thủ', note: 'khi nhận/trả collection mutable từ ngoài — không ai sửa được state nội bộ' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tổng quan',
@@ -262,5 +484,15 @@ SS.addQuestions('design-patterns', [
     'Pattern là câu trả lời, không phải câu hỏi. Xác định vấn đề (trục thay đổi, coupling, duplication kiến thức) trước; pattern là tên của giải pháp cho lớp vấn đề đó. Áp pattern không có vấn đề tương ứng = over-engineering.',
   example:
     'Không: "dự án mới, hãy dựng Factory + Strategy + Observer cho mọi thứ". Có: viết code đơn giản → sau 2 tháng thấy `switch(paymentType)` lặp ở 4 chỗ và hay thêm loại → refactor sang Strategy + registry. Vấn đề (shotgun surgery + OCP) dẫn tới pattern.',
+  viz: {
+    type: 'flow',
+    title: 'Pattern là câu trả lời, không phải câu hỏi',
+    nodes: ['Vấn đề cụ thể (cái gì khó thay đổi? trục biến thiên? coupling ở đâu?)', 'Giải pháp đơn giản trực tiếp trước (constructor, if, hàm) — đủ chưa?', 'Áp lực thay đổi LẶP LẠI ở một điểm', 'Tìm pattern giải quyết đúng vấn đề đó', 'So chi phí (class, gián tiếp) với lợi ích (linh hoạt ĐANG cần)', 'Áp phiên bản nhẹ nhất + đặt tên để giao tiếp'],
+    steps: [
+      { to: 1, label: 'Đừng bắt đầu từ "tôi nên dùng pattern nào"' },
+      { to: 3, label: 'Không phải pattern bạn thích nhất' },
+      { to: 5, label: 'Pattern thường XUẤT HIỆN qua refactoring, không "thiết kế vào" từ đầu' },
+    ],
+  },
 },
 ]);
