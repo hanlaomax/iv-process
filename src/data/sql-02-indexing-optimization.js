@@ -28,6 +28,17 @@ SS.addQuestions('sql', [
     'Clustered index quyết định thứ tự vật lý của hàng → tra theo nó cực nhanh, nhưng PK to/ngẫu nhiên làm mọi secondary index phình và insert phân mảnh. Non-clustered cần thêm bước lấy hàng.',
   example:
     'InnoDB: PK là UUID v4 (ngẫu nhiên) → insert chèn khắp nơi trong clustered index → page split, phân mảnh, và mọi secondary index lưu UUID 16 byte. Đổi sang BIGINT auto-increment (hoặc UUID v7 tăng dần) → insert tuần tự, index gọn.',
+  viz: {
+    type: 'compare',
+    cols: ['Clustered index (InnoDB PK, SQL Server)', 'Non-clustered / secondary'],
+    rows: [
+      ['Lưu trữ', 'HÀNG dữ liệu lưu vật lý theo thứ tự key này', 'cấu trúc riêng (key → con trỏ)'],
+      ['Số lượng', 'một mỗi bảng', 'nhiều'],
+      ['Tra cứu', 'lấy luôn cả hàng', 'bookmark lookup (InnoDB: qua PK value → thêm một lần tra)'],
+      ['Bẫy', 'PK to/ngẫu nhiên (UUID v4) → secondary index phình, insert phân mảnh', '—'],
+      ['Postgres', 'không có clustered thật (CLUSTER chỉ sắp một lần)', 'mọi index là secondary, bảng là heap'],
+    ],
+  },
 },
 {
   cat: 'Index',
@@ -44,6 +55,16 @@ SS.addQuestions('sql', [
     'Composite index như từ điển sắp theo (họ, tên): tra được "họ", "họ + tên", nhưng không tra được "tên" đơn lẻ. Thứ tự cột = cột lọc-bằng trước, cột khoảng/sort sau.',
   example:
     'Query hay chạy: `WHERE tenant_id = ? AND status = ? ORDER BY created_at DESC`. Index tốt: `(tenant_id, status, created_at)` — lọc bằng hai cột đầu, cột thứ ba cho ORDER BY khỏi sort. Index `(created_at, tenant_id, status)` gần như vô dụng cho query này.',
+  viz: {
+    type: 'flow',
+    title: 'Composite index (a, b, c) — quy tắc "leftmost prefix"',
+    nodes: ['sắp theo a, rồi b, rồi c', 'WHERE a = ? ✓', 'WHERE a = ? AND b = ? ✓', 'WHERE b = ? ✗ (thiếu a)', 'WHERE a = ? AND c = ? → chỉ dùng phần a'],
+    steps: [
+      { to: 1, label: 'như từ điển sắp theo (họ, tên): tra "họ", "họ + tên", không tra được "tên" đơn lẻ' },
+      { to: 3, label: 'thứ tự cột = cột lọc-BẰNG trước, cột khoảng/sort SAU' },
+      { to: 4, label: '(tenant_id, status, created_at) cho WHERE tenant= AND status= ORDER BY created_at — không cần sort' },
+    ],
+  },
 },
 {
   cat: 'Index',
@@ -55,6 +76,16 @@ SS.addQuestions('sql', [
     'Covering index = "index tự trả lời được cả câu hỏi". Đánh đổi: index to hơn, ghi chậm hơn. Dùng cho các truy vấn đọc nóng, chọn ít cột.',
   example:
     '`SELECT status, total FROM orders WHERE customer_id = ?` chạy hàng nghìn lần/s: `CREATE INDEX idx ON orders (customer_id) INCLUDE (status, total)` → index-only scan, không đụng heap, latency giảm rõ.',
+  viz: {
+    type: 'flow',
+    title: 'Covering index / index-only scan',
+    nodes: ['mọi cột truy vấn cần (SELECT, WHERE, ORDER BY) đều trong index', 'DB trả kết quả CHỈ từ index', 'bỏ bước bookmark lookup (không chạm heap)', 'Postgres: INCLUDE (col) thêm payload không sắp xếp'],
+    steps: [
+      { to: 2, label: 'nhanh hơn nhiều' },
+      { to: 3, label: 'đánh đổi: index to hơn, ghi chậm hơn — dùng cho truy vấn đọc nóng, chọn ít cột' },
+      { to: 3, label: 'Postgres còn cần visibility map "sạch" (VACUUM) để thực sự tránh heap' },
+    ],
+  },
 },
 {
   cat: 'Tối ưu',
@@ -71,6 +102,19 @@ SS.addQuestions('sql', [
     'Index chỉ có ích khi nó loại được **phần lớn** bảng. Optimizer là dựa trên chi phí — nếu nó bỏ index, thường là nó đúng (selectivity thấp) hoặc predicate của bạn phá index (không sargable / stats cũ).',
   example:
     '`WHERE is_deleted = false` (99% hàng chưa xoá) → optimizer chọn seq scan, đúng. `WHERE lower(email) = ?` không dùng index `(email)` → tạo functional index `(lower(email))` hoặc so sánh đúng case.',
+  viz: {
+    type: 'tree',
+    title: 'Vì sao optimizer KHÔNG dùng index (thường nó đúng)',
+    root: {
+      label: 'Index chỉ có ích khi nó loại được PHẦN LỚN bảng',
+      children: [
+        { label: 'Selectivity thấp', note: 'điều kiện khớp phần lớn bảng (status = "active" 95%) → seq scan rẻ hơn' },
+        { label: 'Predicate không sargable', note: 'func(col) = ?, ép kiểu ngầm, col + 1 = ?' },
+        { label: 'Statistics cũ', note: 'optimizer tưởng bảng nhỏ / phân bố khác → chạy ANALYZE' },
+        { label: 'Bảng nhỏ / kiểu-collation không khớp / OR không bao phủ hết' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tối ưu',
@@ -89,6 +133,20 @@ SS.addQuestions('sql', [
     '`EXPLAIN ANALYZE` là sự thật. Điểm chẩn đoán số một: nơi estimated rows lệch xa actual rows — đó là chỗ optimizer "mù" và chọn sai join/scan.',
   example:
     'Plan cho thấy `Nested Loop` với inner `Index Scan` chạy `loops=2,000,000`, mỗi loop 0.01ms → 20s. Optimizer ước lượng outer trả 10 hàng nhưng thực tế 2 triệu (stats cũ). `ANALYZE` bảng → optimizer chuyển sang `Hash Join` → 400ms.',
+  viz: {
+    type: 'tree',
+    title: 'Đọc EXPLAIN ANALYZE (từ lá lên gốc) — EXPLAIN ANALYZE là sự thật',
+    root: {
+      label: 'Điểm chẩn đoán #1: nơi estimated rows lệch xa actual rows',
+      children: [
+        { label: 'Chênh lệch estimated vs actual rows lớn', note: 'stats sai → plan tệ' },
+        { label: 'Seq Scan trên bảng lớn khi lẽ ra Index Scan' },
+        { label: 'Nested Loop với inner chạy hàng triệu loops' },
+        { label: 'Sort / Hash tràn ra đĩa (external merge Disk)' },
+        { label: 'Rows Removed by Filter cao → thiếu index đúng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tối ưu',
@@ -101,6 +159,15 @@ SS.addQuestions('sql', [
     'Nested loop cho "ít hàng ngoài + index bên trong". Hash join cho "hai tập lớn, join bằng". Merge join cho "đã sắp xếp sẵn". Optimizer chọn theo kích thước ước lượng và index sẵn có.',
   example:
     '`orders JOIN customers ON orders.customer_id = customers.id` khi lọc `orders` còn 50 hàng: nested loop + index PK `customers` — nhanh. Khi join **toàn bộ** 10M orders với 2M customers cho báo cáo: hash join.',
+  viz: {
+    type: 'compare',
+    cols: ['Nested Loop', 'Hash Join', 'Merge Join'],
+    rows: [
+      ['Cách', 'mỗi hàng ngoài → tra bảng trong (qua index)', 'build hash từ bảng nhỏ, probe bằng bảng lớn', 'cả hai đầu vào đã sắp xếp → quét song song'],
+      ['Tốt khi', 'bảng ngoài NHỎ + index bên trong', 'hai tập LỚN, join BẰNG, không index phù hợp', 'dữ liệu đã sorted (từ index)'],
+      ['Tệ khi', 'bảng ngoài lớn (N × chi phí tra)', 'tốn RAM (spill đĩa)', '—'],
+    ],
+  },
 },
 {
   cat: 'Tối ưu',
@@ -117,6 +184,15 @@ SS.addQuestions('sql', [
     'Index được xây trên **giá trị cột**, không phải trên `f(cột)`. Đưa hàm/biểu thức về vế hằng, hoặc index chính cái biểu thức đó.',
   example:
     '`WHERE lower(email) = \'a@b.com\'` chậm → `CREATE INDEX idx_email_lower ON users (lower(email))` → sargable trở lại. Hoặc chuẩn hoá email về lowercase khi ghi và so sánh trực tiếp.',
+  viz: {
+    type: 'flow',
+    title: 'Predicate "sargable" — cột đứng một mình một vế',
+    nodes: ['index xây trên GIÁ TRỊ CỘT, không phải f(cột)', 'WHERE YEAR(created_at) = 2024 → bọc hàm → phá index', 'viết lại: created_at >= "2024-01-01" AND < "2025-01-01"', 'hoặc: functional index CREATE INDEX ON t (YEAR(created_at))'],
+    steps: [
+      { to: 1, label: 'cũng phá: price * 1.1 > 100, CAST(id AS text) = ?, LIKE "%abc%"' },
+      { to: 3, label: 'đưa hàm/biểu thức về vế hằng, hoặc index chính biểu thức đó' },
+    ],
+  },
 },
 {
   cat: 'Tối ưu',
@@ -129,6 +205,15 @@ SS.addQuestions('sql', [
     'Optimizer "nhìn thế giới" qua statistics. Nếu chúng lệch thực tế, mọi quyết định chi phí đều sai. Sau ETL/bulk operation lớn, luôn `ANALYZE`.',
   example:
     'Sau khi import 5 triệu hàng vào bảng vừa tạo, chạy report → cực chậm vì optimizer tưởng bảng có ~0 hàng (chưa ANALYZE) → chọn nested loop. Chạy `ANALYZE orders` → plan chuyển sang hash join, report từ 5 phút xuống 8 giây.',
+  viz: {
+    type: 'flow',
+    title: 'Optimizer statistics — "nhìn thế giới" qua stats',
+    nodes: ['DB lưu stats: số hàng, n_distinct, histogram, MCV, tỉ lệ NULL', 'optimizer ước lượng số hàng mỗi bước', 'chọn scan / join / order theo chi phí', 'stats cũ (sau bulk load / xoá nhiều) → ước lượng sai → plan tệ'],
+    steps: [
+      { to: 3, label: 'chọn nested loop khi nên hash join, seq scan khi nên index' },
+      { to: 3, label: 'cập nhật: ANALYZE (Postgres tự qua autovacuum); sau ETL/bulk LUÔN ANALYZE' },
+    ],
+  },
 },
 {
   cat: 'Index',
@@ -141,6 +226,19 @@ SS.addQuestions('sql', [
     'Partial index tập trung "sức mạnh index" vào đúng phần dữ liệu bạn hay truy vấn (hàng active, hàng pending, hàng chưa xử lý) thay vì index cả bảng gồm phần bạn không bao giờ hỏi.',
   example:
     'Bảng `jobs` 100M hàng, 99.9% đã `DONE`, worker chỉ query `WHERE status = \'QUEUED\' ORDER BY priority`: `CREATE INDEX ON jobs (priority) WHERE status = \'QUEUED\'` → index chỉ ~100k mục thay vì 100M. Unique có điều kiện: `CREATE UNIQUE INDEX ON users (email) WHERE deleted_at IS NULL` (cho phép trùng email ở hàng đã soft-delete).',
+  viz: {
+    type: 'tree',
+    title: 'Partial index — tập trung "sức mạnh index" vào phần dữ liệu hay truy vấn',
+    root: {
+      label: 'CREATE INDEX ... WHERE status = "PENDING"',
+      children: [
+        { label: 'Index nhỏ hơn NHIỀU (vài % bảng)', note: 'rẻ duy trì, cache tốt' },
+        { label: 'Dùng khi truy vấn luôn kèm cùng một điều kiện lọc', note: 'jobs WHERE status = "QUEUED" — index ~100k thay vì 100M' },
+        { label: 'Enforce unique có điều kiện', note: 'UNIQUE INDEX ON users (email) WHERE deleted_at IS NULL' },
+        { label: 'Postgres, SQL Server hỗ trợ; MySQL không (dùng generated column)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tối ưu',
@@ -153,6 +251,15 @@ SS.addQuestions('sql', [
     'Index tăng tốc đọc nhưng đánh thuế mọi lần ghi. Bảng ghi nhiều nên có ít index, được chọn lọc. Xoá index không ai dùng là một cách tối ưu ghi.',
   example:
     'Bảng `events` insert 20k/s có 8 index, phần lớn tạo "phòng khi cần": insert latency cao, WAL lớn. Audit cho thấy 3 index `idx_scan = 0` trong 30 ngày → drop → throughput ghi tăng ~40%.',
+  viz: {
+    type: 'flow',
+    title: 'Over-indexing — index đánh thuế MỌI lần ghi',
+    nodes: ['mỗi index cập nhật khi INSERT/UPDATE(cột index)/DELETE', 'write amplification: 1 insert vào bảng 10 index = 11 lần ghi', 'tốn đĩa/RAM (cạnh tranh page cache), optimizer chậm hơn', 'rà soát pg_stat_user_indexes (idx_scan = 0) → drop'],
+    steps: [
+      { to: 2, label: 'bảng ghi nhiều nên có ÍT index, được chọn lọc' },
+      { to: 3, label: 'xoá index không ai dùng là một cách tối ưu ghi' },
+    ],
+  },
 },
 {
   cat: 'Index',
@@ -168,6 +275,15 @@ SS.addQuestions('sql', [
     'B-tree chỉ giúp prefix. Substring search cần cấu trúc index khác (trigram GIN) hoặc một hệ search chuyên dụng — đừng để `LIKE \'%x%\'` scan bảng triệu hàng.',
   example:
     'Ô tìm kiếm "gõ tới đâu lọc tới đó" trên tên sản phẩm 2M hàng: `CREATE INDEX ON products USING gin (name gin_trgm_ops)` → `WHERE name ILIKE \'%\' || :q || \'%\'` dùng index, ~vài ms thay vì full scan.',
+  viz: {
+    type: 'compare',
+    cols: ["LIKE 'abc%' (prefix)", "LIKE '%abc%' (infix/suffix)"],
+    rows: [
+      ['B-tree index trên cột', 'DÙNG được (range scan)', 'VÔ DỤNG → seq scan'],
+      ['Giải pháp', '—', 'Postgres: pg_trgm + GIN index (gin_trgm_ops)'],
+      ['Cho nhu cầu nghiêm túc', '—', 'full-text (tsvector + GIN) hoặc search engine (Elasticsearch)'],
+    ],
+  },
 },
 {
   cat: 'Tối ưu',
@@ -182,6 +298,15 @@ SS.addQuestions('sql', [
     '`OR` giữa các cột khác nhau chia truy vấn thành hai bài toán index riêng. `UNION` (hoặc `UNION ALL` + dedup) cho phép mỗi nhánh dùng index tối ưu của nó.',
   example:
     '`WHERE email = ? OR phone = ?` (login bằng email hoặc phone) → seq scan. Viết lại: `SELECT * FROM users WHERE email = :x UNION SELECT * FROM users WHERE phone = :x` → mỗi nhánh dùng index tương ứng, nhanh.',
+  viz: {
+    type: 'flow',
+    title: 'OR giữa các cột khác nhau',
+    nodes: ['WHERE a = 1 OR b = 2 (a, b ở hai index khác nhau)', 'DB không dùng một index cho cả hai vế → seq scan', 'viết lại: SELECT ... WHERE a = 1 UNION SELECT ... WHERE b = 2', 'mỗi nhánh dùng index tối ưu của nó'],
+    steps: [
+      { to: 1, label: 'Postgres: bitmap index scan có thể OR nhiều index — kiểm tra EXPLAIN' },
+      { to: 3, label: 'OR trên CÙNG một cột → IN (...) (dùng index tốt)' },
+    ],
+  },
 },
 {
   cat: 'Index',
@@ -194,6 +319,18 @@ SS.addQuestions('sql', [
     'Index không "tự dọn" hoàn hảo — update/delete tạo bloat làm nó phình dần. Fillfactor thấp giảm bloat cho workload update; REINDEX định kỳ cho index nóng.',
   example:
     'Bảng `sessions` update `last_seen` liên tục: index `(last_seen)` phình gấp 3 lần sau vài tuần → query chậm dần. `REINDEX CONCURRENTLY` + đặt `fillfactor = 70` cho bảng → HOT updates, bloat chậm lại.',
+  viz: {
+    type: 'tree',
+    title: 'Index bloat + fillfactor — index không "tự dọn" hoàn hảo',
+    root: {
+      label: 'UPDATE/DELETE để lại khoảng trống → index to hơn dữ liệu thực cần',
+      children: [
+        { label: 'Bloat', note: 'Postgres: dead tuple; page nửa rỗng → chậm hơn, tốn cache' },
+        { label: 'Fillfactor', note: '% page điền khi tạo (mặc định ~90); đặt 70 → chừa chỗ cho UPDATE tại chỗ (HOT) → giảm page split' },
+        { label: 'Khắc phục', note: 'REINDEX CONCURRENTLY (Postgres), OPTIMIZE TABLE (MySQL); autovacuum tuning' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tối ưu',
@@ -209,6 +346,16 @@ SS.addQuestions('sql', [
     'N+1 là "một câu hỏi lớn bị chia thành N câu hỏi nhỏ". Chi phí không nằm ở mỗi query (nhanh) mà ở **số lượng round-trip**. Gom lại thành 1–2 query.',
   example:
     'Trang 50 bài viết, mỗi bài hiện tên tác giả: ORM lazy load → 1 query bài + 50 query tác giả. `SELECT ... FROM posts p JOIN users u ON u.id = p.author_id` → 1 query. Hoặc `SELECT * FROM users WHERE id IN (<50 author ids>)` → 2 query.',
+  viz: {
+    type: 'flow',
+    title: 'N+1 query — chi phí ở SỐ LƯỢNG round-trip, không phải mỗi query',
+    nodes: ['lấy N hàng cha', 'vòng lặp: một truy vấn con cho MỖI hàng', '1 + N truy vấn', 'gom lại thành 1–2 query'],
+    steps: [
+      { to: 2, label: 'latency = (1 + N) × RTT + N × chi phí query' },
+      { to: 3, label: 'JOIN lấy cha + con một truy vấn; hoặc batch WHERE parent_id IN (:ids)' },
+      { to: 3, label: 'ORM: JOIN FETCH / @EntityGraph (JPA), select_related (Django)' },
+    ],
+  },
 },
 {
   cat: 'Tối ưu',
@@ -222,6 +369,19 @@ SS.addQuestions('sql', [
     'Liệt kê đúng cột cần: giảm dữ liệu truyền tải, cho phép index-only scan, và làm truy vấn trở thành một hợp đồng rõ ràng thay vì "cho tôi tất cả".',
   example:
     '`SELECT * FROM articles WHERE id = ?` khi `articles` có cột `content` (50KB) và `search_vector` (10KB) — trang danh sách chỉ cần `id, title, excerpt` → `SELECT id, title, excerpt` tiết kiệm ~99% dữ liệu và dùng được index `(id) INCLUDE (title, excerpt)`.',
+  viz: {
+    type: 'tree',
+    title: 'SELECT * là anti-pattern trong code production',
+    root: {
+      label: 'Liệt kê đúng cột = truy vấn thành hợp đồng rõ ràng',
+      children: [
+        { label: 'Kéo cột không cần', note: 'nhiều I/O, network, RAM (nhất là text/blob/jsonb lớn)' },
+        { label: 'Phá covering index', note: 'buộc bookmark lookup dù chỉ cần vài cột' },
+        { label: 'Giòn', note: 'thêm/đổi thứ tự cột làm hỏng code, bơm dữ liệu mới ra API' },
+        { label: 'Khó đọc / khó tối ưu', note: 'không rõ query thực sự cần gì' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tối ưu',
@@ -241,6 +401,21 @@ SS.addQuestions('sql', [
     'Đa số slow query là một trong ~10 mẫu quen thuộc. `EXPLAIN ANALYZE` chỉ ra mẫu nào; phần lớn sửa bằng "đưa predicate về sargable" hoặc "thêm/đổi index cho khớp cách lọc + sort".',
   example:
     'Slow query log: `SELECT (SELECT count(*) FROM comments c WHERE c.post_id = p.id) FROM posts p` — subquery chạy cho mỗi post. Sửa: `SELECT p.id, coalesce(cc.n, 0) FROM posts p LEFT JOIN (SELECT post_id, count(*) n FROM comments GROUP BY post_id) cc ON cc.post_id = p.id`.',
+  viz: {
+    type: 'tree',
+    title: '~10 mẫu slow query quen thuộc',
+    root: {
+      label: 'EXPLAIN ANALYZE chỉ ra mẫu nào; phần lớn sửa bằng "sargable" hoặc "index khớp lọc + sort"',
+      children: [
+        { label: 'Hàm trên cột index → sargable / functional index' },
+        { label: 'Ép kiểu ngầm → truyền đúng kiểu' },
+        { label: 'LIKE "%x%" → trigram GIN; OFFSET lớn → keyset' },
+        { label: 'Thiếu index trên cột FK; SELECT * kéo cột lớn' },
+        { label: 'N+1 → JOIN/batch; OR cross-column → UNION; stats cũ → ANALYZE' },
+        { label: 'Correlated subquery trong SELECT → LEFT JOIN / window function' },
+      ],
+    },
+  },
 },
 {
   cat: 'Index',
@@ -255,6 +430,18 @@ SS.addQuestions('sql', [
     'Selectivity của một predicate mới là yếu tố quyết định, không phải cardinality của cột. Cột cardinality thấp phát huy khi lọc giá trị hiếm (partial index) hoặc làm thành phần của composite index.',
   example:
     'Bảng `payments` 50M hàng, 0.05% `status = \'FAILED\'`, dashboard hay xem failed: `CREATE INDEX ON payments (created_at) WHERE status = \'FAILED\'` → index ~25k mục, query "failed hôm nay" tức thì. Index thường trên `(status)` sẽ bị bỏ qua cho `status = \'SUCCESS\'`.',
+  viz: {
+    type: 'tree',
+    title: 'Index cột cardinality thấp (boolean, status) — selectivity của PREDICATE mới quyết định',
+    root: {
+      label: 'Dùng đơn lẻ thường ít ích (status = "active" 90% → seq scan)',
+      children: [
+        { label: 'Giá trị hiếm cần lọc nhanh', note: 'WHERE status = "ERROR" (0.1%) → PARTIAL INDEX WHERE status = "ERROR"' },
+        { label: 'Cột ĐẦU của composite index', note: '(tenant_id, status, created_at) cho query luôn lọc bằng nó' },
+        { label: 'Kết hợp cột khác trong index để tăng selectivity tổng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Tối ưu',
@@ -269,6 +456,18 @@ SS.addQuestions('sql', [
     'Hint là "vá triệu chứng". Ưu tiên sửa nguyên nhân: ANALYZE, viết lại predicate, thêm index đúng, tăng statistics target. Hint chỉ khi hết cách và có giám sát.',
   example:
     'Query thỉnh thoảng đổi từ hash join (400ms) sang nested loop (30s) do estimate dao động. Sửa gốc: `ALTER TABLE ... ALTER COLUMN x SET STATISTICS 1000` + ANALYZE để estimate ổn định — thay vì `FORCE INDEX` mãi mãi.',
+  viz: {
+    type: 'tree',
+    title: 'Query hint / ép plan — "vá triệu chứng", thường NÊN TRÁNH',
+    root: {
+      label: 'Ưu tiên sửa nguyên nhân: ANALYZE, viết lại predicate, thêm index đúng',
+      children: [
+        { label: 'Che giấu nguyên nhân gốc', note: 'stats cũ, predicate không sargable, index sai' },
+        { label: 'Plan "đúng hôm nay" có thể sai khi dữ liệu/phiên bản đổi', note: 'hint đóng băng nó lại' },
+        { label: 'Chỉ dùng khi', note: 'đã hiểu optimizer sai ở đâu và không sửa được (bug optimizer) — biện pháp tạm có giám sát' },
+      ],
+    },
+  },
 },
 {
   cat: 'Index',
@@ -283,5 +482,14 @@ SS.addQuestions('sql', [
     'Khi bạn buộc phải lọc/sắp theo `f(col)`, hãy index chính `f(col)`. Đây là cách "hợp thức hoá" một predicate vốn không sargable.',
   example:
     'Lọc theo field trong JSONB: `CREATE INDEX ON orders ((payload->>\'channel\'))` → `WHERE payload->>\'channel\' = \'mobile\'` dùng index. Tìm không phân biệt hoa thường: `CREATE INDEX ON users (lower(email))` + luôn query `WHERE lower(email) = lower(:input)`.',
+  viz: {
+    type: 'flow',
+    title: 'Expression / functional index — "hợp thức hoá" predicate không sargable',
+    nodes: ['buộc phải lọc/sắp theo f(col)', 'index chính f(col)', 'Postgres: CREATE INDEX ON users (lower(email)); MySQL 8: index trên generated column', 'truy vấn phải dùng ĐÚNG biểu thức đó mới khớp'],
+    steps: [
+      { to: 2, label: "lọc theo field JSONB: CREATE INDEX ON orders ((payload->>'channel'))" },
+      { to: 3, label: 'luôn query WHERE lower(email) = lower(:input)' },
+    ],
+  },
 },
 ]);

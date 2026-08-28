@@ -11,6 +11,19 @@ SS.addQuestions('sql', [
     'A = không dở dang. C = luôn hợp lệ. I = không giẫm chân nhau. D = commit rồi thì chắc chắn. Isolation là tính chất bị "nới lỏng" nhất trong thực tế để đổi lấy hiệu năng.',
   example:
     'Chuyển tiền: `BEGIN; UPDATE acc SET bal = bal - 100 WHERE id = 1; UPDATE acc SET bal = bal + 100 WHERE id = 2; COMMIT;`. Atomicity đảm bảo không có cảnh "trừ xong nhưng chưa cộng" nếu crash giữa chừng.',
+  viz: {
+    type: 'tree',
+    title: 'ACID',
+    root: {
+      label: 'Isolation là tính chất bị "nới lỏng" nhất để đổi lấy hiệu năng',
+      children: [
+        { label: 'Atomicity — không dở dang', note: 'commit thì mọi thay đổi được áp; lỗi thì không thay đổi nào tồn tại' },
+        { label: 'Consistency — luôn hợp lệ', note: 'từ trạng thái thoả mọi constraint sang trạng thái hợp lệ khác' },
+        { label: 'Isolation — không giẫm chân nhau', note: 'chạy đồng thời cho kết quả như thể tuần tự (tuỳ level)' },
+        { label: 'Durability — commit rồi thì chắc chắn', note: 'không mất kể cả mất điện (WAL/redo ghi đĩa trước)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Isolation',
@@ -28,6 +41,16 @@ SS.addQuestions('sql', [
     'Isolation level càng cao càng ít anomaly nhưng càng nhiều lock/abort. Mỗi DB "diễn giải" chuẩn hơi khác (nhất là RR). Biết default của DB bạn dùng: Postgres = Read Committed, MySQL = Repeatable Read, Oracle = Read Committed.',
   example:
     'Report tính tổng trong khi có giao dịch chạy: ở Read Committed, hai lần `SELECT SUM` trong cùng transaction có thể ra số khác nhau (non-repeatable). Cần con số nhất quán → chạy report ở Repeatable Read (snapshot cố định).',
+  viz: {
+    type: 'compare',
+    cols: ['Read Uncommitted', 'Read Committed', 'Repeatable Read', 'Serializable'],
+    rows: [
+      ['Dirty read', 'có', 'không', 'không', 'không'],
+      ['Non-repeatable read', 'có', 'có', 'không', 'không'],
+      ['Phantom', 'có', 'có', 'có (*)', 'không'],
+      ['Default', '—', 'Postgres, Oracle', 'MySQL InnoDB', '—'],
+    ],
+  },
 },
 {
   cat: 'Isolation',
@@ -42,6 +65,20 @@ SS.addQuestions('sql', [
     'Dirty/non-repeatable/phantom là về **đọc** thấy gì. Lost update và write skew là về **ghi** đồng thời phá vỡ tính đúng. Serializable ngăn tất cả; các level thấp hơn cần bạn tự khoá.',
   example:
     'Write skew: quy định "luôn có ≥ 1 bác sĩ trực". Hai bác sĩ cùng xin nghỉ, mỗi transaction thấy "còn người kia trực" → cả hai được duyệt → 0 bác sĩ trực. Snapshot isolation không bắt được; cần `SELECT ... FOR UPDATE` hoặc Serializable.',
+  viz: {
+    type: 'tree',
+    title: 'Anomaly — đọc thấy gì vs ghi đồng thời phá tính đúng',
+    root: {
+      label: 'Serializable ngăn tất cả; level thấp hơn cần bạn tự khoá',
+      children: [
+        { label: 'Dirty read (ĐỌC)', note: 'đọc dữ liệu transaction khác CHƯA commit' },
+        { label: 'Non-repeatable read (ĐỌC)', note: 'đọc cùng hàng 2 lần, giá trị đổi' },
+        { label: 'Phantom read (ĐỌC)', note: 'chạy cùng truy vấn phạm vi 2 lần, số hàng đổi' },
+        { label: 'Lost update (GHI)', note: 'hai transaction đọc cùng giá trị, cùng ghi đè → mất một cập nhật' },
+        { label: 'Write skew (GHI)', note: 'mỗi transaction ghi phần khác nhau, kết quả gộp vi phạm một bất biến ("≥ 1 bác sĩ trực")' },
+      ],
+    },
+  },
 },
 {
   cat: 'MVCC',
@@ -72,6 +109,15 @@ SS.addQuestions('sql', [
     'S–S tương thích, S–X và X–X thì không. Row-level tối đa concurrency; table-level đơn giản nhưng nghẽn. DB hiện đại khoá ở mức hàng và chỉ leo lên bảng khi cần.',
   example:
     '`SELECT * FROM accounts WHERE id = 1 FOR UPDATE` lấy X lock trên hàng id=1 → transaction khác `FOR UPDATE` cùng hàng phải chờ, nhưng `SELECT` thường (MVCC) vẫn đọc được snapshot.',
+  viz: {
+    type: 'compare',
+    cols: ['Shared (S) lock', 'Exclusive (X) lock', 'Row-level vs Table-level'],
+    rows: [
+      ['Cho', 'nhiều transaction cùng ĐỌC', 'một transaction GHI', 'row: concurrency cao (mặc định DML); table: DDL, LOCK TABLE'],
+      ['Tương thích', 'S–S OK', 'S–X và X–X KHÔNG', '—'],
+      ['Ngoài ra', '—', '—', 'gap lock / predicate lock cho phantom prevention'],
+    ],
+  },
 },
 {
   cat: 'Locking',
@@ -84,6 +130,15 @@ SS.addQuestions('sql', [
     '`FOR UPDATE` biến "đọc" thành "đọc và giữ chỗ để ghi" — cách chính để làm pessimistic locking. `SKIP LOCKED` là chìa khoá cho hàng đợi job trong SQL.',
   example:
     'Trừ tồn kho: `SELECT qty FROM stock WHERE sku = ? FOR UPDATE` → kiểm tra đủ → `UPDATE stock SET qty = qty - ?`. Không có `FOR UPDATE`, hai request đọc cùng qty=5, cùng trừ 3 → qty = 2 thay vì -1 (oversell).',
+  viz: {
+    type: 'compare',
+    cols: ['FOR UPDATE', 'FOR SHARE'],
+    rows: [
+      ['Lock', 'exclusive — không ai sửa/khoá cho tới khi commit', 'shared — người khác đọc được, không sửa được'],
+      ['Dùng cho', 'pattern đọc-rồi-ghi (pessimistic locking)', 'đảm bảo hàng tham chiếu không đổi khi bạn dựa vào nó'],
+      ['Options', 'NOWAIT (lỗi ngay nếu bị khoá), SKIP LOCKED (bỏ qua hàng khoá — cho queue)', 'như trái'],
+    ],
+  },
 },
 {
   cat: 'Locking',
@@ -100,6 +155,15 @@ SS.addQuestions('sql', [
     'Deadlock là chờ vòng tròn. DB tự phá bằng cách hy sinh một transaction. Việc của bạn: khoá theo thứ tự cố định, transaction ngắn, và code retry cho lỗi deadlock/serialization.',
   example:
     '`transfer(1, 2)` khoá hàng 1 rồi 2; `transfer(2, 1)` khoá 2 rồi 1 → deadlock. Sửa: luôn `SELECT ... WHERE id IN (least, greatest) ORDER BY id FOR UPDATE` — cả hai transaction khoá theo cùng thứ tự.',
+  viz: {
+    type: 'flow',
+    title: 'Deadlock — chờ vòng tròn',
+    nodes: ['A giữ lock 1, chờ lock 2', 'B giữ lock 2, chờ lock 1', 'DB deadlock detector: chu trình trong wait-for graph', 'chọn một transaction làm NẠN NHÂN, rollback (error 1213 / "deadlock detected")', 'ứng dụng RETRY'],
+    steps: [
+      { to: 3, label: 'DB tự phá bằng cách hy sinh một transaction' },
+      { to: 4, label: 'phòng: khoá hàng theo CÙNG thứ tự (ORDER BY id), transaction ngắn, khoá ít hàng' },
+    ],
+  },
 },
 {
   cat: 'Locking',
@@ -116,6 +180,16 @@ SS.addQuestions('sql', [
     'Optimistic: "cứ ghi, kèm điều kiện version chưa đổi; thất bại thì thử lại". Không lock, phù hợp UI form nơi xung đột hiếm. Pessimistic: khoá trước, phù hợp hot row.',
   example:
     'Sửa hồ sơ sản phẩm (admin): optimistic — nếu hai admin cùng mở form và lưu, người thứ hai nhận "Sản phẩm đã được cập nhật bởi người khác, vui lòng tải lại". Trừ tồn kho lúc flash sale: pessimistic hoặc UPDATE nguyên tử.',
+  viz: {
+    type: 'flow',
+    title: 'Optimistic locking với version column',
+    nodes: ['đọc hàng (kèm version)', 'UPDATE ... SET version = version + 1 WHERE id = ? AND version = :đãĐọc', 'rows affected = 0 → ai đó đã sửa từ lúc bạn đọc', 'báo "dữ liệu đã thay đổi" → client tải lại và thử lại'],
+    steps: [
+      { to: 1, label: '"cứ ghi, kèm điều kiện version chưa đổi"' },
+      { to: 3, label: 'dùng khi tranh chấp THẤP (không giữ lock, concurrency cao)' },
+      { to: 3, label: 'tranh chấp cao → pessimistic (FOR UPDATE) tránh retry storm' },
+    ],
+  },
 },
 {
   cat: 'Giao dịch',
@@ -130,6 +204,19 @@ SS.addQuestions('sql', [
     'Transaction dài không chỉ hại chính nó mà "đóng băng" khả năng dọn dẹp của cả DB. Giữ transaction ngắn; tách công việc lớn thành nhiều transaction nhỏ (batch).',
   example:
     'Job cập nhật 50 triệu hàng trong một transaction chạy 2 giờ → autovacuum không dọn được gì trong 2 giờ đó → mọi bảng bloat, query khác chậm dần. Sửa: chia thành batch 10k hàng, commit mỗi batch.',
+  viz: {
+    type: 'tree',
+    title: 'Long-running transaction — "đóng băng" khả năng dọn dẹp của cả DB',
+    root: {
+      label: 'Giữ transaction ngắn; tách công việc lớn thành nhiều transaction nhỏ (batch)',
+      children: [
+        { label: 'Giữ lock lâu → transaction khác chờ/deadlock' },
+        { label: 'Postgres: chặn VACUUM dọn dead tuple', note: '→ bloat bảng/index toàn hệ thống + nguy cơ XID wraparound' },
+        { label: 'MySQL: undo log phình (history list length tăng)' },
+        { label: 'Replication lag: replica phải giữ snapshot tương ứng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Giao dịch',
@@ -142,6 +229,18 @@ SS.addQuestions('sql', [
     'Autocommit = "mỗi lệnh độc lập". Explicit transaction = "gom nhiều lệnh nguyên tử". Savepoint = "checkpoint trong transaction" để rollback cục bộ.',
   example:
     'Import 1000 dòng trong một transaction, một số dòng có thể lỗi validation: `SAVEPOINT sp` trước mỗi dòng; lỗi → `ROLLBACK TO sp` và ghi dòng vào bảng lỗi, rồi tiếp tục. Cuối cùng `COMMIT` những dòng hợp lệ.',
+  viz: {
+    type: 'tree',
+    title: 'Autocommit / BEGIN-COMMIT / SAVEPOINT',
+    root: {
+      label: 'Từ "mỗi lệnh độc lập" tới "checkpoint trong transaction"',
+      children: [
+        { label: 'Autocommit (mặc định)', note: 'mỗi câu lệnh là một transaction tự commit ngay' },
+        { label: 'Explicit', note: 'BEGIN → nhiều lệnh → COMMIT (áp dụng) / ROLLBACK (huỷ hết)' },
+        { label: 'SAVEPOINT name + ROLLBACK TO SAVEPOINT', note: 'rollback MỘT PHẦN — "thử một bước, sai thì bỏ bước đó, đi tiếp"' },
+      ],
+    },
+  },
 },
 {
   cat: 'Isolation',
@@ -154,6 +253,15 @@ SS.addQuestions('sql', [
     'Postgres RC: snapshot per statement (mới nhất mỗi lệnh). MySQL RR: snapshot per transaction (cố định). Biết default của DB để không giả định sai về tính lặp lại của SELECT.',
   example:
     'Chuyển từ MySQL sang Postgres: code cũ dựa vào việc hai `SELECT count(*)` trong một transaction luôn bằng nhau (RR mặc định của MySQL). Trên Postgres RC, giữa hai lệnh có INSERT commit → số khác nhau → bug. Sửa: `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`.',
+  viz: {
+    type: 'compare',
+    cols: ['Postgres Read Committed (default)', 'MySQL InnoDB Repeatable Read (default)'],
+    rows: [
+      ['Snapshot', 'per STATEMENT (mới nhất mỗi lệnh)', 'per TRANSACTION (cố định từ lệnh đọc đầu tiên)'],
+      ['Hai SELECT trong một transaction', 'có thể thấy dữ liệu khác nhau', 'thấy như nhau'],
+      ['Đánh đổi', 'đơn giản, ít abort — cẩn thận đọc-rồi-ghi', 'đọc nhất quán — dễ gặp serialization/lock conflict + gap lock'],
+    ],
+  },
 },
 {
   cat: 'Isolation',
@@ -165,6 +273,15 @@ SS.addQuestions('sql', [
     'SSI cho tính đúng của Serializable với chi phí của snapshot isolation + một số abort. Đổi "viết lock thủ công cẩn thận" lấy "viết code retry". Rất mạnh cho logic nghiệp vụ phức tạp.',
   example:
     'Bài toán "≥ 1 bác sĩ trực": chạy toàn bộ ở `SERIALIZABLE`. Hai bác sĩ cùng xin nghỉ đồng thời → Postgres phát hiện rw-dependency nguy hiểm → abort một transaction → nó retry, lần này thấy chỉ còn 1 bác sĩ → từ chối. Không cần khoá tay.',
+  viz: {
+    type: 'flow',
+    title: 'Postgres SSI (Serializable Snapshot Isolation)',
+    nodes: ['chạy như snapshot isolation, KHÔNG lock đọc', 'theo dõi các phụ thuộc đọc-ghi giữa transaction đồng thời', 'phát hiện "dangerous structure" (kết quả không tuần tự hoá được)', 'abort một transaction: could not serialize access (40001)', 'ứng dụng RETRY'],
+    steps: [
+      { to: 3, label: 'bắt cả write skew — không cần SELECT ... FOR UPDATE thủ công' },
+      { to: 4, label: 'đổi "viết lock thủ công cẩn thận" lấy "viết code retry"' },
+    ],
+  },
 },
 {
   cat: 'Locking',
@@ -176,6 +293,15 @@ SS.addQuestions('sql', [
     'Advisory lock = mutex phân tán "miễn phí" dùng chính Postgres làm coordinator. Không ảnh hưởng dữ liệu, chỉ là tín hiệu "tôi đang giữ khoá K".',
   example:
     'Migration chạy khi app khởi động trên 5 pod: `SELECT pg_try_advisory_lock(42)` — pod nào lấy được thì chạy migration, các pod khác nhận `false` và bỏ qua. `pg_advisory_unlock(42)` khi xong. Không cần Redis/ZooKeeper.',
+  viz: {
+    type: 'flow',
+    title: 'Advisory lock — mutex phân tán "miễn phí" dùng Postgres làm coordinator',
+    nodes: ['SELECT pg_try_advisory_lock(42) — khoá theo một khoá số bigint', 'pod nào lấy được → chạy migration', 'pod khác nhận false → bỏ qua', 'pg_advisory_unlock(42) khi xong (hoặc _xact_ tự nhả khi transaction kết thúc)'],
+    steps: [
+      { to: 0, label: 'không gắn với hàng/bảng nào — chỉ là tín hiệu "tôi đang giữ khoá K"' },
+      { to: 3, label: 'dùng cho: đảm bảo một instance chạy cron/migration, serialize luồng xử lý — không cần bảng lock riêng' },
+    ],
+  },
 },
 {
   cat: 'Locking',
@@ -189,6 +315,15 @@ SS.addQuestions('sql', [
     'Next-key lock là cách InnoDB đạt "không phantom" ở RR — bằng cách khoá cả khoảng. Đây là nguồn deadlock/blocking "khó hiểu" khi lock một range dựa trên index.',
   example:
     'Hai session cùng `INSERT ... ON DUPLICATE KEY UPDATE` với giá trị gần nhau trên một unique index → gap lock chồng lấn → deadlock. Read Committed (không gap lock) hoặc thiết kế lại có thể tránh; hoặc chấp nhận và retry.',
+  viz: {
+    type: 'compare',
+    cols: ['Gap lock', 'Next-key lock'],
+    rows: [
+      ['Khoá gì', 'khoảng (a, b) — không cho INSERT vào giữa', 'gap lock + record lock trên hàng — (a, b]'],
+      ['Mục đích', 'ngăn phantom ở RR', 'ngăn phantom ở RR'],
+      ['Hệ quả', 'SELECT ... BETWEEN 10 AND 20 FOR UPDATE có thể chặn INSERT x=15 dù hàng chưa tồn tại', 'nguồn deadlock/blocking "khó hiểu" khi lock một range dựa trên index'],
+    ],
+  },
 },
 {
   cat: 'Giao dịch',
@@ -210,6 +345,16 @@ SS.addQuestions('sql', [
     'Nguyên tử hoá phép "kiểm tra rồi trừ": hoặc khoá hàng (`FOR UPDATE` theo thứ tự id), hoặc đưa điều kiện vào chính câu `UPDATE`. Luôn khoá theo thứ tự cố định và có idempotency.',
   example:
     'API chuyển tiền có `Idempotency-Key`: kiểm tra key trong bảng `transfers` (unique) → chưa có thì chạy transaction chuyển tiền + insert bản ghi transfer với key đó, tất cả trong một transaction. Retry cùng key → insert fail unique → trả kết quả cũ.',
+  viz: {
+    type: 'flow',
+    title: 'Chuyển tiền an toàn — nguyên tử hoá "kiểm tra rồi trừ"',
+    nodes: ['BEGIN', 'SELECT balance ... WHERE id IN (:from, :to) ORDER BY id FOR UPDATE', 'kiểm tra balance[from] >= amount', 'UPDATE ... balance - amount (from); balance + amount (to)', 'COMMIT'],
+    steps: [
+      { to: 1, label: 'ORDER BY id để tránh deadlock' },
+      { to: 3, label: 'hoặc cách 2: UPDATE ... SET balance = balance - :amount WHERE id = :from AND balance >= :amount (0 hàng → không đủ tiền)' },
+      { to: 4, label: 'kèm: idempotency key cho request; ghi bảng transactions (audit)' },
+    ],
+  },
 },
 {
   cat: 'Giao dịch',
@@ -230,6 +375,15 @@ SS.addQuestions('sql', [
     'Isolation mạnh đẩy trách nhiệm xử lý xung đột về ứng dụng dưới dạng "retry khi bị abort". Backoff + jitter + giới hạn số lần + transaction không side-effect-ngoài là công thức.',
   example:
     'Endpoint đặt vé (Serializable): bọc trong `retryOnSerializationFailure(3)`. Hai người đặt ghế cuối cùng đồng thời → một transaction abort → retry → thấy ghế đã hết → trả "hết vé". Người dùng chỉ thấy request chậm thêm vài ms.',
+  viz: {
+    type: 'flow',
+    title: 'Retry logic cho serialization failure / deadlock',
+    nodes: ['DB abort với mã lỗi tạm thời (Postgres 40001/40P01, MySQL 1213)', 'rollback', 'sleep(backoff × 2^attempt + jitter)', 'retry từ đầu (tối đa maxRetries)', 'lỗi khác → rollback + raise'],
+    steps: [
+      { to: 3, label: 'isolation mạnh đẩy xử lý xung đột về ứng dụng dưới dạng "retry khi bị abort"' },
+      { to: 3, label: 'work bên trong phải KHÔNG có side effect ngoài DB (hoặc idempotent) — nó chạy lại từ đầu' },
+    ],
+  },
 },
 {
   cat: 'Giao dịch',
@@ -244,6 +398,19 @@ SS.addQuestions('sql', [
     'Report = đọc nhiều, chạy lâu, không cần realtime. Đẩy nó ra khỏi đường OLTP: replica read-only, hoặc warehouse. Trên primary thì ít nhất là READ ONLY + timeout.',
   example:
     'Dashboard BI query 30 giây trên bảng `orders` 200M hàng: route sang read replica với `hot_standby_feedback = on`. Primary không thấy tải này; nếu replica lag tăng do query, có thể thêm replica thứ hai dành riêng cho analytics.',
+  viz: {
+    type: 'tree',
+    title: 'Báo cáo nặng không ảnh hưởng OLTP — đẩy nó ra khỏi đường OLTP',
+    root: {
+      label: 'Report = đọc nhiều, chạy lâu, không cần realtime',
+      children: [
+        { label: 'SET TRANSACTION READ ONLY + Repeatable Read', note: 'snapshot nhất quán, DB biết không cần chuẩn bị cho ghi' },
+        { label: 'Chạy trên read replica', note: 'tách hoàn toàn tải khỏi primary' },
+        { label: 'Postgres: hot_standby_feedback / max_standby_streaming_delay', note: 'query dài trên replica có thể bị huỷ khi replica áp WAL' },
+        { label: 'statement_timeout; nhu cầu lớn → ETL sang data warehouse (OLAP)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Giao dịch',
@@ -259,6 +426,16 @@ SS.addQuestions('sql', [
     '2PC cho atomicity phân tán nhưng đánh đổi availability (blocking) và hiệu năng nghiêm trọng. Hệ hiện đại chọn saga/outbox: chấp nhận eventual consistency, xử lý lỗi bằng bước bù trừ.',
   example:
     'Đặt hàng chạm inventory-service + payment-service + shipping-service: **không** dùng distributed transaction. Saga: `OrderCreated → ReserveInventory → ChargePayment → CreateShipment`; nếu `ChargePayment` fail → phát `ReleaseInventory` (bù trừ).',
+  viz: {
+    type: 'compare',
+    cols: ['Two-phase commit (2PC)', 'Saga / Outbox'],
+    rows: [
+      ['Cơ chế', 'coordinator: prepare? → commit', 'chuỗi transaction cục bộ + bước bù trừ'],
+      ['Khi coordinator chết sau phase 1', 'participant KẸT ở "prepared" (giữ khoá) chờ vô hạn', 'không có coordinator kiểu đó'],
+      ['Hiệu năng', 'kém (nhiều round-trip, khoá lâu)', 'tốt (eventual consistency)'],
+      ['Hệ hiện đại', 'thường TRÁNH', 'chọn cái này + idempotency'],
+    ],
+  },
 },
 {
   cat: 'Locking',
@@ -279,6 +456,16 @@ SS.addQuestions('sql', [
     '`SKIP LOCKED` biến một bảng thành hàng đợi đa consumer: mỗi worker "gắp" phần chưa ai giữ. Kèm partial index `WHERE status = \'QUEUED\'` để quét nhanh.',
   example:
     '10 worker poll bảng `outbox`: mỗi cái `SELECT ... LIMIT 50 FOR UPDATE SKIP LOCKED` → 10 lô 50 job không trùng nhau, xử lý song song, không lock contention. Worker chết giữa chừng → transaction rollback → job về `QUEUED`, worker khác lấy.',
+  viz: {
+    type: 'flow',
+    title: 'Hàng đợi job trong SQL với FOR UPDATE SKIP LOCKED',
+    nodes: ['nhiều worker cùng lấy job từ bảng jobs', 'SELECT ... FOR UPDATE (không SKIP) → worker XẾP HÀNG chờ nhau trên hàng đầu tiên', 'SKIP LOCKED: bỏ qua hàng đang khoá, lấy hàng KẾ TIẾP chưa khoá', 'mỗi worker lấy một lô riêng, không giẫm chân'],
+    steps: [
+      { to: 1, label: 'SELECT id FROM jobs WHERE status = "QUEUED" ORDER BY priority LIMIT 10 FOR UPDATE SKIP LOCKED' },
+      { to: 3, label: 'kèm partial index WHERE status = "QUEUED" để quét nhanh' },
+      { to: 3, label: 'worker chết → transaction rollback → job về QUEUED, worker khác lấy' },
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -291,5 +478,14 @@ SS.addQuestions('sql', [
     'MVCC của Postgres tạo "rác" (dead tuple) và dùng XID hữu hạn → VACUUM là bắt buộc, không phải tuỳ chọn: nó vừa dọn rác vừa chống wraparound. Theo dõi `age(datfrozenxid)`.',
   example:
     'Alert: `age(relfrozenxid)` của một bảng tiến gần `autovacuum_freeze_max_age` → autovacuum không theo kịp (bảng ghi cực nhiều, hoặc có transaction "idle in transaction" 10 tiếng chặn nó). Kill transaction cũ, tune `autovacuum_vacuum_cost_limit`, hoặc `VACUUM FREEZE` thủ công.',
+  viz: {
+    type: 'flow',
+    title: 'VACUUM + transaction ID wraparound (Postgres)',
+    nodes: ['MVCC tạo dead tuple + đánh dấu version bằng XID 32-bit', 'XID quay vòng sau ~4 tỉ transaction', 'không FREEZE hàng cũ kịp → dữ liệu quá cũ bị coi là "tương lai"', 'mất dữ liệu / DB DỪNG để tự bảo vệ'],
+    steps: [
+      { to: 1, label: 'VACUUM (autovacuum): dọn dead tuple + cập nhật visibility map + FREEZE hàng cũ' },
+      { to: 3, label: 'transaction dài + autovacuum tụt hậu = nguyên nhân chính; theo dõi age(datfrozenxid)' },
+    ],
+  },
 },
 ]);

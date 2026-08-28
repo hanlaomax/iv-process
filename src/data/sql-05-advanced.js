@@ -12,6 +12,19 @@ SS.addQuestions('sql', [
     'Window function = "aggregate mà không mất hàng chi tiết". Nó cho phép so sánh mỗi hàng với nhóm của nó (xếp hạng, % tổng, so với hàng trước) trong một lần quét.',
   example:
     '"Xếp hạng doanh thu nhân viên trong từng phòng ban": `SELECT name, dept, revenue, RANK() OVER (PARTITION BY dept ORDER BY revenue DESC) AS rank_in_dept FROM sales`. Mỗi nhân viên vẫn là một hàng, kèm thứ hạng.',
+  viz: {
+    type: 'tree',
+    title: 'Aggregate mà không mất hàng chi tiết',
+    root: {
+      label: 'func() OVER (PARTITION BY a ORDER BY b)',
+      children: [
+        { label: 'OVER', note: 'khai báo đây là window function — giữ nguyên số hàng, khác GROUP BY' },
+        { label: 'PARTITION BY a', note: 'chia thành nhóm; window reset ở mỗi nhóm' },
+        { label: 'ORDER BY b', note: 'thứ tự trong nhóm — cần cho ROW_NUMBER, running total, LAG/LEAD' },
+        { label: 'Hàm', note: 'ROW_NUMBER/RANK/DENSE_RANK, SUM/AVG OVER, LAG/LEAD, FIRST/LAST_VALUE, NTILE' },
+      ],
+    },
+  },
 },
 {
   cat: 'Window functions',
@@ -26,6 +39,17 @@ SS.addQuestions('sql', [
     'Frame là "cửa sổ trượt" trong partition. `ROWS` cho window theo số hàng cố định (moving average); `UNBOUNDED PRECEDING` cho cộng dồn. Luôn khai báo frame tường minh khi dùng `LAST_VALUE`/`SUM OVER`.',
   example:
     'Doanh thu cộng dồn theo ngày: `SUM(amount) OVER (ORDER BY day ROWS UNBOUNDED PRECEDING)`. Trung bình động 7 ngày: `AVG(amount) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)`.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['ROWS', 'RANGE'],
+    rows: [
+      ['Cơ sở tính frame', 'vị trí vật lý của hàng', 'giá trị ORDER BY (hàng cùng giá trị coi như một)'],
+      ['Running total', 'ROWS UNBOUNDED PRECEDING AND CURRENT ROW', 'cũng được nhưng cộng cả nhóm cùng giá trị'],
+      ['Moving average N hàng', 'ROWS BETWEEN 6 PRECEDING AND CURRENT ROW', 'không chính xác theo số hàng'],
+      ['Mặc định khi có ORDER BY', '—', 'RANGE UNBOUNDED PRECEDING AND CURRENT ROW (bất ngờ với LAST_VALUE)'],
+    ],
+  },
 },
 {
   cat: 'Window functions',
@@ -37,6 +61,16 @@ SS.addQuestions('sql', [
     '`LAG`/`LEAD` đưa "hàng kế bên" vào cùng hàng hiện tại — biến phép so sánh giữa các hàng (vốn cần self-join) thành một biểu thức đơn giản trong một lần quét.',
   example:
     '"Tăng trưởng doanh thu tháng so với tháng trước": `SELECT month, revenue, revenue - LAG(revenue) OVER (ORDER BY month) AS delta, round(100.0 * (revenue - LAG(revenue) OVER (ORDER BY month)) / LAG(revenue) OVER (ORDER BY month), 1) AS pct FROM monthly`.',
+  viz: {
+    type: 'flow',
+    title: 'Đưa "hàng kế bên" vào cùng hàng hiện tại — không cần self-join',
+    nodes: ['LAG(col, n): hàng cách n phía trước', 'HÀNG HIỆN TẠI', 'LEAD(col, n): hàng cách n phía sau'],
+    steps: [
+      { to: 1, label: 'Hàng hiện tại: có col của chính nó' },
+      { to: 0, label: 'LAG kéo giá trị hàng trước vào — tính delta, growth, gap' },
+      { to: 2, label: 'LEAD kéo giá trị hàng sau vào — khoảng thời gian tới sự kiện kế tiếp' },
+    ],
+  },
 },
 {
   cat: 'CTE',
@@ -51,6 +85,17 @@ SS.addQuestions('sql', [
     'CTE trước hết là công cụ đọc/tổ chức query. Về hiệu năng: biết DB của bạn inline hay materialize — nếu materialize, một CTE dùng ở nhiều nơi được tính một lần (tốt), nhưng predicate không đẩy xuống được (xấu).',
   example:
     'Postgres ≥ 12: `WITH recent AS MATERIALIZED (SELECT * FROM huge_log WHERE ts > now() - interval \'1 day\')` — ép materialize để `recent` được tính một lần rồi join nhiều bảng, thay vì optimizer chạy lại filter đắt cho mỗi join.',
+  viz: {
+    type: 'compare',
+    corner: 'Hành vi',
+    cols: ['Materialize (PG < 12)', 'Inline (PG ≥ 12, SQL Server, MySQL 8)'],
+    rows: [
+      ['Tính mấy lần', 'một lần, lưu kết quả', 'gộp vào query như subquery'],
+      ['Predicate pushdown', 'bị chặn (optimization fence)', 'optimizer đẩy được predicate vào'],
+      ['CTE dùng nhiều nơi', 'tính một lần (tốt)', 'có thể tính lại mỗi lần dùng'],
+      ['Ép thủ công', '—', 'WITH x AS MATERIALIZED / NOT MATERIALIZED'],
+    ],
+  },
 },
 {
   cat: 'CTE',
@@ -72,6 +117,17 @@ SS.addQuestions('sql', [
     'Recursive CTE giải bài toán phân cấp/đồ thị (vốn khó trong SQL phẳng) bằng cách lặp: bắt đầu từ anchor, mỗi vòng nối thêm một "tầng". Cần chặn chu trình.',
   example:
     '"Tất cả cấp dưới (mọi tầng) của manager X": recursive CTE từ `WHERE id = X`, join `employees e ON e.manager_id = tree.id`. Kết quả: toàn bộ cây báo cáo, kèm `depth` để biết mấy cấp.',
+  viz: {
+    type: 'flow',
+    title: 'Bắt đầu từ anchor, mỗi vòng nối thêm một "tầng"',
+    nodes: ['Anchor: gốc (parent_id IS NULL)', 'UNION ALL', 'Recursive: JOIN tree ON parent_id = tree.id', 'Lặp tới khi không sinh hàng mới', 'Chặn chu trình (WHERE depth < 100)'],
+    steps: [
+      { to: 0, label: 'Anchor chạy một lần — lấy các hàng gốc' },
+      { to: 2, label: 'Phần recursive nối con của tầng vừa có' },
+      { to: 3, label: 'Lặp: mỗi vòng thêm một tầng sâu hơn' },
+      { to: 4, label: 'Dữ liệu có chu trình → cần điều kiện dừng / theo dõi visited' },
+    ],
+  },
 },
 {
   cat: 'View',
@@ -83,6 +139,17 @@ SS.addQuestions('sql', [
     'View = "macro truy vấn" (luôn mới, không tăng tốc). Materialized view = "cache truy vấn dạng bảng" (nhanh, cũ, cần refresh). Chọn theo: cần realtime hay chấp nhận trễ để đổi tốc độ.',
   example:
     'Dashboard "top 100 sản phẩm bán chạy tháng này" — query join + aggregate mất 20s: materialized view refresh mỗi 15 phút bằng cron → dashboard load < 100ms, dữ liệu trễ tối đa 15 phút (chấp nhận được). `REFRESH ... CONCURRENTLY` để không chặn người đang xem.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['View', 'Materialized view'],
+    rows: [
+      ['Lưu dữ liệu', 'không — chạy lại truy vấn gốc mỗi lần', 'có — lưu kết quả như một bảng'],
+      ['Tốc độ query', 'bằng truy vấn gốc', 'cực nhanh (đọc bảng đã tính)'],
+      ['Độ mới', 'luôn mới', 'cũ tới lần REFRESH kế tiếp'],
+      ['Dùng cho', 'đóng gói logic, kiểm soát truy cập, tương thích ngược', 'aggregate/report nặng chạy định kỳ'],
+    ],
+  },
 },
 {
   cat: 'Nâng cao',
@@ -97,6 +164,19 @@ SS.addQuestions('sql', [
     '`ROLLUP`/`CUBE` tính nhiều mức aggregate (chi tiết + subtotal + total) trong **một** lần quét bảng — thay cho nhiều query hoặc xử lý ở tầng app.',
   example:
     'Báo cáo doanh thu theo (năm, quý) kèm tổng năm và tổng toàn bộ: `SELECT year, quarter, SUM(amount) FROM sales GROUP BY ROLLUP(year, quarter)` → ra các hàng chi tiết (year, quarter), hàng subtotal mỗi năm (quarter = NULL), và một hàng grand total.',
+  viz: {
+    type: 'tree',
+    title: 'Nhiều mức aggregate trong một lần quét bảng',
+    root: {
+      label: 'Thay cho UNION ALL nhiều query GROUP BY khác nhau',
+      children: [
+        { label: 'GROUPING SETS ((a,b),(a),())', note: 'chỉ định chính xác các tổ hợp nhóm cần' },
+        { label: 'ROLLUP(a, b)', note: '= ((a,b),(a),()) — tổng theo cấp bậc: subtotal + grand total' },
+        { label: 'CUBE(a, b)', note: '= ((a,b),(a),(b),()) — mọi tổ hợp' },
+        { label: 'GROUPING(col)', note: '= 1 nếu col bị gộp toàn bộ ở hàng đó — phân biệt subtotal với NULL thật' },
+      ],
+    },
+  },
 },
 {
   cat: 'JOIN',
@@ -111,6 +191,16 @@ SS.addQuestions('sql', [
     '`LATERAL` = "cho mỗi hàng bên trái, chạy truy vấn này với giá trị của nó". Giải quyết gọn "top-N mỗi nhóm" và "mở rộng theo hàng" mà JOIN thường không làm được.',
   example:
     '"3 đơn mới nhất của mỗi khách": `SELECT c.name, o.* FROM customers c CROSS JOIN LATERAL (SELECT * FROM orders WHERE customer_id = c.id ORDER BY created_at DESC LIMIT 3) o`. Không có LATERAL phải dùng window function `ROW_NUMBER()` + filter.',
+  viz: {
+    type: 'flow',
+    title: '"Cho mỗi hàng bên trái, chạy truy vấn này với giá trị của nó"',
+    nodes: ['Bảng bên trái', 'LATERAL: lặp từng hàng', 'Subquery tham chiếu cột hàng trái', 'Nối kết quả vào hàng đó'],
+    steps: [
+      { to: 0, label: 'customers c — nguồn của vòng lặp' },
+      { to: 2, label: 'Với mỗi c: SELECT ... WHERE customer_id = c.id ORDER BY ... LIMIT 3' },
+      { to: 3, label: 'Top-N per group, gọi hàm trả bảng theo từng hàng' },
+    ],
+  },
 },
 {
   cat: 'Nâng cao',
@@ -125,6 +215,17 @@ SS.addQuestions('sql', [
     'Cách chuẩn: `ROW_NUMBER()` + filter `= 1` (portable) hoặc `DISTINCT ON` (Postgres, ngắn nhất). Tránh correlated subquery so sánh max — chậm và mơ hồ khi trùng.',
   example:
     '"Trạng thái mới nhất của mỗi đơn hàng" từ bảng `order_status_history`: `SELECT DISTINCT ON (order_id) order_id, status, changed_at FROM order_status_history ORDER BY order_id, changed_at DESC`.',
+  viz: {
+    type: 'compare',
+    corner: 'Cách',
+    cols: ['ROW_NUMBER() = 1', 'DISTINCT ON', 'LATERAL', 'Correlated subquery = max'],
+    rows: [
+      ['Portable', 'có', 'Postgres', 'Postgres', 'có'],
+      ['Ngắn gọn', 'trung bình', 'ngắn nhất', 'trung bình', 'dài'],
+      ['Hiệu năng', 'tốt', 'tốt', 'tốt khi bảng trái nhỏ', 'chậm'],
+      ['Đúng khi trùng max', 'có (chọn 1)', 'có (chọn 1)', 'có (LIMIT 1)', 'sai — ra nhiều hàng'],
+    ],
+  },
 },
 {
   cat: 'Phân vùng',
@@ -138,6 +239,17 @@ SS.addQuestions('sql', [
     'Pruning là lợi ích query lớn nhất của partitioning — nhưng chỉ hoạt động khi predicate lọc trực tiếp trên khoá partition. Bọc hàm quanh khoá partition = quét tất cả.',
   example:
     'Bảng `events` partition theo tuần, 2 năm dữ liệu (~104 partition). `WHERE occurred_at BETWEEN \'2024-06-01\' AND \'2024-06-07\'` → chỉ quét 1–2 partition. `WHERE extract(dow from occurred_at) = 1` (thứ Hai) → quét cả 104 partition.',
+  viz: {
+    type: 'compare',
+    corner: 'Predicate',
+    cols: ['Giữ pruning', 'Phá pruning'],
+    rows: [
+      ['Dạng WHERE', 'occurred_at >= \'2024-06-01\'', 'date(occurred_at) = ... / extract(dow ...)'],
+      ['Sargable trên khoá partition', 'có', 'không (bọc hàm quanh khoá)'],
+      ['Số partition quét (trên 104)', '1–2', 'tất cả 104'],
+      ['Bonus', 'partition-wise join khi cùng scheme', '—'],
+    ],
+  },
 },
 {
   cat: 'Sharding',
@@ -152,6 +264,17 @@ SS.addQuestions('sql', [
     'Sharding là biện pháp cuối khi một DB không kham nổi. Shard key quyết định tất cả: chọn sao cho phần lớn query chạm **một shard** (thường theo tenant/user). Cross-shard JOIN và transaction là thứ bạn thiết kế để **không cần**.',
   example:
     'SaaS shard theo `tenant_id` (directory): mọi query của một tenant nằm gọn một shard → không cross-shard. Analytics toàn hệ thống chạy trên data warehouse riêng (ETL từ mọi shard), không query trực tiếp các shard.',
+  viz: {
+    type: 'compare',
+    corner: 'Chiến lược',
+    cols: ['Hash', 'Range', 'Directory'],
+    rows: [
+      ['Phân bố', 'đều', 'lệch được', 'tuỳ mapping'],
+      ['Thêm shard', 'resharding đau (consistent hashing giảm bớt)', 'dễ', 'dễ (di chuyển từng key)'],
+      ['Hot shard', 'ít', 'dễ bị', 'kiểm soát được'],
+      ['Chi phí', 'thấp', 'thấp', 'thêm lookup + điểm lỗi'],
+    ],
+  },
 },
 {
   cat: 'Vận hành',
@@ -167,6 +290,19 @@ SS.addQuestions('sql', [
     'Read/write splitting đổi scale đọc lấy tính không nhất quán tạm thời. Phân loại từng read: "cần thấy write vừa rồi" → primary/causal; "chấp nhận trễ vài giây" → replica.',
   example:
     'User đổi avatar → PUT tới primary → response kèm cờ "vừa ghi". App route mọi GET của user này về primary trong 5 giây (cookie/session flag). Feed của người khác đọc replica bình thường.',
+  viz: {
+    type: 'tree',
+    title: 'Phân loại từng read theo nhu cầu nhất quán',
+    root: {
+      label: 'Read/write splitting đổi scale đọc lấy nhất quán tạm thời',
+      children: [
+        { label: 'Sticky / read-after-write', note: 'sau khi user ghi, route read của user đó về primary trong X giây' },
+        { label: 'Causal consistency', note: 'primary trả LSN/GTID; read chờ replica đạt LSN đó (WAIT_FOR_EXECUTED_GTID_SET)' },
+        { label: 'Đọc không nhạy staleness', note: 'feed, search, report → replica thoải mái' },
+        { label: 'Giám sát lag', note: 'rút replica khỏi pool nếu lag vượt ngưỡng' },
+      ],
+    },
+  },
 },
 {
   cat: 'Vận hành',
@@ -181,6 +317,16 @@ SS.addQuestions('sql', [
     'Postgres không scale tốt theo số connection (process-per-connection). PgBouncer transaction-mode cho phép hàng nghìn client dùng chung vài chục server connection — gần như bắt buộc ở quy mô.',
   example:
     '200 pod × pool 20 = 4000 connection tới Postgres (`max_connections` thường 100–500) → không khả thi. Thêm PgBouncer transaction mode: 4000 client conn → 50 server conn. App tắt prepared statement cache hoặc dùng protocol tương thích.',
+  viz: {
+    type: 'compare',
+    corner: 'Pool mode',
+    cols: ['session', 'transaction', 'statement'],
+    rows: [
+      ['Trả server conn về pool', 'khi client ngắt session', 'sau mỗi transaction', 'sau mỗi câu lệnh'],
+      ['Mức gom', 'ít', 'mạnh nhất (phổ biến)', 'cực mạnh (hiếm dùng)'],
+      ['Session-level state', 'dùng được', 'không (prepared toàn cục, SET, advisory lock, LISTEN)', 'không'],
+    ],
+  },
 },
 {
   cat: 'Hiệu năng',
@@ -196,6 +342,18 @@ SS.addQuestions('sql', [
     'Chi phí insert nằm ở overhead per-statement và fsync per-commit, không phải per-row. Gộp hàng vào ít câu lệnh + ít commit; dùng `COPY` cho nạp dữ liệu thật sự lớn.',
   example:
     'Import 10 triệu hàng: `INSERT` từng dòng ~3 giờ. `COPY orders FROM STDIN` với dữ liệu CSV ~90 giây. Nếu qua ORM: batch 1000 hàng/câu multi-row INSERT + commit mỗi 10k → ~10 phút.',
+  viz: {
+    type: 'bars',
+    title: 'Chi phí nằm ở overhead per-statement + fsync per-commit',
+    unit: '× nhanh hơn',
+    scale: 'log',
+    items: [
+      { label: 'INSERT từng hàng (autocommit)', value: 1, note: 'RTT + fsync mỗi hàng — chậm nhất' },
+      { label: 'Multi-row INSERT', value: 20, note: 'vài trăm hàng/câu, một transaction' },
+      { label: 'Batch trong một transaction', value: 30, note: 'nhiều INSERT + một COMMIT' },
+      { label: 'COPY / LOAD DATA INFILE', value: 120, note: 'đường nạp chuyên dụng, bỏ qua overhead parse/plan' },
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -208,6 +366,18 @@ SS.addQuestions('sql', [
     'OLTP tối ưu "tìm và sửa vài hàng nhanh"; OLAP tối ưu "quét và tổng hợp nhiều hàng". Kiến trúc lưu trữ (row vs column) khác nhau căn bản — đừng ép một DB làm tốt cả hai ở quy mô lớn.',
   example:
     'Báo cáo "doanh thu theo sản phẩm × vùng × tháng, 3 năm" quét 500M hàng: trên Postgres mất phút và ngốn I/O. ETL sang ClickHouse (columnar) → cùng query ~1 giây vì chỉ đọc các cột cần và nén tốt.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['OLTP', 'OLAP'],
+    rows: [
+      ['Mẫu truy vấn', 'nhiều truy vấn nhỏ, đọc/ghi vài hàng', 'ít truy vấn lớn, quét/aggregate triệu–tỉ hàng'],
+      ['Lưu trữ', 'row-based, B-tree', 'columnar, nén tốt'],
+      ['Mô hình', 'chuẩn hoá', 'denormalized (star schema)'],
+      ['Tối ưu cho', 'latency ms', 'throughput'],
+      ['Ví dụ', 'Postgres, MySQL', 'Snowflake, BigQuery, ClickHouse, Redshift'],
+    ],
+  },
 },
 {
   cat: 'Hiệu năng',
@@ -230,6 +400,16 @@ SS.addQuestions('sql', [
     'Thao tác lớn = nhiều thao tác nhỏ có commit. Mỗi batch nhả lock, giới hạn WAL, cho vacuum/replica bắt kịp. Xoá theo tuổi thì partition hoá để `DROP` thay vì `DELETE`.',
   example:
     'Dọn 200M log cũ hàng đêm: script batch 10k hàng, commit + sleep 50ms, dừng khi hết. Chạy trong ~30 phút mà không ảnh hưởng p99 của app. Hoặc: partition theo ngày, `DROP` partition > 30 ngày trong mili giây.',
+  viz: {
+    type: 'cycle',
+    title: 'Thao tác lớn = nhiều thao tác nhỏ có commit',
+    steps: [
+      { label: 'DELETE LIMIT 5000', note: 'xoá một lô nhỏ theo id (cần index trên created_at)' },
+      { label: 'COMMIT', note: 'nhả lock, giới hạn WAL, cho autovacuum thở' },
+      { label: 'sleep ngắn', note: 'giảm áp lực I/O, cho replica bắt kịp' },
+      { label: 'EXIT khi hết hàng', note: 'lặp tới khi không còn hàng nào khớp' },
+    ],
+  },
 },
 {
   cat: 'Kiến trúc',
@@ -242,6 +422,18 @@ SS.addQuestions('sql', [
     '"SQL hay NoSQL" là câu hỏi sai — hỏi "workload này cần gì". RDBMS là lựa chọn mặc định vững chắc; thêm store chuyên dụng cho phần mà RDBMS làm kém. Đừng dùng một DB cho mọi thứ, cũng đừng dùng NoSQL vì "nghe hiện đại".',
   example:
     'E-commerce: Postgres (đơn hàng, thanh toán, tồn kho — cần ACID), Redis (giỏ hàng, cache giá, rate limit), Elasticsearch (tìm sản phẩm, autocomplete), ClickHouse (dashboard BI), S3 (ảnh sản phẩm).',
+  viz: {
+    type: 'tree',
+    title: 'Hỏi "workload này cần gì", không phải "SQL hay NoSQL"',
+    root: {
+      label: 'RDBMS là lựa chọn mặc định; thêm store chuyên dụng cho phần RDBMS làm kém',
+      children: [
+        { label: 'Chọn SQL khi', note: 'quan hệ rõ, transaction ACID đa bảng, constraint mạnh, truy vấn ad-hoc, nhất quán quan trọng' },
+        { label: 'Cân nhắc NoSQL khi', note: 'truy cập đơn giản cố định, scale ghi/dung lượng vượt một node, schema thực sự linh hoạt, chấp nhận eventual' },
+        { label: 'Polyglot persistence', note: 'Postgres core + Redis cache + Elasticsearch search + ClickHouse analytics + S3 blob' },
+      ],
+    },
+  },
 },
 {
   cat: 'Full-text search',
@@ -254,6 +446,18 @@ SS.addQuestions('sql', [
     'Postgres FTS tiết kiệm một hệ thống cho nhu cầu search "vừa đủ". Search chuyên dụng đáng giá khi search là trải nghiệm chính và cần fuzzy/relevance/facet mà SQL FTS không làm tốt.',
   example:
     'Blog nội bộ, tìm bài viết theo từ khoá: Postgres `tsvector` + GIN, không thêm gì. Sàn thương mại điện tử với "gõ sai vẫn ra kết quả", lọc theo brand/price/rating, gợi ý khi gõ: Elasticsearch, đồng bộ từ Postgres qua CDC.',
+  viz: {
+    type: 'compare',
+    corner: 'Nhu cầu',
+    cols: ['Postgres FTS (tsvector/GIN)', 'Search engine chuyên dụng'],
+    rows: [
+      ['Stemming, ranking, highlight', 'có (ts_rank)', 'có'],
+      ['Typo / fuzzy tolerance', 'không', 'có'],
+      ['Faceted search, relevance tuning sâu', 'hạn chế', 'có'],
+      ['Autocomplete tức thời', 'gượng', 'có'],
+      ['Thêm hệ thống + đồng bộ', 'không cần', 'cần (CDC từ Postgres)'],
+    ],
+  },
 },
 {
   cat: 'Hiệu năng',
@@ -268,6 +472,17 @@ SS.addQuestions('sql', [
     'Prepared statement tốt cho query có plan ổn định bất kể tham số. Với cột phân bố lệch mạnh, một plan cache "trung bình" có thể chậm thảm hại cho các giá trị hiếm — cân nhắc custom plan.',
   example:
     'ORM tự prepare mọi query. Query `WHERE tenant_id = $1` với một tenant chiếm 90% dữ liệu và nghìn tenant nhỏ: generic plan chọn seq scan → tenant nhỏ query chậm 100×. Fix: `force_custom_plan` cho query đó, hoặc partition theo tenant.',
+  viz: {
+    type: 'flow',
+    title: 'Với cột phân bố lệch mạnh, plan cache "trung bình" có thể chậm thảm hại',
+    nodes: ['PREPARE: parse + plan 1 lần', 'Custom plan (lần 1–5)', 'Generic plan (sau 5 lần)', 'Dữ liệu skew → plan tệ cho giá trị hiếm'],
+    steps: [
+      { to: 0, label: 'Tiết kiệm parse/plan overhead, chống SQL injection' },
+      { to: 1, label: 'Postgres nhìn giá trị tham số, chọn plan phù hợp từng lần' },
+      { to: 2, label: 'Chuyển sang generic plan — không nhìn giá trị tham số nữa' },
+      { to: 3, label: 'status=\'PENDING\' (0.1%) cần index; status=\'DONE\' (99%) cần seq — một plan không tối ưu cả hai. Fix: force_custom_plan' },
+    ],
+  },
 },
 {
   cat: 'Hiệu năng',
@@ -287,5 +502,23 @@ SS.addQuestions('sql', [
     'Hầu hết vấn đề SQL trong production là một trong ~10 mẫu này. Rà soát code + slow query log theo checklist; đa số fix là "đưa predicate về sargable" hoặc "gộp N query thành 1".',
   example:
     'Code review checklist cho mọi PR chạm DB: có `SELECT *` không? query trong vòng lặp không? `WHERE` có bọc hàm quanh cột không? phân trang dùng OFFSET không? transaction có bao gồm lời gọi HTTP/chờ không? — bắt được phần lớn sự cố trước khi lên production.',
+  viz: {
+    type: 'tree',
+    title: 'Đa số fix là "đưa predicate về sargable" hoặc "gộp N query thành 1"',
+    root: {
+      label: '~10 mẫu chiếm hầu hết sự cố SQL production',
+      children: [
+        { label: 'SELECT *', note: 'kéo cột thừa, phá covering index' },
+        { label: 'N+1 query', note: 'vòng lặp query thay vì JOIN/batch' },
+        { label: 'Hàm trên cột index', note: 'lower(email) không có functional index → mất index' },
+        { label: 'OFFSET lớn cho phân trang sâu', note: 'thay bằng keyset pagination' },
+        { label: 'Correlated subquery trong SELECT', note: 'chạy mỗi hàng → thay bằng JOIN/window' },
+        { label: 'NOT IN với subquery có NULL', note: 'dùng NOT EXISTS' },
+        { label: 'Thiếu index trên cột FK', note: 'JOIN chậm, ON DELETE quét toàn bảng' },
+        { label: 'Transaction quá dài / idle in transaction', note: 'giữ lock, chặn vacuum' },
+        { label: "LIKE '%x%' trên bảng lớn", note: 'không có trigram index → seq scan' },
+      ],
+    },
+  },
 },
 ]);
