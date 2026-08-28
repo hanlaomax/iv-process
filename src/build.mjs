@@ -112,6 +112,15 @@ cpSync(join(ROOT, 'assets', 'topic-graph.js'), join(DIST, 'assets', 'topic-graph
 cpSync(join(ROOT, 'assets', 'viz'), join(DIST, 'assets', 'viz'), { recursive: true });
 if (diagramTopics.size) cpSync(diagramDir, join(DIST, 'assets', 'diagrams'), { recursive: true });
 
+/* File tĩnh tuỳ ý ở gốc site: google<...>.html (Search Console), BingSiteAuth.xml,
+   ads.txt, CNAME... — bỏ vào thư mục static/ ở gốc repo. */
+try {
+  for (const entry of readdirSync(join(ROOT, 'static'))) {
+    if (entry === 'README.md' || entry.startsWith('.')) continue;
+    cpSync(join(ROOT, 'static', entry), join(DIST, entry), { recursive: true });
+  }
+} catch {}
+
 /* SEO phụ trợ */
 writeFileSync(join(DIST, 'sitemap.xml'), renderSitemap({ topics, siteUrl }));
 writeFileSync(

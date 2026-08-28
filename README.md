@@ -60,6 +60,11 @@ IP); tôn trọng Do Not Track; bot bị lọc theo User-Agent.
 - `sitemap.xml`, `robots.txt`, trang `404.html` tự chứa.
 - HTTPS do GitHub Pages tự cấp.
 
+> **Được index chưa?** Có thẻ SEO ≠ có mặt trên Google. Site mới phải: (1) thêm vào
+> **Google Search Console** — xác minh bằng cách bỏ file `google….html` vào [`static/`](static/);
+> (2) nộp `sitemap.xml`; (3) *URL Inspection → Request Indexing* cho trang chủ + 7 trang chủ đề.
+> Index mất vài ngày–2 tuần; xếp hạng từ khoá cạnh tranh mất nhiều tháng + cần backlink.
+
 ## Cấu trúc
 
 ```
@@ -75,6 +80,7 @@ assets/
   enhance.js            # tiện ích client + gửi lượt xem (không bắt buộc)
   stats.js             # nạp & vẽ số liệu cho trang /stats
 analytics/             # Cloudflare Worker + D1 — backend thống kê (deploy riêng)
+static/                # file copy nguyên trạng ra gốc site (google….html, BingSiteAuth.xml, CNAME…)
 .github/workflows/deploy.yml
 ```
 
