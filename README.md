@@ -58,12 +58,35 @@ Xem [`analytics/README.md`](analytics/README.md) để set up database và deplo
 Sau khi deploy Worker, đặt **repo variable** `ANALYTICS_URL` = URL Worker
 (*Settings → Secrets and variables → Actions → Variables*) rồi build lại (push hoặc re-run Actions).
 
-- Có `ANALYTICS_URL`: footer hiện **số thật**, thêm trang **`/stats`** (tổng lượt xem, khách duy
-  nhất, khách quay lại, biểu đồ 30 ngày, lượt xem theo chủ đề).
+- Có `ANALYTICS_URL`: footer hiện **số thật**, thêm trang **`/stats`** (tổng lượt truy cập, khách duy
+  nhất, khách quay lại, biểu đồ 30 ngày, lượt truy cập theo chủ đề).
 - Chưa có: footer dùng bộ đếm tạm phía client, `/stats` báo "chưa cấu hình".
+
+**Một lượt truy cập = một phiên**: `enhance.js` chỉ gửi `/collect` khi phiên mới — phiên hết hạn sau
+**30 phút không hoạt động** (cửa sổ trượt, chung mọi tab, mốc lưu ở `localStorage['iv-ses']`).
+Tải lại trang / mở nhiều tab trong phiên không cộng thêm. "Khách duy nhất" và "khách quay lại"
+vẫn tính theo `iv-vid` + ngày như cũ.
 
 Dữ liệu **ẩn danh**: visitor id là chuỗi ngẫu nhiên trong `localStorage` (không cookie, không lưu
 IP); tôn trọng Do Not Track; bot bị lọc theo User-Agent.
+
+## Đăng nhập Google (tuỳ chọn)
+
+Dùng chung Worker `analytics/`. Đặt **repo variable** `GOOGLE_CLIENT_ID` + secret `SESSION_SECRET`
+cho Worker — xem [`analytics/README.md`](analytics/README.md) phần **C**. Chưa cấu hình thì nút
+"Đăng nhập" tự ẩn, site chạy y như cũ.
+
+Khi bật, người dùng đăng nhập Google (sau **màn hình đồng ý** nêu rõ dữ liệu được lưu) để:
+- Đồng bộ tiến độ luyện tập (`iv-srs` / câu đã thuộc / log) giữa các thiết bị — merge kiểu union,
+  đẩy lên server sau mỗi lần chấm (debounce 2.5s).
+- Trang **`/tai-khoan/`**: dashboard cá nhân (đã thuộc / cần ôn / streak / theo chủ đề), cài đặt
+  tên hiển thị, **xoá tài khoản + toàn bộ dữ liệu**.
+- Trang **`/bang-xep-hang/`**: top 7 ngày, chỉ hiện người tự bật.
+- **`/privacy/`**: chính sách bảo mật (bắt buộc cho OAuth consent screen của Google).
+- Quyền **premium**: đường ống entitlement có sẵn (`tier` trong `/me`), cấp thủ công qua
+  `POST /admin/grant`. Chưa có nội dung premium.
+
+Lượt xem trang **không** gắn với danh tính người đăng nhập — thống kê vẫn ẩn danh.
 
 ## SEO
 
@@ -86,14 +109,19 @@ src/
   format.mjs            # markdown-lite -> HTML, slug, hash id, strip
   templates.mjs         # <head> đầy đủ SEO, header, footer, breadcrumb, khung trang
   render.mjs            # sinh trang chủ, trang chủ đề, /stats, /luyen-tap, sitemap, 404
-  build.mjs             # đọc data -> kiểm tra toàn vẹn -> ghi dist/  (đọc env ANALYTICS_URL)
+  render-user.mjs      # sinh /tai-khoan, /bang-xep-hang, /privacy
+  build.mjs             # đọc data -> kiểm tra toàn vẹn -> ghi dist/  (env ANALYTICS_URL, GOOGLE_CLIENT_ID)
   serve.mjs             # máy chủ tĩnh tối giản để xem thử
 assets/
   styles.css           # thiết kế (IBM Plex Sans/Mono + Lora; màu theo chủ đề; sáng/tối)
   practice.js          # trang /luyen-tap: lọc + phiên luyện + spaced repetition
   enhance.js            # tiện ích client + gửi lượt xem (không bắt buộc)
+  auth.js              # đăng nhập Google + modal đồng ý + đồng bộ tiến độ
+  account.js           # trang /tai-khoan
+  leaderboard.js       # trang /bang-xep-hang
   stats.js             # nạp & vẽ số liệu cho trang /stats
-analytics/             # Cloudflare Worker + D1 — backend thống kê (deploy riêng)
+analytics/             # Cloudflare Worker + D1 — thống kê ẩn danh + tài khoản Google (deploy riêng)
+  src/{worker,analytics,auth,users,lib}.js
 static/                # file copy nguyên trạng ra gốc site (google….html, BingSiteAuth.xml, CNAME…)
 .github/workflows/deploy.yml
 ```

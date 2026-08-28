@@ -34,7 +34,8 @@
   var NAMES = {
     java: 'Java / Spring Boot', kafka: 'Apache Kafka', aws: 'AWS', redis: 'Redis', sql: 'SQL',
     microservices: 'Microservices', 'design-patterns': 'Design Patterns',
-    hub: 'Trang chủ', stats: 'Trang thống kê', other: 'Khác',
+    hub: 'Trang chủ', stats: 'Trang thống kê', 'luyen-tap': 'Luyện tập',
+    'tai-khoan': 'Tài khoản', 'bang-xep-hang': 'Bảng xếp hạng', privacy: 'Bảo mật', other: 'Khác',
   };
 
   function render(d) {
@@ -59,7 +60,7 @@
         var col = document.createElement('div');
         col.className = 'stats-col';
         col.style.setProperty('--h', Math.max(2, Math.round((x.views / max) * 100)) + '%');
-        col.title = x.day + ' · ' + fmt(x.views) + ' lượt xem · ' + fmt(x.visitors) +
+        col.title = x.day + ' · ' + fmt(x.views) + ' lượt truy cập · ' + fmt(x.visitors) +
           ' khách (' + fmt(x.returningVisitors) + ' quay lại)';
         col.appendChild(document.createElement('span')).className = 'stats-col-bar';
         chart.appendChild(col);
@@ -95,7 +96,8 @@
     var meta = $('[data-stats-meta]');
     meta.hidden = false;
     meta.textContent = 'Cập nhật lúc ' + new Date(d.generatedAt).toLocaleString('vi-VN') +
-      ' · bộ nhớ đệm ~5 phút · "khách quay lại" = trình duyệt đã ghé từ một ngày trước.';
+      ' · bộ nhớ đệm ~5 phút · một lượt = một phiên (30 phút không hoạt động thì tính phiên mới) ·' +
+      ' "khách quay lại" = trình duyệt đã ghé từ một ngày trước.';
   }
 
   function set(scope, k, v) {

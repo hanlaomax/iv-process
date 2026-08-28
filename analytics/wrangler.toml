@@ -13,6 +13,14 @@ database_id = "7c776535-8d38-471a-a5ba-bab3061a083d"
 # Origin của site tĩnh (GitHub Pages). Để "*" nếu chưa rõ, nhưng nên đặt đúng.
 ALLOW_ORIGIN = "https://hanlaomax.github.io"
 
+# OAuth Client ID của Google (KHÔNG bí mật — client id là công khai). Dán vào đây,
+# hoặc đặt bằng: wrangler secret put GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_ID = ""
+
+# Bí mật (KHÔNG để trong file này) — đặt bằng lệnh:
+#   wrangler secret put SESSION_SECRET   # chuỗi ngẫu nhiên dài, ký session token
+#   wrangler secret put ADMIN_TOKEN      # để gọi POST /admin/grant cấp premium
+
 # Dọn bảng visitor_day cũ mỗi ngày (giữ ~90 ngày)
 [triggers]
 crons = ["17 3 * * *"]

@@ -4,10 +4,19 @@ Cloudflare **Worker** (API) + **D1** (database SQLite quản lý sẵn). Free ti
 D1 5 GB, 5 triệu dòng đọc/ngày, 100k dòng ghi/ngày — thừa cho một site nhỏ.
 
 Site tĩnh (GitHub Pages) gọi:
-- `POST /collect` — ghi một lượt xem (visitor id + chủ đề)
+- `POST /collect` — ghi một lượt truy cập (visitor id + chủ đề); client chỉ gọi **một lần mỗi phiên**
+  (30 phút không hoạt động = phiên mới), nên số "views" = số phiên
 - `GET /stats` — trả JSON tổng hợp cho footer + trang `/stats`
 
 Dữ liệu ẩn danh: visitor id là chuỗi ngẫu nhiên trong `localStorage`, không cookie, không lưu IP.
+
+**Đăng nhập Google (tuỳ chọn)** — để đồng bộ tiến độ học + bảng xếp hạng:
+- `POST /auth` `{credential}` — verify Google ID token, trả session token
+- `GET /me`, `GET|POST /progress`, `POST /settings`, `POST /account/delete`
+- `GET /leaderboard` — công khai
+- `POST /admin/grant` — cấp premium (cần `Authorization: Bearer <ADMIN_TOKEN>`)
+
+Xem phần **C** bên dưới để bật.
 
 ---
 
@@ -82,6 +91,57 @@ GitHub repo → **Settings → Secrets and variables → Actions → Variables �
 
 Push lại (hoặc **Actions → Deploy → Re-run**) để build site với biến này.
 Chưa đặt biến thì site vẫn chạy — footer dùng bộ đếm tạm phía client.
+
+---
+
+## C. Bật đăng nhập Google (tuỳ chọn — làm sau khi A + B xong)
+
+### 1. Tạo OAuth Client ID
+1. <https://console.cloud.google.com/> → tạo project mới (ví dụ "interview-vault").
+2. **APIs & Services → OAuth consent screen**:
+   - User type: **External** → Create
+   - App name: `Interview Vault`, support email: email của bạn
+   - **App privacy policy URL**: `https://hanlaomax.github.io/iv-process/privacy/`
+   - Scopes: chỉ giữ `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`
+     (không nhạy cảm → không cần Google duyệt)
+   - Test users: thêm email của bạn nếu app còn "Testing"; bấm **Publish app** để mở cho mọi người
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
+   - Application type: **Web application**
+   - **Authorized JavaScript origins**: `https://hanlaomax.github.io`
+   - (Không cần redirect URI)
+   - Copy **Client ID** (dạng `xxxxx.apps.googleusercontent.com`)
+
+### 2. Thêm bảng người dùng vào D1
+```powershell
+cd analytics
+wrangler d1 execute iv-analytics --remote --file=schema.sql   # IF NOT EXISTS — chạy lại an toàn
+```
+
+### 3. Đặt biến & secret cho Worker
+```powershell
+# Client ID (không bí mật) — dán vào [vars] GOOGLE_CLIENT_ID trong wrangler.toml, HOẶC:
+wrangler secret put GOOGLE_CLIENT_ID     # dán Client ID
+
+wrangler secret put SESSION_SECRET       # chuỗi ngẫu nhiên dài (vd: openssl rand -hex 32)
+wrangler secret put ADMIN_TOKEN          # chuỗi ngẫu nhiên — để gọi /admin/grant
+
+wrangler deploy
+```
+
+### 4. Cho site biết Client ID
+GitHub repo → **Settings → Secrets and variables → Actions → Variables → New repository variable**
+- Name: `GOOGLE_CLIENT_ID`
+- Value: Client ID ở trên
+
+Push lại (hoặc Actions → Re-run) để build site. Chưa đặt biến thì nút "Đăng nhập" tự ẩn.
+
+### 5. Cấp premium cho một người (thủ công)
+```powershell
+curl -X POST https://iv-analytics.<sub>.workers.dev/admin/grant `
+  -H "Authorization: Bearer <ADMIN_TOKEN>" -H "Content-Type: text/plain" `
+  --data '{\"email\":\"nguoidung@gmail.com\",\"tier\":\"premium\",\"days\":365}'
+```
+(Người đó phải đăng nhập ít nhất 1 lần trước để có bản ghi.)
 
 ---
 

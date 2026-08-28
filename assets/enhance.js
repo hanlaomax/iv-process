@@ -52,7 +52,16 @@
     var els = document.querySelectorAll('.js-view-count');
     var base = window.IV_ANALYTICS;
 
-    if (!base) { fakeCounter(); return; }
+    /* Một phiên = một lượt. Phiên mới khi 30 phút không hoạt động (cửa sổ trượt,
+       chung cho mọi tab). Tải lại / mở nhiều tab trong phiên -> không cộng thêm. */
+    var SESSION_MS = 1800000, freshSession = true;
+    try {
+      var lastSeen = +localStorage.getItem('iv-ses') || 0;
+      freshSession = Date.now() - lastSeen > SESSION_MS;
+      localStorage.setItem('iv-ses', String(Date.now()));
+    } catch (e) {}
+
+    if (!base) { fakeCounter(freshSession); return; }
     base = base.replace(/\/+$/, '');
 
     var dnt = navigator.doNotTrack === '1' || window.doNotTrack === '1' || navigator.msDoNotTrack === '1';
@@ -70,9 +79,12 @@
     var tp = document.querySelector('.topic-page');
     var topic = tp ? tp.getAttribute('data-topic')
       : document.querySelector('.practice-page') ? 'luyen-tap'
-      : document.querySelector('.stats-page') ? 'stats' : 'hub';
+      : document.querySelector('.stats-page') ? 'stats'
+      : document.querySelector('.acct-page') ? 'tai-khoan'
+      : document.querySelector('.lb-page') ? 'bang-xep-hang'
+      : document.querySelector('.prose-page') ? 'privacy' : 'hub';
 
-    if (!dnt && vid) {
+    if (!dnt && vid && freshSession) {
       try {
         fetch(base + '/collect', {
           method: 'POST',
@@ -98,11 +110,11 @@
       })
       .catch(function () {});
 
-    function fakeCounter() {
+    function fakeCounter(fresh) {
       if (!els.length) return;
       var BASE = 985, LAUNCH = Date.UTC(2026, 7, 27, 12), k = 'iv-views', st = {};
       try { st = JSON.parse(localStorage.getItem(k)) || {}; } catch (e) {}
-      st.visits = (st.visits || 0) + 1;
+      if (fresh) st.visits = (st.visits || 0) + 1;
       try { localStorage.setItem(k, JSON.stringify(st)); } catch (e) {}
       var hours = Math.max(0, (Date.now() - LAUNCH) / 3600000);
       var wiggle = ((Math.floor(hours / 24) * 2654435761) % 11) - 5;
@@ -128,6 +140,7 @@
       art.classList.toggle('is-learned', on);
       art.classList.remove('is-collapsed');
       updateProgress();
+      if (window.IVAuth && window.IVAuth.pushProgress) window.IVAuth.pushProgress();
     });
     if (q) q.addEventListener('click', function () {
       if (art.classList.contains('is-learned')) return;
@@ -150,6 +163,17 @@
     if (hideBtn) hideBtn.hidden = done === 0;
   }
   updateProgress();
+
+  /* ---- Đồng bộ từ tài khoản: cập nhật lại trạng thái "đã thuộc" ---- */
+  window.addEventListener('iv-progress', function () {
+    learned = store.read();
+    articles.forEach(function (art) {
+      var on = !!learned[art.id], btn = art.querySelector('.qa-learn');
+      art.classList.toggle('is-learned', on);
+      if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    updateProgress();
+  });
 
   /* ---- Toolbar: filter / collapse-all / hide-learned ---- */
   var input = document.querySelector('.filter-input');

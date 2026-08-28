@@ -1,154 +1,55 @@
-/* iv-analytics — Cloudflare Worker
-   POST /collect : ghi một lượt xem (visitor id + chủ đề)
-   GET  /stats   : trả JSON tổng hợp (footer + trang /stats)
-   cron          : dọn bảng visitor_day > 90 ngày */
+/* iv-analytics — Cloudflare Worker (router)
+   Thống kê ẩn danh:  POST /collect · GET /stats
+   Tài khoản Google:  POST /auth · GET /me · GET|POST /progress · POST /settings
+                      POST /account/delete · GET /leaderboard · POST /admin/grant
+   cron: dọn bảng visitor_day + user_activity_day > 90 ngày */
+import { cors, json, utcDay } from './lib.js';
+import { collect, stats } from './analytics.js';
+import {
+  authLogin, getMe, getProgress, putProgress, putSettings, deleteAccount, leaderboard, adminGrant,
+} from './users.js';
 
-const TOPICS = new Set([
-  'hub', 'stats', 'luyen-tap', 'java', 'kafka', 'aws', 'redis', 'sql', 'microservices', 'design-patterns',
-]);
-const BOT = /bot\b|crawl|spider|slurp|bingpreview|facebookexternalhit|embedly|pinterest|whatsapp|telegram|headless|lighthouse|pagespeed|gtmetrix|pingdom|uptimerobot|monitor|python-requests|curl\/|wget|okhttp|go-http|node-fetch|axios/i;
-
-let statsCache = null; // { at, body } — cache trong isolate, TTL 60s
-
-const utcDay = (d = new Date()) => d.toISOString().slice(0, 10);
-
-function cors(env) {
-  return {
-    'Access-Control-Allow-Origin': env.ALLOW_ORIGIN || '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-    Vary: 'Origin',
-  };
-}
-
-function json(data, status, env, extra) {
-  return new Response(JSON.stringify(data), {
-    status: status || 200,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(env), ...(extra || {}) },
-  });
-}
-
-async function collect(request, env) {
-  const ua = request.headers.get('user-agent') || '';
-  if (!ua || BOT.test(ua)) return json({ ok: true, skipped: 'bot' }, 200, env);
-
-  const origin = request.headers.get('origin') || '';
-  const allow = env.ALLOW_ORIGIN || '';
-  if (allow && allow !== '*' && origin && origin !== allow) {
-    return json({ ok: false, error: 'origin' }, 403, env);
-  }
-
-  let body;
-  try {
-    body = JSON.parse(await request.text());
-  } catch {
-    return json({ ok: false, error: 'body' }, 400, env);
-  }
-
-  const vid = String(body.v || '').trim();
-  if (!/^[A-Za-z0-9._-]{8,64}$/.test(vid)) return json({ ok: false, error: 'vid' }, 400, env);
-
-  let topic = String(body.t || 'hub').trim().toLowerCase();
-  if (!TOPICS.has(topic)) topic = 'other';
-
-  const day = utcDay();
-
-  const [vres, vdres] = await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO visitor (id, first_day, last_day, views) VALUES (?, ?, ?, 1)
-       ON CONFLICT(id) DO UPDATE SET last_day = excluded.last_day, views = visitor.views + 1
-       RETURNING first_day, views`
-    ).bind(vid, day, day),
-    env.DB.prepare(
-      `INSERT INTO visitor_day (id, day) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING 1`
-    ).bind(vid, day),
-  ]);
-
-  const vrow = (vres.results && vres.results[0]) || { first_day: day, views: 1 };
-  const isNew = vrow.views === 1;
-  const isReturning = String(vrow.first_day) < day;
-  const firstToday = !!(vdres.results && vdres.results.length);
-
-  const dv = firstToday ? 1 : 0;
-  const dn = firstToday && isNew ? 1 : 0;
-  const dr = firstToday && isReturning ? 1 : 0;
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO daily (day, views, visitors, new_visitors, returning_visitors) VALUES (?, 1, ?, ?, ?)
-       ON CONFLICT(day) DO UPDATE SET
-         views = daily.views + 1,
-         visitors = daily.visitors + ?,
-         new_visitors = daily.new_visitors + ?,
-         returning_visitors = daily.returning_visitors + ?`
-    ).bind(day, dv, dn, dr, dv, dn, dr),
-    env.DB.prepare(
-      `INSERT INTO daily_topic (day, topic, views) VALUES (?, ?, 1)
-       ON CONFLICT(day, topic) DO UPDATE SET views = daily_topic.views + 1`
-    ).bind(day, topic),
-  ]);
-
-  return json({ ok: true }, 200, env);
-}
-
-async function stats(env) {
-  if (statsCache && Date.now() - statsCache.at < 60000) return statsCache.payload;
-
-  const day = utcDay();
-  const since = utcDay(new Date(Date.now() - 29 * 86400000));
-  const res = await env.DB.batch([
-    env.DB.prepare(`SELECT COALESCE(SUM(views), 0) AS v FROM daily`),
-    env.DB.prepare(`SELECT COUNT(*) AS v FROM visitor`),
-    env.DB.prepare(`SELECT COUNT(*) AS v FROM visitor WHERE first_day <> last_day`),
-    env.DB.prepare(`SELECT views, visitors, new_visitors, returning_visitors FROM daily WHERE day = ?`).bind(day),
-    env.DB.prepare(`SELECT day, views, visitors, returning_visitors FROM daily WHERE day >= ? ORDER BY day`).bind(since),
-    env.DB.prepare(`SELECT topic, SUM(views) AS views FROM daily_topic GROUP BY topic ORDER BY views DESC`),
-  ]);
-
-  const one = (r) => (r.results && r.results[0]) || {};
-  const t = one(res[3]);
-  const payload = {
-    generatedAt: new Date().toISOString(),
-    totalViews: one(res[0]).v || 0,
-    totalVisitors: one(res[1]).v || 0,
-    returningVisitors: one(res[2]).v || 0,
-    today: {
-      views: t.views || 0,
-      visitors: t.visitors || 0,
-      newVisitors: t.new_visitors || 0,
-      returningVisitors: t.returning_visitors || 0,
-    },
-    last30Days: (res[4].results || []).map((r) => ({
-      day: r.day, views: r.views, visitors: r.visitors, returningVisitors: r.returning_visitors,
-    })),
-    topTopics: (res[5].results || []).map((r) => ({ topic: r.topic, views: r.views })),
-  };
-
-  statsCache = { at: Date.now(), payload };
-  return payload;
-}
+const GET = {
+  '/stats': (req, env) => stats(env).then((p) => json(p, 200, env, { 'Cache-Control': 'public, max-age=60' })),
+  '/me': getMe,
+  '/progress': getProgress,
+  '/leaderboard': (req, env) => leaderboard(env),
+};
+const POST = {
+  '/collect': collect,
+  '/auth': authLogin,
+  '/progress': putProgress,
+  '/settings': putSettings,
+  '/account/delete': deleteAccount,
+  '/admin/grant': adminGrant,
+};
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const { pathname } = new URL(request.url);
-
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env) });
 
     try {
-      if (pathname === '/collect' && request.method === 'POST') return await collect(request, env);
-      if (pathname === '/stats' && request.method === 'GET') {
-        return json(await stats(env), 200, env, { 'Cache-Control': 'public, max-age=60' });
+      if (request.method === 'GET') {
+        if (pathname === '/' || pathname === '/health') return json({ ok: true, service: 'iv-analytics' }, 200, env);
+        const h = GET[pathname];
+        if (h) return await h(request, env);
       }
-      if (pathname === '/' || pathname === '/health') return json({ ok: true, service: 'iv-analytics' }, 200, env);
+      if (request.method === 'POST') {
+        const h = POST[pathname];
+        if (h) return await h(request, env);
+      }
     } catch (e) {
-      return json({ ok: false, error: 'server' }, 500, env);
+      return json({ ok: false, error: 'server', detail: String(e && e.message || e) }, 500, env);
     }
     return json({ ok: false, error: 'not found' }, 404, env);
   },
 
   async scheduled(event, env, ctx) {
     const cutoff = utcDay(new Date(Date.now() - 90 * 86400000));
-    ctx.waitUntil(env.DB.prepare(`DELETE FROM visitor_day WHERE day < ?`).bind(cutoff).run());
+    ctx.waitUntil(env.DB.batch([
+      env.DB.prepare(`DELETE FROM visitor_day WHERE day < ?`).bind(cutoff),
+      env.DB.prepare(`DELETE FROM user_activity_day WHERE day < ?`).bind(cutoff),
+    ]));
   },
 };

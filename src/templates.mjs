@@ -31,7 +31,9 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords)}">` : ''}
 <link rel="stylesheet" href="${o.root}assets/styles.css">
 <link rel="sitemap" type="application/xml" href="${o.root}sitemap.xml">
 <script>(function(){try{var t=localStorage.getItem('iv-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+<script>window.IV_ROOT=${JSON.stringify(o.root || '')};</script>
 ${o.analyticsUrl ? `<script>window.IV_ANALYTICS=${JSON.stringify(o.analyticsUrl)};</script>` : ''}
+${o.googleClientId ? `<script>window.IV_GOOGLE_CLIENT_ID=${JSON.stringify(o.googleClientId)};</script>` : ''}
 ${o.jsonld ? `<script type="application/ld+json">${o.jsonld}</script>` : ''}`;
 }
 
@@ -51,6 +53,7 @@ export function header(o) {
     <a class="brand" href="${o.root}"><span class="brand-mark" aria-hidden="true">🎯</span> Interview Vault</a>
     <nav class="topnav" aria-label="Chủ đề">${links}</nav>
     <a class="topnav-cta${o.current === 'luyen-tap' ? ' is-current' : ''}" href="${o.root}luyen-tap/">🎯 Luyện tập</a>
+    <div class="topnav-acct" data-acct hidden></div>
   </div>
 </header>`;
 }
@@ -70,17 +73,17 @@ export function footer(root) {
   const year = new Date().getFullYear();
   return `<footer class="site-footer">
   <div class="wrap">
-    <p class="footer-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt xem</p>
+    <p class="footer-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt truy cập</p>
     <p>Interview Vault — bộ câu hỏi phỏng vấn cấp độ Middle. Nội dung tiếng Việt, giữ nguyên thuật ngữ tiếng Anh.</p>
     <p class="muted">Cập nhật ${year}. Trang tĩnh, hoạt động không cần JavaScript.</p>
-    <p><a href="${root}">Trang chủ</a> · <a href="${root}stats/">Thống kê</a> · <a href="${root}sitemap.xml">Sitemap</a></p>
+    <p><a href="${root}">Trang chủ</a> · <a href="${root}luyen-tap/">Luyện tập</a> · <a href="${root}bang-xep-hang/">Bảng xếp hạng</a> · <a href="${root}tai-khoan/">Tài khoản</a> · <a href="${root}stats/">Thống kê</a> · <a href="${root}privacy/">Bảo mật</a> · <a href="${root}sitemap.xml">Sitemap</a></p>
   </div>
 </footer>`;
 }
 
 /* Lắp trang hoàn chỉnh — root là tiền tố tương đối ("" cho trang chủ, "../" cho trang chủ đề) */
 export function page({ head: h, body, root = '', scripts = [] }) {
-  const s = ['assets/enhance.js', ...scripts]
+  const s = ['assets/enhance.js', 'assets/auth.js', ...scripts]
     .map((src) => `<script src="${root}${src}" defer></script>`)
     .join('\n');
   return `<!doctype html>

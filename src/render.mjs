@@ -104,7 +104,7 @@ function diagramFigure(id) {
 }
 
 /* Trang chủ đề */
-export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz, analyticsUrl }) {
+export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz, analyticsUrl, googleClientId }) {
   const url = `${siteUrl}${topic.id}/`;
   const groups = groupByCat(list);
   const idx = topics.findIndex((t) => t.id === topic.id);
@@ -202,39 +202,38 @@ ${footer('../')}`;
       ogType: 'article',
       jsonld: faqJsonLd(topic, list, url),
       analyticsUrl,
+      googleClientId,
     }),
     body,
   });
 }
 
 /* Trang thống kê /stats — khung tĩnh, assets/stats.js nạp số liệu từ Worker */
-export function renderStatsPage({ topics, siteUrl, analyticsUrl }) {
+export function renderStatsPage({ topics, siteUrl, analyticsUrl, googleClientId }) {
   const url = `${siteUrl}stats/`;
   const body = `${header({ root: '../', topics, current: null })}
 <main id="main" class="stats-page">
   <div class="wrap stats-wrap">
     ${breadcrumb([{ name: 'Trang chủ', href: '../' }, { name: 'Thống kê' }])}
     <h1 class="topic-h1"><span class="topic-h1-icon" aria-hidden="true">📈</span>Thống kê truy cập</h1>
-    <p class="lede">Số liệu ẩn danh: không cookie, không lưu IP. Một "khách" là một trình duyệt
-      (mã ngẫu nhiên trong <code>localStorage</code>). Tôn trọng Do Not Track.</p>
 
     <p class="stats-state" data-stats-state hidden></p>
 
     <div class="stats-tiles" data-stats-tiles hidden>
-      <div class="stat-tile"><b data-k="totalViews">—</b><span>Tổng lượt xem</span></div>
+      <div class="stat-tile"><b data-k="totalViews">—</b><span>Tổng lượt truy cập</span></div>
       <div class="stat-tile"><b data-k="totalVisitors">—</b><span>Khách duy nhất</span></div>
       <div class="stat-tile"><b data-k="returningVisitors">—</b><span>Khách quay lại <em data-k="returningPct"></em></span></div>
-      <div class="stat-tile"><b data-k="todayViews">—</b><span>Lượt xem hôm nay</span></div>
+      <div class="stat-tile"><b data-k="todayViews">—</b><span>Truy cập hôm nay</span></div>
     </div>
 
     <section class="stats-section" data-stats-chart-wrap hidden>
       <h2>30 ngày gần nhất</h2>
       <div class="stats-chart" data-stats-chart></div>
-      <p class="stats-legend">Cột = lượt xem/ngày. Rê chuột để xem số khách.</p>
+      <p class="stats-legend">Cột = lượt truy cập/ngày. Rê chuột để xem số khách.</p>
     </section>
 
     <section class="stats-section" data-stats-topics-wrap hidden>
-      <h2>Lượt xem theo chủ đề</h2>
+      <h2>Lượt truy cập theo chủ đề</h2>
       <div class="stats-bars" data-stats-topics></div>
     </section>
 
@@ -248,11 +247,12 @@ ${footer('../')}`;
     scripts: ['assets/stats.js'],
     head: head({
       title: 'Thống kê truy cập — Interview Vault',
-      description: 'Số liệu truy cập ẩn danh của Interview Vault: tổng lượt xem, khách duy nhất, khách quay lại, 30 ngày gần nhất.',
+      description: 'Số liệu truy cập ẩn danh của Interview Vault: tổng lượt truy cập, khách duy nhất, khách quay lại, 30 ngày gần nhất.',
       canonical: url,
       root: '../',
       robots: 'noindex, follow',
       analyticsUrl,
+      googleClientId,
     }),
     body,
   });
@@ -270,7 +270,7 @@ export function practiceData(questions) {
 }
 
 /* Trang luyện tập /luyen-tap/ — duyệt + lọc + phiên luyện (spaced repetition, client-side) */
-export function renderPracticePage({ topics, questions, siteUrl, analyticsUrl }) {
+export function renderPracticePage({ topics, questions, siteUrl, analyticsUrl, googleClientId }) {
   const url = `${siteUrl}luyen-tap/`;
   const nameOf = new Map(topics.map((t) => [t.id, t.name]));
 
@@ -417,13 +417,14 @@ ${footer('../')}`;
       canonical: url,
       root: '../',
       analyticsUrl,
+      googleClientId,
     }),
     body,
   });
 }
 
 /* Trang chủ */
-export function renderHub({ topics, counts, total, siteUrl, analyticsUrl }) {
+export function renderHub({ topics, counts, total, siteUrl, analyticsUrl, googleClientId }) {
   const cards = topics
     .map(
       (t) => `<a class="topic-card" href="${t.id}/" data-topic="${t.id}">
@@ -472,7 +473,7 @@ export function renderHub({ topics, counts, total, siteUrl, analyticsUrl }) {
         <span><b>${topics.length}</b> chủ đề</span>
         <span><b>3</b> phần / câu</span>
       </div>
-      <p class="hero-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt xem</p>
+      <p class="hero-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt truy cập</p>
     </div>
   </section>
   <section class="wrap topic-grid-section" aria-label="Chủ đề">
@@ -510,6 +511,7 @@ ${footer('')}`;
       root: '',
       jsonld,
       analyticsUrl,
+      googleClientId,
     }),
     body,
   });
@@ -517,7 +519,10 @@ ${footer('')}`;
 
 export function renderSitemap({ topics, siteUrl }) {
   const now = new Date().toISOString().slice(0, 10);
-  const urls = [siteUrl, `${siteUrl}luyen-tap/`, ...topics.map((t) => `${siteUrl}${t.id}/`)];
+  const urls = [
+    siteUrl, `${siteUrl}luyen-tap/`, `${siteUrl}bang-xep-hang/`, `${siteUrl}privacy/`,
+    ...topics.map((t) => `${siteUrl}${t.id}/`),
+  ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((u, i) => `  <url><loc>${esc(u)}</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>${i === 0 ? '1.0' : '0.8'}</priority></url>`).join('\n')}

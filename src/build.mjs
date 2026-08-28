@@ -7,6 +7,7 @@ import {
   renderHub, renderTopicPage, renderStatsPage, renderPracticePage, practiceData,
   renderSitemap, render404,
 } from './render.mjs';
+import { renderAccountPage, renderLeaderboardPage, renderPrivacyPage } from './render-user.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -23,6 +24,9 @@ siteUrl = (siteUrl || 'https://example.github.io/interview-vault').replace(/\/?$
 
 /* URL backend thống kê (Cloudflare Worker) — trống thì site dùng bộ đếm tạm phía client */
 const analyticsUrl = (process.env.ANALYTICS_URL || '').trim().replace(/\/+$/, '');
+
+/* Google OAuth Client ID — trống thì nút đăng nhập bị ẩn (site vẫn chạy bình thường) */
+const googleClientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
 
 /* Shim tối thiểu để chạy các file dữ liệu viết theo kiểu biến toàn cục SS */
 const SS = { topics: [], q: {} };
@@ -86,20 +90,30 @@ for (const entry of readdirSync(DIST)) rmSync(join(DIST, entry), { recursive: tr
 mkdirSync(join(DIST, 'assets'), { recursive: true });
 
 /* Trang chủ */
-writeFileSync(join(DIST, 'index.html'), renderHub({ topics, counts, total, siteUrl, analyticsUrl }));
+writeFileSync(join(DIST, 'index.html'), renderHub({ topics, counts, total, siteUrl, analyticsUrl, googleClientId }));
 
 /* Trang thống kê */
 mkdirSync(join(DIST, 'stats'), { recursive: true });
-writeFileSync(join(DIST, 'stats', 'index.html'), renderStatsPage({ topics, siteUrl, analyticsUrl }));
+writeFileSync(join(DIST, 'stats', 'index.html'), renderStatsPage({ topics, siteUrl, analyticsUrl, googleClientId }));
 
 /* Trang luyện tập + dữ liệu nội dung đầy đủ (tải on-demand) */
 const allQuestions = topics.flatMap((t) => SS.q[t.id] || []);
 mkdirSync(join(DIST, 'luyen-tap'), { recursive: true });
 writeFileSync(
   join(DIST, 'luyen-tap', 'index.html'),
-  renderPracticePage({ topics, questions: allQuestions, siteUrl, analyticsUrl })
+  renderPracticePage({ topics, questions: allQuestions, siteUrl, analyticsUrl, googleClientId })
 );
 writeFileSync(join(DIST, 'luyen-tap', 'questions.json'), practiceData(allQuestions));
+
+/* Trang tài khoản / bảng xếp hạng / bảo mật (đăng nhập Google) */
+for (const [dir, fn] of [
+  ['tai-khoan', renderAccountPage],
+  ['bang-xep-hang', renderLeaderboardPage],
+  ['privacy', renderPrivacyPage],
+]) {
+  mkdirSync(join(DIST, dir), { recursive: true });
+  writeFileSync(join(DIST, dir, 'index.html'), fn({ topics, counts, siteUrl, analyticsUrl, googleClientId }));
+}
 
 /* Có file hình minh hoạ cho chủ đề nào? */
 const diagramDir = join(ROOT, 'assets', 'diagrams');
@@ -119,13 +133,16 @@ for (const topic of topics) {
   const hasViz = list.some((q) => q.viz);
   writeFileSync(
     join(dir, 'index.html'),
-    renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz, analyticsUrl })
+    renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz, analyticsUrl, googleClientId })
   );
 }
 
 /* Tài nguyên tĩnh */
 cpSync(join(ROOT, 'assets', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 cpSync(join(ROOT, 'assets', 'enhance.js'), join(DIST, 'assets', 'enhance.js'));
+cpSync(join(ROOT, 'assets', 'auth.js'), join(DIST, 'assets', 'auth.js'));
+cpSync(join(ROOT, 'assets', 'account.js'), join(DIST, 'assets', 'account.js'));
+cpSync(join(ROOT, 'assets', 'leaderboard.js'), join(DIST, 'assets', 'leaderboard.js'));
 cpSync(join(ROOT, 'assets', 'stats.js'), join(DIST, 'assets', 'stats.js'));
 cpSync(join(ROOT, 'assets', 'practice.js'), join(DIST, 'assets', 'practice.js'));
 cpSync(join(ROOT, 'assets', 'sql-run.js'), join(DIST, 'assets', 'sql-run.js'));
