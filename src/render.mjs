@@ -59,6 +59,16 @@ function relatedChips(q, ctx) {
     </nav>`;
 }
 
+/* 3 khối trả lời + hình minh hoạ — dùng chung cho trang chủ đề và trình luyện tập.
+   forPlayer: bỏ hình diagram cũ (cần script riêng); viz vẫn giữ. */
+function qaBlocks(q, forPlayer) {
+  const figure = q.viz ? vizFigure(q.viz) : !forPlayer && q.diagram ? diagramFigure(q.diagram) : '';
+  return `<div class="qa-block qa-answer"><h4>Trả lời</h4>${fmt(q.answer)}</div>
+    <div class="qa-block qa-essence"><h4>Bản chất</h4>${fmt(q.essence)}</div>
+    <div class="qa-block qa-example"><h4>Ví dụ thực tế</h4>${fmt(q.example)}</div>
+    ${figure}`;
+}
+
 function questionArticle(q, n, ctx) {
   return `<article class="qa" id="${esc(q.id)}">
   <div class="qa-head">
@@ -70,10 +80,7 @@ function questionArticle(q, n, ctx) {
     <a class="qa-permalink" href="#${esc(q.id)}" aria-label="Liên kết cố định tới câu hỏi này">#</a>
   </div>
   <div class="qa-body">
-    <div class="qa-block qa-answer"><h4>Trả lời</h4>${fmt(q.answer)}</div>
-    <div class="qa-block qa-essence"><h4>Bản chất</h4>${fmt(q.essence)}</div>
-    <div class="qa-block qa-example"><h4>Ví dụ thực tế</h4>${fmt(q.example)}</div>
-    ${q.viz ? vizFigure(q.viz) : q.diagram ? diagramFigure(q.diagram) : ''}
+    ${qaBlocks(q)}
     ${relatedChips(q, ctx)}
   </div>
 </article>`;
@@ -162,6 +169,7 @@ export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, has
           <input type="search" class="filter-input" placeholder="Lọc câu hỏi trong trang…" autocomplete="off">
         </label>
         <div class="toolbar-actions">
+          <a class="btn-ghost btn-practice" href="../luyen-tap/?topic=${topic.id}">🎯 Luyện tập chủ đề</a>
           <button type="button" class="btn-ghost" data-action="toggle-learned" hidden>Ẩn câu đã thuộc</button>
           <button type="button" class="btn-ghost" data-action="collapse-all">Thu gọn tất cả</button>
         </div>
@@ -250,6 +258,148 @@ ${footer('../')}`;
   });
 }
 
+/* Dữ liệu cho trình luyện tập: nội dung đầy đủ mỗi câu, tải on-demand (luyen-tap/questions.json) */
+export function practiceData(questions) {
+  return JSON.stringify(
+    questions.map((q) => ({
+      id: q.id,
+      topic: q.topic,
+      cat: q.cat,
+      q: q.q,
+      body: qaBlocks(q, true).trim(),
+    }))
+  );
+}
+
+/* Trang luyện tập /luyen-tap/ — duyệt + lọc + phiên luyện (spaced repetition, client-side) */
+export function renderPracticePage({ topics, questions, siteUrl, analyticsUrl }) {
+  const url = `${siteUrl}luyen-tap/`;
+  const nameOf = new Map(topics.map((t) => [t.id, t.name]));
+
+  const chips = topics
+    .map(
+      (t) =>
+        `<button type="button" class="pr-chip" data-topic="${t.id}"><span aria-hidden="true">${esc(
+          t.icon
+        )}</span> ${esc(t.name)}</button>`
+    )
+    .join('');
+
+  const rows = questions
+    .map(
+      (q, i) => `<tr data-id="${esc(q.id)}" data-topic="${esc(q.topic)}" data-cat="${esc(q.cat)}">
+    <td class="pr-n">${i + 1}</td>
+    <td class="pr-qcell"><button type="button" class="pr-open" data-id="${esc(q.id)}">${esc(q.q)}</button>
+      <span class="pr-meta">${esc(nameOf.get(q.topic) || q.topic)} · ${esc(q.cat)}</span></td>
+    <td class="pr-status"><span class="pr-dot" title="Chưa làm"></span></td>
+  </tr>`
+    )
+    .join('\n');
+
+  const body = `${header({ root: '../', topics, current: 'luyen-tap' })}
+<main id="main" class="practice-page" data-practice>
+  <div class="wrap pr-wrap">
+    ${breadcrumb([{ name: 'Trang chủ', href: '../' }, { name: 'Luyện tập' }])}
+    <h1 class="topic-h1"><span class="topic-h1-icon" aria-hidden="true">🎯</span>Luyện tập</h1>
+    <p class="lede">Chế độ chủ động: hiện câu hỏi, tự nhớ lại, rồi mở đáp án và tự chấm.
+      Câu bạn chưa chắc sẽ được lặp lại sớm hơn (spaced repetition). Tiến độ lưu trên trình duyệt.</p>
+
+    <div class="pr-stats" data-pr-stats>
+      <div class="pr-stat"><b data-k="learned">0</b><span>đã thuộc</span></div>
+      <div class="pr-stat"><b data-k="due">0</b><span>cần ôn</span></div>
+      <div class="pr-stat"><b data-k="today">0</b><span>luyện hôm nay</span></div>
+      <div class="pr-stat"><b data-k="streak">0</b><span>ngày liên tục</span></div>
+    </div>
+
+    <section class="pr-browse" data-pr-browse>
+      <div class="pr-filters">
+        <div class="pr-chips" role="group" aria-label="Lọc theo chủ đề">
+          <button type="button" class="pr-chip is-on" data-topic="">Tất cả</button>
+          ${chips}
+        </div>
+        <div class="pr-filter-row">
+          <label class="pr-select"><span class="visually-hidden">Trạng thái</span>
+            <select data-pr-filter-status>
+              <option value="">Mọi trạng thái</option>
+              <option value="new">Chưa làm</option>
+              <option value="due">Cần ôn</option>
+              <option value="learned">Đã thuộc</option>
+            </select>
+          </label>
+          <label class="pr-select"><span class="visually-hidden">Số câu mỗi phiên</span>
+            <select data-pr-count>
+              <option value="10">10 câu / phiên</option>
+              <option value="20" selected>20 câu / phiên</option>
+              <option value="50">50 câu / phiên</option>
+              <option value="0">Không giới hạn</option>
+            </select>
+          </label>
+          <input type="search" class="pr-search" placeholder="Tìm câu hỏi…" autocomplete="off" data-pr-search>
+          <button type="button" class="pr-start" data-pr-start>Bắt đầu luyện <span class="pr-start-n" data-pr-start-n></span></button>
+        </div>
+        <p class="pr-count" data-pr-count-label></p>
+      </div>
+
+      <div class="pr-table-wrap">
+        <table class="pr-table">
+          <thead><tr><th class="pr-n">#</th><th>Câu hỏi</th><th class="pr-status">Trạng thái</th></tr></thead>
+          <tbody data-pr-rows>
+${rows}
+          </tbody>
+        </table>
+        <p class="pr-empty" data-pr-empty hidden>Không có câu hỏi khớp bộ lọc.</p>
+      </div>
+    </section>
+
+    <section class="pr-player" data-pr-player hidden aria-live="polite">
+      <div class="pr-player-bar">
+        <span class="pr-player-count">Câu <b data-pr-cur>1</b> / <b data-pr-total>1</b></span>
+        <div class="pr-player-dots" data-pr-dots></div>
+        <button type="button" class="pr-exit" data-pr-exit>Thoát phiên</button>
+      </div>
+      <article class="pr-qcard">
+        <span class="pr-qcard-topic" data-pr-qtopic></span>
+        <h2 class="pr-qcard-q" data-pr-qtext></h2>
+        <button type="button" class="pr-reveal" data-pr-reveal>Hiện đáp án</button>
+        <div class="pr-qcard-body qa-body" data-pr-qbody hidden></div>
+        <div class="pr-grade" data-pr-grade hidden>
+          <p class="pr-grade-label">Bạn nhớ tới đâu?</p>
+          <div class="pr-grade-btns">
+            <button type="button" data-g="again"><b>Không nhớ</b><span>ôn lại sớm</span></button>
+            <button type="button" data-g="hard"><b>Khó</b><span>~1 ngày</span></button>
+            <button type="button" data-g="good"><b>Đã thuộc</b><span>giãn dần</span></button>
+          </div>
+        </div>
+      </article>
+      <div class="pr-end" data-pr-end hidden>
+        <h2>Xong phiên 🎉</h2>
+        <p class="pr-end-summary" data-pr-end-summary></p>
+        <div class="pr-end-actions">
+          <button type="button" class="pr-start" data-pr-again>Phiên mới</button>
+          <button type="button" class="pr-exit" data-pr-end-exit>Về danh sách</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+${footer('../')}`;
+
+  return page({
+    root: '../',
+    scripts: ['assets/viz/viz-core.js', 'assets/viz/viz-static.js', 'assets/viz/viz-anim.js', 'assets/practice.js'],
+    head: head({
+      title: 'Luyện tập câu hỏi phỏng vấn — Interview Vault',
+      description:
+        'Luyện tập chủ động 700+ câu hỏi phỏng vấn Java/Spring, Kafka, AWS, Redis, SQL, Microservices, Design Patterns theo phương pháp spaced repetition. Lọc theo chủ đề, tự chấm, theo dõi tiến độ.',
+      keywords: 'luyện tập phỏng vấn, ôn phỏng vấn backend, flashcard câu hỏi phỏng vấn, spaced repetition java',
+      canonical: url,
+      root: '../',
+      analyticsUrl,
+    }),
+    body,
+  });
+}
+
 /* Trang chủ */
 export function renderHub({ topics, counts, total, siteUrl, analyticsUrl }) {
   const cards = topics
@@ -306,6 +456,16 @@ export function renderHub({ topics, counts, total, siteUrl, analyticsUrl }) {
   <section class="wrap topic-grid-section" aria-label="Chủ đề">
     <div class="topic-grid">${cards}</div>
   </section>
+  <section class="wrap practice-cta-section">
+    <a class="practice-cta" href="luyen-tap/">
+      <span class="practice-cta-icon" aria-hidden="true">🎯</span>
+      <span class="practice-cta-text">
+        <b>Luyện tập chủ động</b>
+        <span>Không chỉ đọc — tự nhớ lại, tự chấm, để hệ thống lặp lại câu bạn chưa chắc (spaced repetition).</span>
+      </span>
+      <span class="practice-cta-go" aria-hidden="true">Vào luyện →</span>
+    </a>
+  </section>
   <section class="wrap how">
     <h2>Cách dùng để học hiệu quả</h2>
     <ol class="how-list">
@@ -335,7 +495,7 @@ ${footer('')}`;
 
 export function renderSitemap({ topics, siteUrl }) {
   const now = new Date().toISOString().slice(0, 10);
-  const urls = [siteUrl, ...topics.map((t) => `${siteUrl}${t.id}/`)];
+  const urls = [siteUrl, `${siteUrl}luyen-tap/`, ...topics.map((t) => `${siteUrl}${t.id}/`)];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((u, i) => `  <url><loc>${esc(u)}</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>${i === 0 ? '1.0' : '0.8'}</priority></url>`).join('\n')}

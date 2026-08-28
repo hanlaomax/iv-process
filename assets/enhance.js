@@ -69,6 +69,7 @@
 
     var tp = document.querySelector('.topic-page');
     var topic = tp ? tp.getAttribute('data-topic')
+      : document.querySelector('.practice-page') ? 'luyen-tap'
       : document.querySelector('.stats-page') ? 'stats' : 'hub';
 
     if (!dnt && vid) {

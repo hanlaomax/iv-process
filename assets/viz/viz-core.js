@@ -91,6 +91,8 @@
   }
 
   function mount(fig) {
+    if (fig.dataset.vzMounted) return;
+    fig.dataset.vzMounted = '1';
     var spec;
     try {
       spec = JSON.parse(fig.dataset.viz);
@@ -114,7 +116,7 @@
     if (out.steps && out.steps.length) controlBar(fig, out.steps, out.reset);
   }
 
-  window.IVViz = { register: register, S: S, H: H };
+  window.IVViz = { register: register, S: S, H: H, mount: mount };
 
   function init() {
     document.querySelectorAll('figure.viz[data-viz]').forEach(mount);

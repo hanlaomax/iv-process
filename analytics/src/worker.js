@@ -4,7 +4,7 @@
    cron          : dọn bảng visitor_day > 90 ngày */
 
 const TOPICS = new Set([
-  'hub', 'stats', 'java', 'kafka', 'aws', 'redis', 'sql', 'microservices', 'design-patterns',
+  'hub', 'stats', 'luyen-tap', 'java', 'kafka', 'aws', 'redis', 'sql', 'microservices', 'design-patterns',
 ]);
 const BOT = /bot\b|crawl|spider|slurp|bingpreview|facebookexternalhit|embedly|pinterest|whatsapp|telegram|headless|lighthouse|pagespeed|gtmetrix|pingdom|uptimerobot|monitor|python-requests|curl\/|wget|okhttp|go-http|node-fetch|axios/i;
 

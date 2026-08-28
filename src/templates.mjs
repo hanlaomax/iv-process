@@ -50,6 +50,7 @@ export function header(o) {
   <div class="wrap site-header-inner">
     <a class="brand" href="${o.root}"><span class="brand-mark" aria-hidden="true">🎯</span> Interview Vault</a>
     <nav class="topnav" aria-label="Chủ đề">${links}</nav>
+    <a class="topnav-cta${o.current === 'luyen-tap' ? ' is-current' : ''}" href="${o.root}luyen-tap/">🎯 Luyện tập</a>
   </div>
 </header>`;
 }

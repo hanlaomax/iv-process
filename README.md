@@ -9,6 +9,13 @@ Nội dung tiếng Việt, giữ nguyên thuật ngữ kỹ thuật tiếng Anh.
 Trang được **render sẵn thành HTML tĩnh** (tối ưu SEO), hoạt động **không cần JavaScript**;
 JavaScript chỉ thêm tiện ích (lọc, đánh dấu "đã thuộc", thu gọn, giao diện sáng/tối).
 
+Có trang **`/luyen-tap/`** kiểu LeetCode: duyệt & lọc toàn bộ 702 câu theo chủ đề / trạng thái,
+rồi vào **phiên luyện chủ động** — hiện câu hỏi, tự nhớ lại, mở đáp án, tự chấm
+(Không nhớ / Khó / Đã thuộc). Câu chưa chắc được lặp lại sớm hơn (spaced repetition).
+Tiến độ (`iv-srs`, `iv-questions-learned`, `iv-practice-log`) lưu ở localStorage, đồng bộ với nút
+"đã thuộc" trên trang chủ đề. Mỗi trang chủ đề có nút *🎯 Luyện tập chủ đề* dẫn tới
+`/luyen-tap/?topic=<id>`.
+
 ## Chạy tại máy
 
 Không cần cài package (chỉ dùng Node core).
@@ -72,11 +79,12 @@ src/
   data/                 # 35 file câu hỏi + _topics.js (nội dung, tự đăng ký qua SS.addQuestions)
   format.mjs            # markdown-lite -> HTML, slug, hash id, strip
   templates.mjs         # <head> đầy đủ SEO, header, footer, breadcrumb, khung trang
-  render.mjs            # sinh trang chủ, trang chủ đề, trang /stats, sitemap, 404
+  render.mjs            # sinh trang chủ, trang chủ đề, /stats, /luyen-tap, sitemap, 404
   build.mjs             # đọc data -> kiểm tra toàn vẹn -> ghi dist/  (đọc env ANALYTICS_URL)
   serve.mjs             # máy chủ tĩnh tối giản để xem thử
 assets/
   styles.css           # thiết kế (IBM Plex Sans/Mono + Lora; màu theo chủ đề; sáng/tối)
+  practice.js          # trang /luyen-tap: lọc + phiên luyện + spaced repetition
   enhance.js            # tiện ích client + gửi lượt xem (không bắt buộc)
   stats.js             # nạp & vẽ số liệu cho trang /stats
 analytics/             # Cloudflare Worker + D1 — backend thống kê (deploy riêng)

@@ -3,7 +3,10 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync } f
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hash } from './format.mjs';
-import { renderHub, renderTopicPage, renderStatsPage, renderSitemap, render404 } from './render.mjs';
+import {
+  renderHub, renderTopicPage, renderStatsPage, renderPracticePage, practiceData,
+  renderSitemap, render404,
+} from './render.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -82,6 +85,15 @@ writeFileSync(join(DIST, 'index.html'), renderHub({ topics, counts, total, siteU
 mkdirSync(join(DIST, 'stats'), { recursive: true });
 writeFileSync(join(DIST, 'stats', 'index.html'), renderStatsPage({ topics, siteUrl, analyticsUrl }));
 
+/* Trang luyện tập + dữ liệu nội dung đầy đủ (tải on-demand) */
+const allQuestions = topics.flatMap((t) => SS.q[t.id] || []);
+mkdirSync(join(DIST, 'luyen-tap'), { recursive: true });
+writeFileSync(
+  join(DIST, 'luyen-tap', 'index.html'),
+  renderPracticePage({ topics, questions: allQuestions, siteUrl, analyticsUrl })
+);
+writeFileSync(join(DIST, 'luyen-tap', 'questions.json'), practiceData(allQuestions));
+
 /* Có file hình minh hoạ cho chủ đề nào? */
 const diagramDir = join(ROOT, 'assets', 'diagrams');
 let diagramTopics = new Set();
@@ -108,6 +120,7 @@ for (const topic of topics) {
 cpSync(join(ROOT, 'assets', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 cpSync(join(ROOT, 'assets', 'enhance.js'), join(DIST, 'assets', 'enhance.js'));
 cpSync(join(ROOT, 'assets', 'stats.js'), join(DIST, 'assets', 'stats.js'));
+cpSync(join(ROOT, 'assets', 'practice.js'), join(DIST, 'assets', 'practice.js'));
 cpSync(join(ROOT, 'assets', 'topic-graph.js'), join(DIST, 'assets', 'topic-graph.js'));
 cpSync(join(ROOT, 'assets', 'viz'), join(DIST, 'assets', 'viz'), { recursive: true });
 if (diagramTopics.size) cpSync(diagramDir, join(DIST, 'assets', 'diagrams'), { recursive: true });
