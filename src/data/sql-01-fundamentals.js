@@ -14,6 +14,25 @@ SS.addQuestions('sql', [
     'INNER = giao. OUTER (LEFT/RIGHT/FULL) = giữ thêm hàng "mồ côi" một bên và điền NULL. CROSS = tổ hợp mọi cặp. Chọn theo "có muốn giữ hàng không khớp không".',
   example:
     '"Mọi khách hàng và tổng đơn của họ, kể cả khách chưa mua": `LEFT JOIN orders` → khách chưa mua vẫn hiện với `SUM(amount) = NULL` (dùng `COALESCE(..., 0)`). Dùng INNER JOIN sẽ loại mất họ.',
+  code: {
+    lang: 'sql',
+    prompt: 'Trả về tên khách hàng và TỔNG số tiền họ đã đặt (cột total_spent), gồm cả khách chưa có đơn nào (total_spent = 0).',
+    tables:
+      'CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);\n' +
+      'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER);',
+    datasets: [
+      "INSERT INTO customers VALUES (1,'An'),(2,'Binh'),(3,'Cuong');\n" +
+        'INSERT INTO orders VALUES (1,1,100),(2,1,50),(3,3,200);',
+      "INSERT INTO customers VALUES (1,'Dung'),(2,'Emi');\n" +
+        'INSERT INTO orders VALUES (1,2,10),(2,2,20),(3,2,30);',
+    ],
+    starter: 'SELECT c.name, ...\nFROM customers c\n',
+    solution:
+      'SELECT c.name, COALESCE(SUM(o.amount), 0) AS total_spent\n' +
+      'FROM customers c LEFT JOIN orders o ON o.customer_id = c.id\n' +
+      'GROUP BY c.id, c.name',
+    ordered: false,
+  },
 },
 {
   cat: 'JOIN',
@@ -33,6 +52,27 @@ SS.addQuestions('sql', [
       ['Hàng bảng trái không khớp', 'vẫn giữ (NULL bên phải)', 'bị loại (NULL = x là false)'],
       ['Kết quả', 'LEFT JOIN đúng nghĩa', 'LEFT JOIN âm thầm biến thành INNER JOIN'],
     ],
+  },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Trả về tên khách hàng và số đơn có status = SHIPPED của họ (cột shipped_count), ' +
+      'GỒM CẢ khách không có đơn SHIPPED nào (shipped_count = 0).',
+    tables:
+      'CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);\n' +
+      'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT);',
+    datasets: [
+      "INSERT INTO customers VALUES (1,'An'),(2,'Binh'),(3,'Cuong');\n" +
+        "INSERT INTO orders VALUES (1,1,'SHIPPED'),(2,1,'PENDING'),(3,2,'PENDING');",
+      "INSERT INTO customers VALUES (1,'Dung'),(2,'Emi');\n" +
+        "INSERT INTO orders VALUES (1,1,'SHIPPED'),(2,1,'SHIPPED'),(3,2,'CANCELLED');",
+    ],
+    starter: 'SELECT c.name, COUNT(...) AS shipped_count\nFROM customers c\nLEFT JOIN orders o ON ...\n',
+    solution:
+      "SELECT c.name, COUNT(o.id) AS shipped_count\n" +
+      "FROM customers c LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'SHIPPED'\n" +
+      'GROUP BY c.id, c.name',
+    ordered: false,
   },
 },
 {
@@ -84,6 +124,28 @@ SS.addQuestions('sql', [
       ['Nguyên tắc', 'đẩy điều kiện xuống WHERE càng nhiều càng tốt', '—'],
     ],
   },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Trả về customer_id và tổng amount (cột total) của các khách có tổng amount > 100 ' +
+      'TÍNH TRÊN các đơn năm 2024 (order_date từ 2024-01-01 tới 2024-12-31).',
+    tables:
+      'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER, order_date TEXT);',
+    datasets: [
+      'INSERT INTO orders VALUES ' +
+        "(1,1,80,'2024-03-01'),(2,1,50,'2024-06-01'),(3,1,999,'2023-12-31')," +
+        "(4,2,40,'2024-01-01'),(5,3,120,'2024-05-05');",
+      'INSERT INTO orders VALUES ' +
+        "(1,7,200,'2024-02-02'),(2,8,60,'2024-02-02'),(3,8,60,'2024-02-03')," +
+        "(4,9,500,'2025-01-01');",
+    ],
+    starter: 'SELECT customer_id, SUM(amount) AS total\nFROM orders\nWHERE ...\nGROUP BY customer_id\nHAVING ...',
+    solution:
+      'SELECT customer_id, SUM(amount) AS total\n' +
+      "FROM orders WHERE order_date >= '2024-01-01' AND order_date <= '2024-12-31'\n" +
+      'GROUP BY customer_id HAVING SUM(amount) > 100',
+    ordered: false,
+  },
 },
 {
   cat: 'Subquery',
@@ -106,6 +168,26 @@ SS.addQuestions('sql', [
       ['Cách chạy', 'chạy một lần (non-correlated)', 'dừng ngay khi tìm thấy một hàng khớp', 'nhân bản hàng nếu 1-nhiều'],
       ['Dùng cho', 'set nhỏ, cố định', 'semi-join, anti-join (NOT EXISTS)', 'cần cột từ cả hai bảng'],
     ],
+  },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Trả về tên (cột name) các khách hàng CHƯA TỪNG đặt đơn nào. Lưu ý: orders.customer_id có thể chứa NULL — ' +
+      'dùng NOT EXISTS để không bị bẫy NOT IN + NULL.',
+    tables:
+      'CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);\n' +
+      'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER);',
+    datasets: [
+      "INSERT INTO customers VALUES (1,'An'),(2,'Binh'),(3,'Cuong');\n" +
+        'INSERT INTO orders VALUES (1,1),(2,1),(3,NULL);',
+      "INSERT INTO customers VALUES (1,'Dung'),(2,'Emi'),(3,'Phuc'),(4,'Quyen');\n" +
+        'INSERT INTO orders VALUES (1,2),(2,NULL),(3,4);',
+    ],
+    starter: 'SELECT name\nFROM customers c\nWHERE NOT EXISTS (\n  SELECT 1 FROM orders o WHERE ...\n)',
+    solution:
+      'SELECT name FROM customers c\n' +
+      'WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)',
+    ordered: false,
   },
 },
 {
@@ -162,6 +244,18 @@ SS.addQuestions('sql', [
       ['Đừng làm', 'dùng DISTINCT để "vá" JOIN bị nhân bản — sửa JOIN', '—'],
     ],
   },
+  code: {
+    lang: 'sql',
+    prompt: 'Trả về customer_id và SỐ ĐƠN của mỗi khách (cột order_count), chỉ những khách có từ 2 đơn trở lên.',
+    tables: 'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER);',
+    datasets: [
+      'INSERT INTO orders VALUES (1,10),(2,10),(3,10),(4,20),(5,30),(6,30);',
+      'INSERT INTO orders VALUES (1,1),(2,2),(3,2),(4,3),(5,3),(6,3),(7,4);',
+    ],
+    starter: 'SELECT customer_id, COUNT(*) AS order_count\nFROM orders\nGROUP BY customer_id\n',
+    solution: 'SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY customer_id HAVING COUNT(*) >= 2',
+    ordered: false,
+  },
 },
 {
   cat: 'Tập hợp',
@@ -207,6 +301,25 @@ SS.addQuestions('sql', [
       { to: 2, label: 'FILTER là cú pháp sạch hơn CASE (Postgres / SQL chuẩn mới)' },
       { to: 3, label: 'cho phép "pivot" nhanh' },
     ],
+  },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Với mỗi customer_id, trả về: tổng số đơn (total), số đơn PAID (paid), và tổng amount của các đơn PAID (revenue). ' +
+      'Dùng conditional aggregation (CASE hoặc SUM/COUNT có điều kiện) — một lần quét.',
+    tables:
+      'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT, amount INTEGER);',
+    datasets: [
+      "INSERT INTO orders VALUES (1,1,'PAID',100),(2,1,'PENDING',50),(3,1,'PAID',30),(4,2,'PENDING',999);",
+      "INSERT INTO orders VALUES (1,5,'PAID',10),(2,5,'PAID',20),(3,6,'CANCELLED',777),(4,6,'PAID',5);",
+    ],
+    starter: 'SELECT customer_id,\n  COUNT(*) AS total,\n  ... AS paid,\n  ... AS revenue\nFROM orders\nGROUP BY customer_id\n',
+    solution:
+      'SELECT customer_id, COUNT(*) AS total,\n' +
+      "  SUM(CASE WHEN status = 'PAID' THEN 1 ELSE 0 END) AS paid,\n" +
+      "  SUM(CASE WHEN status = 'PAID' THEN amount ELSE 0 END) AS revenue\n" +
+      'FROM orders GROUP BY customer_id',
+    ordered: false,
   },
 },
 {
@@ -348,6 +461,24 @@ SS.addQuestions('sql', [
       ['Không nhân bản hàng', 'đúng — khác INNER JOIN', 'đúng'],
       ['Viết bằng', 'EXISTS hoặc IN', 'NOT EXISTS, hoặc LEFT JOIN ... WHERE right.key IS NULL'],
     ],
+  },
+  code: {
+    lang: 'sql',
+    prompt: 'Trả về tên (cột name) các sản phẩm CHƯA TỪNG xuất hiện trong order_items (chưa bao giờ được đặt).',
+    tables:
+      'CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT);\n' +
+      'CREATE TABLE order_items (id INTEGER PRIMARY KEY, product_id INTEGER, qty INTEGER);',
+    datasets: [
+      "INSERT INTO products VALUES (1,'Ban phim'),(2,'Chuot'),(3,'Man hinh'),(4,'Tai nghe');\n" +
+        'INSERT INTO order_items VALUES (1,1,2),(2,2,1),(3,1,1);',
+      "INSERT INTO products VALUES (1,'Cap'),(2,'Sac'),(3,'Op lung');\n" +
+        'INSERT INTO order_items VALUES (1,2,5);',
+    ],
+    starter: 'SELECT name\nFROM products p\nWHERE NOT EXISTS (\n  SELECT 1 FROM order_items oi WHERE ...\n)',
+    solution:
+      'SELECT name FROM products p\n' +
+      'WHERE NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id)',
+    ordered: false,
   },
 },
 {

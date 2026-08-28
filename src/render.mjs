@@ -261,13 +261,11 @@ ${footer('../')}`;
 /* Dữ liệu cho trình luyện tập: nội dung đầy đủ mỗi câu, tải on-demand (luyen-tap/questions.json) */
 export function practiceData(questions) {
   return JSON.stringify(
-    questions.map((q) => ({
-      id: q.id,
-      topic: q.topic,
-      cat: q.cat,
-      q: q.q,
-      body: qaBlocks(q, true).trim(),
-    }))
+    questions.map((q) => {
+      const o = { id: q.id, topic: q.topic, cat: q.cat, q: q.q, body: qaBlocks(q, true).trim() };
+      if (q.code) o.code = q.code;
+      return o;
+    })
   );
 }
 
@@ -287,9 +285,13 @@ export function renderPracticePage({ topics, questions, siteUrl, analyticsUrl })
 
   const rows = questions
     .map(
-      (q, i) => `<tr data-id="${esc(q.id)}" data-topic="${esc(q.topic)}" data-cat="${esc(q.cat)}">
+      (q, i) => `<tr data-id="${esc(q.id)}" data-topic="${esc(q.topic)}" data-cat="${esc(q.cat)}"${
+        q.code ? ' data-code="1"' : ''
+      }>
     <td class="pr-n">${i + 1}</td>
-    <td class="pr-qcell"><button type="button" class="pr-open" data-id="${esc(q.id)}">${esc(q.q)}</button>
+    <td class="pr-qcell"><button type="button" class="pr-open" data-id="${esc(q.id)}">${esc(q.q)}</button>${
+      q.code ? ` <span class="pr-badge" title="Có bài tập code">&lt;/&gt; ${esc(q.code.lang || 'code')}</span>` : ''
+    }
       <span class="pr-meta">${esc(nameOf.get(q.topic) || q.topic)} · ${esc(q.cat)}</span></td>
     <td class="pr-status"><span class="pr-dot" title="Chưa làm"></span></td>
   </tr>`
@@ -324,6 +326,7 @@ export function renderPracticePage({ topics, questions, siteUrl, analyticsUrl })
               <option value="new">Chưa làm</option>
               <option value="due">Cần ôn</option>
               <option value="learned">Đã thuộc</option>
+              <option value="code">Có bài tập code</option>
             </select>
           </label>
           <label class="pr-select"><span class="visually-hidden">Số câu mỗi phiên</span>
@@ -360,6 +363,22 @@ ${rows}
       <article class="pr-qcard">
         <span class="pr-qcard-topic" data-pr-qtopic></span>
         <h2 class="pr-qcard-q" data-pr-qtext></h2>
+
+        <div class="pr-code" data-pr-code hidden>
+          <p class="pr-code-prompt" data-pr-code-prompt></p>
+          <details class="pr-code-schema" data-pr-code-schema>
+            <summary>Xem schema &amp; dữ liệu mẫu</summary>
+            <div class="pr-code-schema-body" data-pr-code-schema-body></div>
+          </details>
+          <textarea class="pr-editor" data-pr-editor spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+          <div class="pr-code-actions">
+            <button type="button" class="pr-run" data-pr-run>▶ Chạy &amp; chấm</button>
+            <button type="button" class="pr-code-reset" data-pr-code-reset>Xoá về mẫu</button>
+            <button type="button" class="pr-code-sol" data-pr-code-sol>Xem lời giải</button>
+          </div>
+          <div class="pr-code-result" data-pr-code-result hidden></div>
+        </div>
+
         <button type="button" class="pr-reveal" data-pr-reveal>Hiện đáp án</button>
         <div class="pr-qcard-body qa-body" data-pr-qbody hidden></div>
         <div class="pr-grade" data-pr-grade hidden>
@@ -386,7 +405,10 @@ ${footer('../')}`;
 
   return page({
     root: '../',
-    scripts: ['assets/viz/viz-core.js', 'assets/viz/viz-static.js', 'assets/viz/viz-anim.js', 'assets/practice.js'],
+    scripts: [
+      'assets/viz/viz-core.js', 'assets/viz/viz-static.js', 'assets/viz/viz-anim.js',
+      'assets/sql-run.js', 'assets/practice.js',
+    ],
     head: head({
       title: 'Luyện tập câu hỏi phỏng vấn — Interview Vault',
       description:

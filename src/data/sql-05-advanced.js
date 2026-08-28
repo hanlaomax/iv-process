@@ -25,6 +25,21 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Trả về name, dept, salary và thứ hạng lương TRONG TỪNG phòng ban (cột rnk), lương cao nhất = 1. ' +
+      'Dùng window function.',
+    tables: 'CREATE TABLE emp (name TEXT, dept TEXT, salary INTEGER);',
+    datasets: [
+      "INSERT INTO emp VALUES ('An','IT',100),('Binh','IT',120),('Cuong','IT',90),('Dung','HR',80),('Emi','HR',80);",
+      "INSERT INTO emp VALUES ('P','A',10),('Q','A',20),('R','B',50),('S','B',40),('T','B',60);",
+    ],
+    starter: 'SELECT name, dept, salary,\n  RANK() OVER (...) AS rnk\nFROM emp',
+    solution:
+      'SELECT name, dept, salary, RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk FROM emp',
+    ordered: false,
+  },
 },
 {
   cat: 'Window functions',
@@ -70,6 +85,20 @@ SS.addQuestions('sql', [
       { to: 0, label: 'LAG kéo giá trị hàng trước vào — tính delta, growth, gap' },
       { to: 2, label: 'LEAD kéo giá trị hàng sau vào — khoảng thời gian tới sự kiện kế tiếp' },
     ],
+  },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Bảng monthly(month, revenue) đã có sẵn theo tháng tăng dần. Trả về month, revenue, và chênh lệch ' +
+      'so với tháng liền trước (cột delta). Tháng đầu tiên: delta = NULL.',
+    tables: 'CREATE TABLE monthly (month TEXT PRIMARY KEY, revenue INTEGER);',
+    datasets: [
+      "INSERT INTO monthly VALUES ('2024-01',100),('2024-02',150),('2024-03',120),('2024-04',200);",
+      "INSERT INTO monthly VALUES ('2025-01',50),('2025-02',50),('2025-03',80);",
+    ],
+    starter: 'SELECT month, revenue,\n  revenue - LAG(revenue) OVER (ORDER BY month) AS delta\nFROM monthly',
+    solution: 'SELECT month, revenue, revenue - LAG(revenue) OVER (ORDER BY month) AS delta FROM monthly',
+    ordered: true,
   },
 },
 {
@@ -225,6 +254,27 @@ SS.addQuestions('sql', [
       ['Hiệu năng', 'tốt', 'tốt', 'tốt khi bảng trái nhỏ', 'chậm'],
       ['Đúng khi trùng max', 'có (chọn 1)', 'có (chọn 1)', 'có (LIMIT 1)', 'sai — ra nhiều hàng'],
     ],
+  },
+  code: {
+    lang: 'sql',
+    prompt:
+      'Với mỗi customer_id, lấy id và amount của đơn hàng MỚI NHẤT (created_at lớn nhất). ' +
+      'Mỗi khách đúng một hàng; giả sử không trùng created_at. Trả về: customer_id, id, amount.',
+    tables:
+      'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER, created_at TEXT);',
+    datasets: [
+      "INSERT INTO orders VALUES (1,1,100,'2024-01-01'),(2,1,50,'2024-03-01'),(3,2,999,'2024-02-15'),(4,2,10,'2024-02-10');",
+      "INSERT INTO orders VALUES (1,7,5,'2025-05-05'),(2,8,1,'2025-01-01'),(3,8,2,'2025-06-06'),(4,8,3,'2025-02-02');",
+    ],
+    starter:
+      'SELECT customer_id, id, amount FROM (\n' +
+      '  SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) rn\n' +
+      '  FROM orders\n) t WHERE rn = 1',
+    solution:
+      'SELECT customer_id, id, amount FROM (\n' +
+      '  SELECT customer_id, id, amount, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) rn\n' +
+      '  FROM orders\n) t WHERE rn = 1',
+    ordered: false,
   },
 },
 {

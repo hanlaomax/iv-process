@@ -83,9 +83,11 @@
   function applyFilter() {
     var q = curSearch.trim().toLowerCase(), shown = 0;
     rows.forEach(function (tr) {
+      var okStatus = !curStatus ||
+        (curStatus === 'code' ? tr.dataset.code === '1' : bucket(tr.getAttribute('data-id')) === curStatus);
       var vis =
         (!curTopic || tr.getAttribute('data-topic') === curTopic) &&
-        (!curStatus || bucket(tr.getAttribute('data-id')) === curStatus) &&
+        okStatus &&
         (!q || tr.textContent.toLowerCase().indexOf(q) !== -1);
       tr.hidden = !vis;
       if (vis) shown++;
@@ -177,6 +179,8 @@
     });
   }
 
+  var curCode = null;
+
   function showCard() {
     var it = DATA[queue[qi]];
     $('[data-pr-cur]').textContent = qi + 1;
@@ -186,27 +190,127 @@
     b.innerHTML = it.body; b.hidden = true;
     $('[data-pr-grade]').hidden = true;
     var rev = $('[data-pr-reveal]'); rev.hidden = false;
+
+    var panel = $('[data-pr-code]');
+    curCode = it.code && it.code.lang === 'sql' && window.IVSql ? it.code : null;
+    if (curCode) {
+      panel.hidden = false;
+      $('[data-pr-code-prompt]').textContent = curCode.prompt;
+      $('[data-pr-editor]').value = curCode.starter || 'SELECT ';
+      var res = $('[data-pr-code-result]'); res.hidden = true; res.innerHTML = '';
+      var sc = $('[data-pr-code-schema]'); sc.open = false; sc.dataset.loaded = '';
+      $('[data-pr-code-schema-body]').innerHTML = '';
+      rev.textContent = 'Xem giải thích khái niệm';
+    } else {
+      panel.hidden = true;
+      rev.textContent = 'Hiện đáp án';
+    }
   }
 
   $('[data-pr-reveal]').addEventListener('click', function () {
     var b = $('[data-pr-qbody]');
     b.hidden = false; this.hidden = true;
-    $('[data-pr-grade]').hidden = false;
+    if (!curCode) $('[data-pr-grade]').hidden = false;
     if (window.IVViz && window.IVViz.mount) {
       $$('figure.viz[data-viz]', b).forEach(window.IVViz.mount);
     }
   });
 
+  function advance(g) {
+    grade(queue[qi], g); results[g === 'good' ? 'good' : g === 'hard' ? 'hard' : 'again']++; logToday();
+    var dot = $('[data-pr-dots]').children[qi];
+    if (dot) dot.className = 'pr-pdot is-' + (g === 'again' ? 'again' : g === 'hard' ? 'hard' : 'good');
+    qi++;
+    if (qi >= queue.length) endSession();
+    else showCard();
+    window.scrollTo(0, 0);
+  }
+
   $$('[data-pr-grade] [data-g]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var g = btn.getAttribute('data-g');
-      grade(queue[qi], g); results[g]++; logToday();
-      var dot = $('[data-pr-dots]').children[qi];
-      if (dot) dot.className = 'pr-pdot is-' + g;
-      qi++;
-      if (qi >= queue.length) endSession();
-      else showCard();
-      window.scrollTo(0, 0);
+    btn.addEventListener('click', function () { advance(btn.getAttribute('data-g')); });
+  });
+
+  /* ---------- bài tập code (SQL, sql.js) ---------- */
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function resultTable(rs) {
+    if (!rs || !rs.rows || !rs.rows.length) return '<p class="pr-rt-empty">(không có hàng)</p>';
+    var head = (rs.columns || []).map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('');
+    var body = rs.rows.slice(0, 8).map(function (row) {
+      return '<tr>' + row.map(function (v) {
+        return '<td>' + (v === null ? '<i>NULL</i>' : esc(v)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var more = rs.rows.length > 8 ? '<p class="pr-rt-more">… và ' + (rs.rows.length - 8) + ' hàng nữa</p>' : '';
+    return '<div class="pr-rt-wrap"><table class="pr-rt"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' + more;
+  }
+
+  function runCode() {
+    if (!curCode) return;
+    var query = $('[data-pr-editor]').value.trim();
+    var r = $('[data-pr-code-result]');
+    r.hidden = false;
+    r.innerHTML = '<p class="pr-running">Đang chạy…</p>';
+    window.IVSql.grade(curCode, query).then(function (res) {
+      if (res.ok) {
+        r.innerHTML = '<p class="pr-verdict pr-ok">✓ Accepted — đúng trên mọi bộ dữ liệu.</p>' +
+          '<button type="button" class="pr-start" data-pr-code-next>Câu tiếp →</button>';
+        r.querySelector('[data-pr-code-next]').addEventListener('click', function () { advance('good'); });
+        return;
+      }
+      var bad = null, idx = 0;
+      for (var i = 0; i < res.cases.length; i++) if (!res.cases[i].pass) { bad = res.cases[i]; idx = i; break; }
+      var h = '<p class="pr-verdict pr-wrong">✗ Chưa đúng' +
+        (res.cases.length > 1 ? ' — sai ở bộ dữ liệu ' + (idx + 1) : '') + '</p>';
+      if (bad.error) h += '<pre class="pr-err">' + esc(bad.error) + '</pre>';
+      else h += '<div class="pr-diff"><div><b>Mong đợi</b>' + resultTable(bad.expected) +
+        '</div><div><b>Kết quả của bạn</b>' + resultTable(bad.got) + '</div></div>';
+      r.innerHTML = h;
+    }).catch(function (e) {
+      r.innerHTML = '<p class="pr-verdict pr-wrong">Lỗi: ' + esc(e && e.message || e) + '</p>';
+    });
+  }
+
+  $('[data-pr-run]').addEventListener('click', runCode);
+  $('[data-pr-code-reset]').addEventListener('click', function () {
+    if (curCode) $('[data-pr-editor]').value = curCode.starter || 'SELECT ';
+  });
+  $('[data-pr-code-sol]').addEventListener('click', function () {
+    if (!curCode) return;
+    var r = $('[data-pr-code-result]');
+    r.hidden = false;
+    r.innerHTML = '<div class="pr-sol"><b>Lời giải mẫu</b><pre></pre></div>';
+    r.querySelector('pre').textContent = curCode.solution;
+    $('[data-pr-grade]').hidden = false;
+  });
+  $('[data-pr-editor]').addEventListener('keydown', function (e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = this.selectionStart, en = this.selectionEnd;
+      this.value = this.value.slice(0, s) + '  ' + this.value.slice(en);
+      this.selectionStart = this.selectionEnd = s + 2;
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault(); runCode();
+    }
+  });
+  $('[data-pr-code-schema]').addEventListener('toggle', function () {
+    var d = this;
+    if (!d.open || d.dataset.loaded || !curCode) return;
+    d.dataset.loaded = '1';
+    var host = $('[data-pr-code-schema-body]');
+    host.innerHTML = '<pre class="pr-schema-ddl">' + esc(curCode.tables) + '</pre><p class="pr-running">Đang nạp dữ liệu mẫu…</p>';
+    window.IVSql.preview(curCode).then(function (tables) {
+      var h = '<pre class="pr-schema-ddl">' + esc(curCode.tables) + '</pre>';
+      tables.forEach(function (t) {
+        h += '<p class="pr-schema-tname">' + esc(t.table) + ' — dữ liệu mẫu (bộ 1)</p>' +
+          resultTable({ columns: t.columns, rows: t.rows });
+      });
+      host.innerHTML = h;
+    }).catch(function () {
+      host.innerHTML = '<pre class="pr-schema-ddl">' + esc(curCode.tables) + '</pre>';
     });
   });
 

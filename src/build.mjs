@@ -69,6 +69,13 @@ for (const t of topics) {
       for (const r of q.related)
         if (!ids.has(r)) console.warn(`⚠ ${q.id}: related "${r}" không có trong chủ đề ${t.id}`);
     if (q.viz && !q.viz.type) console.warn(`⚠ ${q.id}: viz thiếu "type"`);
+    if (q.code) {
+      const c = q.code;
+      const miss = ['lang', 'prompt', 'tables', 'solution'].filter((k) => !c[k]);
+      if (miss.length) console.warn(`⚠ ${q.id}: code thiếu ${miss.join(', ')}`);
+      if (c.lang && c.lang !== 'sql' && c.lang !== 'java')
+        console.warn(`⚠ ${q.id}: code.lang "${c.lang}" chưa hỗ trợ`);
+    }
   }
 }
 
@@ -121,6 +128,10 @@ cpSync(join(ROOT, 'assets', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 cpSync(join(ROOT, 'assets', 'enhance.js'), join(DIST, 'assets', 'enhance.js'));
 cpSync(join(ROOT, 'assets', 'stats.js'), join(DIST, 'assets', 'stats.js'));
 cpSync(join(ROOT, 'assets', 'practice.js'), join(DIST, 'assets', 'practice.js'));
+cpSync(join(ROOT, 'assets', 'sql-run.js'), join(DIST, 'assets', 'sql-run.js'));
+mkdirSync(join(DIST, 'assets', 'vendor'), { recursive: true });
+for (const f of ['sql-wasm.js', 'sql-wasm.wasm'])
+  cpSync(join(ROOT, 'assets', 'vendor', f), join(DIST, 'assets', 'vendor', f));
 cpSync(join(ROOT, 'assets', 'topic-graph.js'), join(DIST, 'assets', 'topic-graph.js'));
 cpSync(join(ROOT, 'assets', 'viz'), join(DIST, 'assets', 'viz'), { recursive: true });
 if (diagramTopics.size) cpSync(diagramDir, join(DIST, 'assets', 'diagrams'), { recursive: true });

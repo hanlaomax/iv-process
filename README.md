@@ -16,6 +16,12 @@ Tiến độ (`iv-srs`, `iv-questions-learned`, `iv-practice-log`) lưu ở loca
 "đã thuộc" trên trang chủ đề. Mỗi trang chủ đề có nút *🎯 Luyện tập chủ đề* dẫn tới
 `/luyen-tap/?topic=<id>`.
 
+**Bài tập code SQL**: câu SQL phù hợp có thêm `code: { lang:'sql', prompt, tables, datasets, starter,
+solution, ordered }`. Trong trình luyện, câu đó hiện **IDE**: xem schema + dữ liệu mẫu, viết truy vấn,
+"▶ Chạy & chấm" → SQLite chạy trong trình duyệt (`assets/vendor/sql-wasm.*`, tải on-demand), so
+result set của bạn với lời giải trên **2 bộ dữ liệu** (chống hard-code) → Accepted / diff "mong đợi vs
+nhận được". Lọc "Có bài tập code" trong bộ lọc trạng thái. (Java qua CheerpJ: kế hoạch tiếp theo.)
+
 ## Chạy tại máy
 
 Không cần cài package (chỉ dùng Node core).

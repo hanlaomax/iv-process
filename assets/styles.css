@@ -715,4 +715,66 @@ img, svg { max-width: 100%; }
   .pr-qcard { padding: 20px; }
   .practice-cta { flex-wrap: wrap; }
   .practice-cta-go { width: 100%; }
+  .pr-diff { grid-template-columns: 1fr; }
 }
+
+/* ---- bài tập code (SQL playground) ---- */
+.pr-badge {
+  display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  color: var(--accent-ink); background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 5px; padding: 0 5px; vertical-align: 1px; margin-left: 6px;
+}
+.pr-code { margin: 4px 0 6px; }
+.pr-code-prompt {
+  font-size: 14.5px; color: var(--ink); background: var(--surface-2);
+  border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 14px; margin: 0 0 12px;
+}
+.pr-code-schema { margin-bottom: 12px; font-size: 13px; }
+.pr-code-schema summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; font-size: 13px; }
+.pr-code-schema-body { margin-top: 10px; }
+.pr-schema-ddl, .pr-err, .pr-sol pre {
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap;
+  background: var(--code-bg); color: var(--code-ink); border-radius: 8px; padding: 12px 14px; margin: 0 0 12px;
+  overflow-x: auto;
+}
+.pr-schema-tname { font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); margin: 10px 0 4px; }
+
+.pr-editor {
+  width: 100%; min-height: 130px; resize: vertical; display: block;
+  font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6; tab-size: 2;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: 10px; padding: 12px 14px;
+}
+.pr-editor:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.pr-code-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.pr-run {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  color: #fff; background: var(--accent); border: 1px solid var(--accent); border-radius: 9px; padding: 8px 16px;
+}
+:root[data-theme="dark"] .pr-run, :root:not([data-theme="light"]) .pr-run { color: #10201e; }
+.pr-run:hover { background: var(--accent-ink); }
+.pr-code-reset, .pr-code-sol {
+  font: inherit; font-size: 13px; cursor: pointer; color: var(--ink-soft);
+  background: none; border: 1px solid var(--line-strong); border-radius: 9px; padding: 8px 14px;
+}
+.pr-code-reset:hover, .pr-code-sol:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.pr-code-result { margin-top: 4px; }
+.pr-running { font-size: 13px; color: var(--ink-soft); margin: 0; }
+.pr-verdict { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.pr-ok { color: #2f8f4e; }
+.pr-wrong { color: #cf4f45; }
+.pr-verdict + .pr-start { margin-top: 2px; }
+
+.pr-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pr-diff > div > b { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.pr-rt-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.pr-rt { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 12px; }
+.pr-rt th, .pr-rt td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pr-rt thead th { background: var(--surface-2); color: var(--ink-soft); font-weight: 600; }
+.pr-rt tbody tr:last-child td { border-bottom: 0; }
+.pr-rt i { color: var(--ink-faint); }
+.pr-rt-empty, .pr-rt-more { font-size: 12px; color: var(--ink-faint); margin: 4px 0 0; }
+.pr-sol b { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
