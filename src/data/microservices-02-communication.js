@@ -9,6 +9,17 @@ SS.addQuestions('microservices', [
     'Đồng bộ cho "tôi cần biết ngay để làm tiếp"; bất đồng bộ cho "tôi thông báo, ai quan tâm thì xử lý". Ưu tiên bất đồng bộ cho **thay đổi state**, đồng bộ cho **truy vấn**.',
   example:
     'Checkout: `order-service` gọi **đồng bộ** `payment-service` (cần biết thanh toán OK mới tạo đơn) nhưng phát **event** `OrderPlaced` cho `inventory`, `email`, `analytics` (không cần chờ chúng). Nếu email service chết, đơn hàng vẫn tạo được.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Đồng bộ (REST/gRPC)', 'Bất đồng bộ (message/event)'],
+    rows: [
+      ['Caller', 'chờ kết quả', 'phát rồi đi tiếp'],
+      ['Dùng cho', 'cần dữ liệu ngay để làm tiếp — truy vấn', 'thông báo "đã có việc xảy ra" — thay đổi state'],
+      ['Coupling', 'temporal: callee phải sống & nhanh', 'tách rời vòng đời (broker buffer)'],
+      ['Nhược', 'lỗi lan theo chuỗi', 'eventual consistency, khó theo dõi luồng, cần idempotency'],
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -27,6 +38,19 @@ SS.addQuestions('microservices', [
     'gRPC tối ưu cho "máy nói với máy" trong mạng nội bộ với contract mạnh. REST tối ưu cho khả năng tiếp cận, debug, và tương thích rộng (trình duyệt, đối tác).',
   example:
     '`order-service` ↔ `inventory-service`: gRPC (thường xuyên, cần nhanh, `.proto` là contract). API mà app mobile và đối tác gọi: REST qua API Gateway. Nhiều hệ dùng cả hai: gRPC bên trong, REST/GraphQL ở rìa.',
+  viz: {
+    type: 'compare',
+    corner: 'Tiêu chí',
+    cols: ['REST / JSON', 'gRPC'],
+    rows: [
+      ['Giao thức', 'HTTP/1.1, text', 'HTTP/2, binary (Protobuf)'],
+      ['Contract', 'OpenAPI (tuỳ chọn)', '.proto bắt buộc, sinh code'],
+      ['Hiệu năng', 'chậm hơn, payload lớn', 'nhanh, nhỏ, multiplexing'],
+      ['Streaming', 'hạn chế (SSE)', 'client/server/bi-directional'],
+      ['Trình duyệt / debug', 'native, curl đọc được', 'cần grpc-web + proxy, grpcurl'],
+      ['Hợp với', 'public API, client, webhook, đối tác', 'service-to-service nội bộ'],
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -39,6 +63,19 @@ SS.addQuestions('microservices', [
     'Kafka = "sổ cái sự kiện tua lại được, throughput lớn". RabbitMQ = "hàng đợi công việc với routing thông minh". SQS/SNS = "không phải vận hành gì, đủ dùng trong AWS".',
   example:
     'Event `OrderPlaced` mà 5 team tiêu thụ và cần replay khi thêm consumer mới → **Kafka**. Hàng đợi gửi email với retry + DLQ, throughput vừa → **RabbitMQ** hoặc **SQS**. Fan-out thông báo tới nhiều queue → **SNS→SQS**.',
+  viz: {
+    type: 'compare',
+    corner: 'Tiêu chí',
+    cols: ['Kafka', 'RabbitMQ', 'SQS + SNS'],
+    rows: [
+      ['Mô hình', 'log phân tán, replay được', 'broker + routing (exchange/binding)', 'managed queue + pub/sub'],
+      ['Throughput', 'cực cao', 'vừa', 'vừa'],
+      ['Lưu trữ / replay', 'có (retention)', 'không', 'không'],
+      ['Ordering', 'per-partition', 'per-queue', 'SQS FIFO (MessageGroupId)'],
+      ['Vận hành', 'nặng (hoặc managed)', 'trung bình', 'không phải vận hành gì'],
+      ['Hợp với', 'event streaming, event sourcing, pipeline', 'task queue, RPC, workflow', 'đủ dùng trong AWS'],
+    ],
+  },
 },
 {
   cat: 'Event-driven',
@@ -51,6 +88,16 @@ SS.addQuestions('microservices', [
     'Ba mức "event mang bao nhiêu thông tin": chỉ tín hiệu → tín hiệu + trạng thái → toàn bộ lịch sử. ECST là điểm cân bằng phổ biến cho microservices (giảm call đồng bộ, chấp nhận trùng lặp dữ liệu).',
   example:
     'Notification: `{ "type": "OrderShipped", "orderId": 123 }` → email-service gọi `GET /orders/123`. ECST: `{ "type": "OrderShipped", "orderId": 123, "customerEmail": "...", "trackingUrl": "..." }` → email-service gửi luôn, không gọi ai.',
+  viz: {
+    type: 'layers',
+    title: 'Event mang bao nhiêu thông tin',
+    dir: 'up',
+    layers: [
+      { name: 'Event notification', tag: 'id + loại', note: 'consumer phải gọi lại provider lấy chi tiết — nhẹ nhưng tăng coupling đồng bộ' },
+      { name: 'Event-carried state transfer', tag: 'đủ dữ liệu', note: 'consumer không cần gọi lại — tách rời hơn, event lớn, lưu bản sao. Điểm cân bằng phổ biến' },
+      { name: 'Event sourcing', tag: 'toàn bộ lịch sử', note: 'mọi thay đổi state là chuỗi event = nguồn sự thật; state hiện tại = replay' },
+    ],
+  },
 },
 {
   cat: 'Event-driven',
@@ -66,6 +113,17 @@ SS.addQuestions('microservices', [
     'Ít bước, tách rời quan trọng → choreography. Nhiều bước, cần quan sát/kiểm soát luồng (nhất là saga tiền bạc) → orchestration. Nhiều hệ dùng lai: choreography ở mức cao, orchestration trong một số quy trình phức tạp.',
   example:
     'Đăng ký người dùng (tạo account → gửi email xác thực → tạo hồ sơ): choreography đủ. Quy trình hoàn tiền (kiểm tra đơn → tạo credit note → gọi cổng thanh toán → cập nhật sổ cái → thông báo): orchestrator (Temporal/Camunda) vì cần theo dõi trạng thái và retry/bù trừ chính xác.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Choreography', 'Orchestration'],
+    rows: [
+      ['Điều khiển luồng', 'không có "nhạc trưởng" — mỗi service tự phản ứng event', 'một orchestrator (state machine) điều khiển từng bước'],
+      ['Tách rời', 'cao — thêm consumer không sửa ai', 'thấp hơn — thêm một thành phần'],
+      ['Quan sát luồng', 'khó — "đơn hàng kẹt ở đâu?"', 'tường minh ở một chỗ, dễ debug'],
+      ['Hợp với', 'ít bước, tách rời quan trọng', 'nhiều bước, saga tiền bạc cần kiểm soát'],
+    ],
+  },
 },
 {
   cat: 'Saga',
@@ -81,6 +139,19 @@ SS.addQuestions('microservices', [
     'Saga thay "atomic + rollback" (bất khả thi xuyên service) bằng "chuỗi commit + undo nghiệp vụ". Mỗi bước phải nghĩ trước hành động bù trừ của nó.',
   example:
     'Đặt tour: `reserve-flight` → `reserve-hotel` → `charge-payment`. `charge-payment` fail (thẻ hết hạn) → orchestrator gọi `cancel-hotel` rồi `cancel-flight`. Đơn hàng kết thúc ở trạng thái FAILED, khách được thông báo, không mất tiền, không giữ chỗ.',
+  viz: {
+    type: 'sequence',
+    title: 'Chuỗi local transaction + compensating transaction khi lỗi',
+    actors: ['orchestrator', 'flight', 'hotel', 'payment'],
+    messages: [
+      { from: 0, to: 1, label: 'ReserveFlight → OK' },
+      { from: 0, to: 2, label: 'ReserveHotel → OK' },
+      { from: 0, to: 3, label: 'ChargePayment → FAIL (thẻ hết hạn)' },
+      { from: 0, to: 2, label: 'compensation: CancelHotel (idempotent, retry tới cùng)' },
+      { from: 0, to: 1, label: 'compensation: CancelFlight' },
+      { from: 0, to: 0, label: 'đơn → FAILED; đặt bước không đảo ngược ở cuối' },
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -96,6 +167,17 @@ SS.addQuestions('microservices', [
     'Đừng ghi hai nơi cùng lúc. Ghi một nơi nguyên tử (DB, gồm cả event trong bảng outbox), rồi để một relay đáng tin chuyển event ra broker.',
   example:
     '`@Transactional`: `orderRepo.save(order)` + `outboxRepo.save(new OutboxEvent("OrderPlaced", json))`. Debezium theo dõi bảng `outbox`, mỗi INSERT → publish lên Kafka topic `orders`. DB rollback → không có dòng outbox → không có event sai.',
+  viz: {
+    type: 'flow',
+    title: 'Đừng ghi hai nơi cùng lúc — ghi một nơi nguyên tử, relay chuyển sau',
+    nodes: ['Một local transaction: bản ghi nghiệp vụ + dòng outbox', 'Relay đọc outbox (polling / CDC Debezium)', 'Publish lên broker (at-least-once)', 'Đánh dấu đã gửi'],
+    steps: [
+      { to: 0, label: 'DB rollback → không có dòng outbox → không có event sai' },
+      { to: 1, label: 'Tiến trình riêng đọc SELECT ... WHERE published=false, hoặc CDC đọc WAL/binlog' },
+      { to: 2, label: 'Consumer xử lý idempotent' },
+      { to: 3, label: 'Còn một thao tác ghi nguyên tử duy nhất (vào DB)' },
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -110,6 +192,18 @@ SS.addQuestions('microservices', [
     'Query xuyên service: composition (gọi lúc chạy, đơn giản, mong manh) hoặc CQRS read model (dựng sẵn, nhanh, phức tạp hơn). Chọn theo tần suất query và yêu cầu latency/độ tin cậy.',
   example:
     'Trang "chi tiết đơn hàng" cần order + customer + shipping: API composition ở BFF gọi 3 service song song (`CompletableFuture.allOf`). Trang "lịch sử đơn hàng của tôi" (query nóng, cần nhanh): `order-history-service` giữ read model tổng hợp sẵn từ event.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['API Composition', 'CQRS read model'],
+    rows: [
+      ['Khi nào ghép dữ liệu', 'lúc chạy — composer gọi từng service', 'dựng sẵn — service nghe event, build materialized view'],
+      ['Latency', 'tổng/max các call', 'query một chỗ, nhanh'],
+      ['Độ tin cậy', 'phụ thuộc tất cả service sống', 'chịu lỗi tốt'],
+      ['Cái giá', 'N+1 nếu gọi lặp', 'eventual consistency + maintain projection'],
+      ['Hợp với', 'query ít gặp, view linh hoạt', 'query nóng, cần latency thấp'],
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -126,6 +220,20 @@ SS.addQuestions('microservices', [
     'BFF là "API riêng cho từng trải nghiệm". Nó tách nhu cầu rất khác nhau của web (payload lớn, ít call) và mobile (payload nhỏ, tiết kiệm pin/data) khỏi nhau và khỏi các service lõi.',
   example:
     'App mobile cần màn hình home gọn: `mobile-bff` gọi `feed`, `promo`, `user` → trả một JSON gọn ~5KB. Web dashboard cần chi tiết: `web-bff` trả ~50KB với đầy đủ thông tin. Hai BFF, cùng downstream service.',
+  viz: {
+    type: 'tree',
+    title: 'API riêng cho từng trải nghiệm',
+    root: {
+      label: 'Một backend riêng cho mỗi loại frontend',
+      children: [
+        { label: 'mobile-bff', note: 'payload nhỏ, ít call — tiết kiệm pin/data' },
+        { label: 'web-bff', note: 'payload lớn, đầy đủ thông tin' },
+        { label: 'Giảm round-trip', note: 'một call BFF thay vì 5 call service' },
+        { label: 'Che giấu cấu trúc microservices', note: 'đổi service bên trong không ảnh hưởng client' },
+        { label: 'Team frontend sở hữu', note: 'đổi UI + API cùng nhịp; đổi lại: trùng lặp logic giữa BFF' },
+      ],
+    },
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -141,6 +249,17 @@ SS.addQuestions('microservices', [
     'Trong hệ phân tán, "gửi đúng một lần" là bất khả thi → làm cho "gửi lại request giống hệt" trở nên vô hại. Idempotency key = server nhận ra và trả kết quả cũ.',
   example:
     'Payment API: app mobile timeout sau 30s dù server đã charge → app retry cùng `Idempotency-Key` → server thấy key đã có kết quả `{paymentId: "p_123"}` → trả lại y hệt, KHÔNG charge lần hai. Stripe/PayPal đều làm vậy.',
+  viz: {
+    type: 'flow',
+    title: 'Làm cho "gửi lại request giống hệt" trở nên vô hại',
+    nodes: ['Request + Idempotency-Key: <uuid>', 'Tra key trong store (Redis/DB, có TTL)', 'Chưa thấy → xử lý + lưu key + kết quả', 'Thấy & đã xong → trả lại kết quả cũ', 'Thấy & đang xử lý → 409 (retry sau)'],
+    steps: [
+      { to: 1, label: 'Cho request không an toàn: POST tạo tài nguyên, thanh toán' },
+      { to: 2, label: 'Lưu status + body cùng key' },
+      { to: 3, label: 'Không xử lý lại — chống double-click, timeout retry, at-least-once redelivery' },
+      { to: 4, label: 'Client retry sau vài giây' },
+    ],
+  },
 },
 {
   cat: 'Event-driven',
@@ -155,6 +274,17 @@ SS.addQuestions('microservices', [
     'Đừng ép ordering toàn cục. Nhóm các event *cần* thứ tự theo key thực thể vào cùng một partition, xử lý tuần tự trong partition đó.',
   example:
     'Event `AddressChanged` rồi `OrderShipped` của cùng đơn: key = `orderId` → cùng Kafka partition → consumer `shipping` xử lý đúng thứ tự. Đơn khác nằm partition khác, xử lý song song.',
+  viz: {
+    type: 'flow',
+    title: 'Đừng ép ordering toàn cục — nhóm theo key thực thể',
+    nodes: ['Partition/routing key = id thực thể', 'Mọi event cùng key → cùng partition', 'Consumer xử lý tuần tự trong partition', 'Vẫn lệch? version/sequence number trong event'],
+    steps: [
+      { to: 0, label: 'Kafka partition key = orderId; SQS FIFO MessageGroupId' },
+      { to: 1, label: 'Thứ tự đảm bảo trong phạm vi một key' },
+      { to: 2, label: 'Không dùng thread pool phá thứ tự' },
+      { to: 3, label: 'Consumer bỏ qua event cũ hơn version đã thấy' },
+    ],
+  },
 },
 {
   cat: 'Event-driven',
@@ -170,6 +300,17 @@ SS.addQuestions('microservices', [
     'DLQ tách "message độc" ra khỏi luồng chính để một record hỏng không làm nghẽn tất cả. Retry queue cho lỗi tạm; DLQ cho lỗi cần con người xem.',
   example:
     'Message có JSON sai định dạng: consumer bắt `DeserializationException` → publish nguyên bytes sang `orders.dlq` với header `error`, `original-offset`. Partition tiếp tục chạy. Team data xem DLQ, phát hiện producer bug, sửa, replay 200 message từ DLQ.',
+  viz: {
+    type: 'flow',
+    title: 'Tách "message độc" khỏi luồng chính để một record hỏng không nghẽn tất cả',
+    nodes: ['Message fail', 'Retry queue có delay (5s → 1m → 10m)', 'Quá maxRetries', 'DLQ + metadata (lỗi, stack, offset gốc, số lần thử)', 'Alert + dashboard + replay sau khi sửa bug'],
+    steps: [
+      { to: 1, label: 'Lỗi tạm thời (downstream chập chờn) → thử lại sau delay' },
+      { to: 2, label: 'Lỗi vĩnh viễn (schema sai, bug logic) vẫn fail' },
+      { to: 3, label: 'Không retry vô hạn — không chặn queue/partition' },
+      { to: 4, label: 'Không bao giờ "nuốt" message lỗi im lặng' },
+    ],
+  },
 },
 {
   cat: 'Testing',
@@ -185,6 +326,17 @@ SS.addQuestions('microservices', [
     'Contract test kiểm tra "hai phía hiểu nhau" mà không cần chạy cả hệ thống. Mỗi phía test độc lập với một artifact chung (contract). Nhanh, chạy trong CI của từng service.',
   example:
     '`web-bff` (consumer) khai báo cần field `estimatedDelivery` từ `order-service`. Dev order-service lỡ đổi tên field → CI order-service chạy Pact verify → FAIL với "web-bff mong đợi estimatedDelivery" → sửa trước khi merge.',
+  viz: {
+    type: 'flow',
+    title: 'Kiểm "hai phía hiểu nhau" mà không chạy cả hệ thống',
+    nodes: ['Consumer viết test kỳ vọng', 'Sinh contract (file Pact)', 'Chia sẻ qua Pact Broker', 'Provider chạy verify: response thật thoả mọi contract', 'CI provider FAIL nếu thay đổi phá contract'],
+    steps: [
+      { to: 0, label: '"gọi GET /orders/1 thì nhận {id, status, total}"' },
+      { to: 2, label: 'Artifact chung giữa hai phía' },
+      { to: 3, label: 'Mỗi phía test độc lập trong CI của mình — nhanh' },
+      { to: 4, label: 'Biết trước khi deploy, không chờ e2e giòn' },
+    ],
+  },
 },
 {
   cat: 'Event-driven',
@@ -199,6 +351,17 @@ SS.addQuestions('microservices', [
     'Event schema là hợp đồng nhiều-bên tồn tại lâu. "Chỉ thêm, không xoá/đổi" giải quyết 90%. Schema Registry biến quy tắc đó thành kiểm tra tự động.',
   example:
     'Thêm `discountCode` (string, default "") vào `OrderPlaced` với mode BACKWARD → consumer cũ bỏ qua, producer mới không phá ai. Registry từ chối nếu bạn đổi `amount` từ int sang string.',
+  viz: {
+    type: 'compare',
+    corner: 'Loại',
+    cols: ['Backward compatible', 'Forward compatible'],
+    rows: [
+      ['Nghĩa', 'consumer mới đọc được event cũ', 'consumer cũ đọc được event mới'],
+      ['Quy tắc', 'chỉ thêm field optional/có default; không xoá/đổi kiểu/đổi nghĩa', 'consumer là tolerant reader — bỏ qua field lạ'],
+      ['Công cụ', 'Schema Registry mode BACKWARD — chặn thay đổi phá vỡ tự động', 'kỷ luật code consumer'],
+      ['Breaking không tránh được', 'phát OrderPlacedV2, chạy song song, migrate, bỏ V1', '—'],
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -218,6 +381,19 @@ SS.addQuestions('microservices', [
     'Mỗi hop đồng bộ thêm latency và nhân xác suất lỗi. Kiến trúc tốt có **chuỗi call nông** — phần lớn "làm việc" xảy ra bất đồng bộ hoặc từ dữ liệu đã dựng sẵn.',
   example:
     'Trang home gọi `feed`→`ranking`→`profile`→`ads` tuần tự = 400ms + hay lỗi. Sửa: `feed-service` giữ read model đã gộp sẵn (cập nhật qua event), trang home gọi 1 lần = 30ms. Ads gọi song song, có fallback "không hiện ads" nếu lỗi.',
+  viz: {
+    type: 'tree',
+    title: 'Kiến trúc tốt có chuỗi call nông',
+    root: {
+      label: 'Mỗi hop đồng bộ thêm latency và nhân xác suất lỗi',
+      children: [
+        { label: 'Latency cộng dồn', note: 'p99 tổng ≈ tổng p99 từng chặng' },
+        { label: 'Availability nhân', note: '4 service × 99.9% → chuỗi ≈ 99.6%' },
+        { label: 'Fault propagation', note: 'D chậm → C giữ conn → B hết thread → A timeout → cascading' },
+        { label: 'Giảm', note: 'chuyển bước không-cần-ngay sang event; composition song song; cache; CQRS read model; timeout + circuit breaker + fallback' },
+      ],
+    },
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -230,6 +406,17 @@ SS.addQuestions('microservices', [
     'Deadline propagation biến "mỗi service một timeout tuỳ hứng" thành "cả chuỗi cùng một hạn chót". Downstream không làm việc cho một request mà client đã bỏ cuộc.',
   example:
     'Client đặt deadline 500ms. A dùng 200ms rồi gọi B với deadline còn 300ms. B dùng 280ms, gọi C với deadline còn 20ms → C thấy "không đủ thời gian" → trả `DEADLINE_EXCEEDED` ngay thay vì chạy query 100ms vô ích.',
+  viz: {
+    type: 'sequence',
+    title: 'Cả chuỗi cùng một hạn chót — không làm việc cho request đã bỏ cuộc',
+    actors: ['client', 'A', 'B', 'C'],
+    messages: [
+      { from: 0, to: 1, label: 'deadline = 500ms (thời điểm T)' },
+      { from: 1, to: 2, label: 'A dùng 200ms → gọi B, deadline còn 300ms' },
+      { from: 2, to: 3, label: 'B dùng 280ms → gọi C, deadline còn 20ms' },
+      { from: 3, to: 2, label: 'C: query cần 100ms > 20ms → DEADLINE_EXCEEDED ngay (fail fast)' },
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -247,6 +434,20 @@ SS.addQuestions('microservices', [
     'Webhook là "push HTTP không đảm bảo". Coi nó như at-least-once, không thứ tự: consumer phải idempotent, có dedup, và tự lấy lại được cái đã miss.',
   example:
     'GitHub webhook `push` event: ký HMAC-SHA256, gửi `X-GitHub-Delivery` (id để dedup), retry vài lần. Consumer verify chữ ký → đẩy vào SQS → trả 200 ngay → worker xử lý build. Có UI xem "recent deliveries" + nút redeliver.',
+  viz: {
+    type: 'tree',
+    title: '"Push HTTP không đảm bảo" — coi là at-least-once, không thứ tự',
+    root: {
+      label: 'Provider gọi HTTP tới URL consumer đăng ký khi có sự kiện',
+      children: [
+        { label: 'Retry với backoff', note: 'vài giờ tới vài ngày, rồi disable endpoint + alert nếu fail liên tục' },
+        { label: 'Ký payload (HMAC header)', note: 'consumer verify nguồn gốc' },
+        { label: 'Idempotency: gửi event-id', note: 'consumer dedup — webhook có thể trùng' },
+        { label: 'Không đảm bảo thứ tự', note: 'consumer đính kèm timestamp/version' },
+        { label: 'Nhận nhanh (ghi vào queue) rồi xử lý sau', note: 'không xử lý nặng trong handler; có endpoint xem lịch sử + replay' },
+      ],
+    },
+  },
 },
 {
   cat: 'Event-driven',
@@ -262,6 +463,17 @@ SS.addQuestions('microservices', [
     'Request/reply qua broker cho bạn buffering và load leveling của async, với ngữ nghĩa đồng bộ của caller. Nhưng caller vẫn bị chặn + cần timeout → cân nhắc có thực sự cần chờ không.',
   example:
     'Service tính toán nặng (render báo cáo): API nhận request → gửi vào RabbitMQ `report-requests` → worker pool xử lý → gửi kết quả về `reply-<id>`. API chờ tối đa 30s; nếu quá thì trả `202 Accepted` + link poll kết quả.',
+  viz: {
+    type: 'sequence',
+    title: 'Buffering + load leveling của async, ngữ nghĩa đồng bộ của caller',
+    actors: ['producer', 'request-q', 'consumer', 'reply-q'],
+    messages: [
+      { from: 0, to: 1, label: 'gửi message + correlationId + replyTo' },
+      { from: 1, to: 2, label: 'consumer nhận, xử lý' },
+      { from: 2, to: 3, label: 'gửi response tới replyTo, cùng correlationId' },
+      { from: 3, to: 0, label: 'producer chờ, khớp correlationId — có timeout' },
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -275,6 +487,16 @@ SS.addQuestions('microservices', [
     'Federation là "API composition được chuẩn hoá qua GraphQL": mỗi service góp một phần schema, gateway tự nối. Mạnh cho client đa dạng, nhưng thêm một tầng thông minh cần vận hành.',
   example:
     '`Product` do catalog-service sở hữu (`@key(fields: "id")`); `Review` do review-service sở hữu và `extend type Product { reviews: [Review] }`. Client query `{ product(id:1) { name reviews { rating } } }` → gateway gọi catalog rồi review, nối theo `id`.',
+  viz: {
+    type: 'flow',
+    title: '"API composition được chuẩn hoá qua GraphQL"',
+    nodes: ['Mỗi service expose subgraph (@key cho entity)', 'Gateway hợp nhất thành supergraph', 'Client gửi 1 query GraphQL', 'Gateway lập plan, gọi subgraph cần thiết', 'Resolve @key nối entity xuyên service, gộp kết quả'],
+    steps: [
+      { to: 1, label: 'Apollo Router — một endpoint duy nhất cho client' },
+      { to: 3, label: 'Client tự chọn field, không over/under-fetch' },
+      { to: 4, label: 'Nhược: gateway phức tạp, khó cache theo field, N+1 giữa subgraph nếu bất cẩn' },
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -290,6 +512,16 @@ SS.addQuestions('microservices', [
     'Outbox lo "không mất event". Inbox lo "không xử lý trùng". Điểm mấu chốt của inbox: ghi id đã xử lý và làm side-effect phải **nguyên tử** với nhau.',
   example:
     '`inventory-service` nhận `OrderPlaced` (có `eventId`): `INSERT INTO inbox(event_id) VALUES(?) ON CONFLICT DO NOTHING` — nếu insert được thì trừ kho; nếu 0 dòng thì event này đã xử lý, skip. Cả hai trong một transaction DB.',
+  viz: {
+    type: 'flow',
+    title: 'Outbox lo "không mất event" — Inbox lo "không xử lý trùng"',
+    nodes: ['Nhận message (có messageId)', 'Kiểm tra messageId trong bảng inbox', 'Chưa có → xử lý + INSERT inbox (CÙNG transaction)', 'Đã có → bỏ qua'],
+    steps: [
+      { to: 1, label: 'Consumer có thể nhận trùng: redelivery, rebalance' },
+      { to: 2, label: 'Ghi id đã xử lý + side-effect phải NGUYÊN TỬ với nhau' },
+      { to: 3, label: 'Outbox (producer) + Inbox (consumer) → hiệu ứng exactly-once' },
+    ],
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -304,5 +536,18 @@ SS.addQuestions('microservices', [
     'Zero-trust: không tin request chỉ vì nó đến từ mạng nội bộ. Mỗi call service-to-service phải có danh tính xác thực được (mTLS hoặc token), và mang theo user context nếu cần phân quyền theo user.',
   example:
     'Service mesh Istio: `order-service` gọi `payment-service` qua mTLS tự động (Istio inject cert). Đồng thời `order-service` truyền tiếp JWT của user trong header `Authorization` để `payment-service` kiểm tra "user này có quyền thanh toán đơn này không".',
+  viz: {
+    type: 'tree',
+    title: 'Zero-trust: không tin request chỉ vì đến từ mạng nội bộ',
+    root: {
+      label: 'Mỗi call service-to-service phải có danh tính xác thực được',
+      children: [
+        { label: 'mTLS', note: 'mỗi service có cert, hai bên verify nhau — service mesh (Istio) tự cấp/xoay' },
+        { label: 'OAuth2 Client Credentials', note: 'service lấy token bằng client_id/secret, đính kèm call' },
+        { label: 'Signed JWT short TTL', note: 'downstream verify chữ ký' },
+        { label: 'Token propagation cho user context', note: 'A gọi B thay mặt user → truyền tiếp token để B biết cả service nào gọi + user nào' },
+      ],
+    },
+  },
 },
 ]);

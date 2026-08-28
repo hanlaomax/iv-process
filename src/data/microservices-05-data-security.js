@@ -11,6 +11,16 @@ SS.addQuestions('microservices', [
     'CQRS thừa nhận "đọc và ghi là hai bài toán khác nhau" và cho phép tối ưu riêng. Trong microservices, read model là cách trả lời query xuyên service mà không JOIN và không call chuỗi lúc request.',
   example:
     '`order-service` (write) enforce quy tắc đặt hàng. `order-history-service` (read) lắng nghe `OrderPlaced`, `OrderShipped`, `OrderCancelled` + `CustomerUpdated` từ customer-service → dựng bảng `order_summary(orderId, customerName, status, total, ...)`. Trang "đơn hàng của tôi" query một bảng, một service, latency ms.',
+  viz: {
+    type: 'flow',
+    title: '"Đọc và ghi là hai bài toán khác nhau" — tối ưu riêng',
+    nodes: ['Write side: model chuẩn hoá, enforce invariant', 'Phát event khi state đổi', 'Read side: read model (materialized view) từ event', 'Query = SELECT một bảng, đúng shape UI'],
+    steps: [
+      { to: 0, label: 'Tối ưu cho tính đúng' },
+      { to: 2, label: 'Dựng read model từ event của nhiều service — không JOIN, không call chuỗi lúc request' },
+      { to: 3, label: 'Đổi lại: eventual consistency. KHÔNG dùng cho CRUD đơn giản' },
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -23,6 +33,19 @@ SS.addQuestions('microservices', [
     'Event sourcing đổi "biết state bây giờ" lấy "biết toàn bộ lịch sử làm sao đến state này". Cực mạnh cho domain cần audit/temporal (tài chính, y tế), nhưng là công cụ chuyên dụng — đừng dùng mặc định.',
   example:
     'Tài khoản ngân hàng: thay vì cột `balance`, lưu event `Deposited(100)`, `Withdrawn(30)`, `Deposited(50)`. Balance = 120 (fold). Kiểm toán hỏi "số dư ngày 15/6" → replay tới ngày đó. Phát hiện bug tính phí → sửa projection, replay lại toàn bộ.',
+  viz: {
+    type: 'tree',
+    title: 'Đổi "biết state bây giờ" lấy "biết toàn bộ lịch sử" — công cụ chuyên dụng',
+    root: {
+      label: 'Lưu chuỗi event là nguồn sự thật; state = fold/replay (+ snapshot)',
+      children: [
+        { label: 'Ưu: audit trail đầy đủ & miễn phí', note: '"time travel" — state tại bất kỳ thời điểm' },
+        { label: 'Ưu: dựng read model mới bằng replay', note: 'hợp tự nhiên với event-driven' },
+        { label: 'Nhược: query phức tạp (cần projection)', note: 'versioning event schema khó' },
+        { label: 'Nhược: xoá dữ liệu (GDPR) khó', note: 'event append-only; cần DB chuyên dụng (EventStoreDB / Kafka+KTable)' },
+      ],
+    },
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -40,6 +63,20 @@ SS.addQuestions('microservices', [
     'Database riêng là *định nghĩa* của service độc lập. Chia sẻ DB = giữ coupling chặt nhất (dữ liệu) trong khi mất tính đơn giản của monolith. Tệ cả đôi đường.',
   example:
     '`order-service` và `reporting-service` cùng đọc bảng `orders`. Team order thêm cột NOT NULL → reporting-service (không biết) crash khi insert. Sửa: order-service sở hữu `orders`, phát event; reporting-service giữ bản sao của riêng nó hoặc query qua API.',
+  viz: {
+    type: 'tree',
+    title: 'Dấu hiệu #1 của distributed monolith',
+    root: {
+      label: 'Chia sẻ DB = coupling chặt nhất (dữ liệu) + mất tính đơn giản của monolith',
+      children: [
+        { label: 'Schema thành API ngầm không có contract', note: 'đổi bảng làm hỏng service khác, không biết ai phụ thuộc' },
+        { label: 'Không deploy độc lập', note: 'migration phải phối hợp' },
+        { label: 'Coupling runtime', note: 'lock, transaction, connection pool tranh chấp' },
+        { label: 'Không chọn được công nghệ lưu trữ riêng', note: '' },
+        { label: 'Mất ranh giới sở hữu', note: '"ai chịu trách nhiệm tính đúng của bảng này?"' },
+      ],
+    },
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -52,6 +89,16 @@ SS.addQuestions('microservices', [
     'ACL bảo vệ mô hình domain sạch của bạn khỏi sự lây nhiễm của mô hình xấu bên ngoài. Chi phí dịch thuật ở một chỗ, đổi lấy việc phần còn lại của service không dính "nợ" của hệ legacy.',
   example:
     'Service `pricing` mới phải lấy dữ liệu từ ERP cũ (SOAP, field tên `CUST_PRC_GRP_CD`, ngày dạng `YYYYMMDD`, giá là string). ACL: một `ErpPricingClient` gọi SOAP, parse, chuyển thành `PriceGroup` enum + `LocalDate` + `Money`. Phần `pricing` còn lại không biết ERP tồn tại.',
+  viz: {
+    type: 'flow',
+    title: 'Chi phí dịch thuật ở một chỗ — phần còn lại không dính "nợ" legacy',
+    nodes: ['Hệ ngoài (legacy / đối tác): model xấu, khác biệt', 'ACL: lớp dịch thuật', 'Mô hình domain sạch của bạn'],
+    steps: [
+      { to: 0, label: 'SOAP, CUST_PRC_GRP_CD, ngày YYYYMMDD, giá là string' },
+      { to: 1, label: 'ErpPricingClient: gọi, parse, chuyển đổi hai chiều' },
+      { to: 2, label: 'PriceGroup enum + LocalDate + Money — service không biết ERP tồn tại' },
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -68,6 +115,17 @@ SS.addQuestions('microservices', [
     'Migrate dữ liệu trong microservices là một quá trình nhiều tuần với các giai đoạn "hai nguồn song song", không phải một script chạy một lần. Đối soát (reconciliation) là bắt buộc để tin tưởng đường mới.',
   example:
     'Tách `inventory` khỏi monolith: (1) `inventory-service` + Postgres riêng; (2) Debezium CDC từ bảng `stock` của monolith → inventory-service; (3) monolith gọi API inventory-service để đọc tồn kho (flag), so với đọc DB trực tiếp; (4) chuyển ghi; (5) sau 1 tháng ổn định, drop bảng `stock`.',
+  viz: {
+    type: 'flow',
+    title: 'Quá trình nhiều tuần với "hai nguồn song song" — không một script',
+    nodes: ['Tạo service mới + DB riêng (chưa ai dùng)', 'Đồng bộ: CDC + backfill lịch sử', 'Chuyển đọc (flag, shadow read + so sánh)', 'Chuyển ghi — service mới là nguồn sự thật', 'Dọn: xoá code/bảng cũ'],
+    steps: [
+      { to: 1, label: 'Debezium CDC từ bảng cũ → service mới' },
+      { to: 2, label: 'Consumer dần chuyển sang API mới; đối soát kết quả với đường cũ' },
+      { to: 3, label: 'Bảng cũ thành read-only rồi bỏ' },
+      { to: 4, label: 'Mỗi bước có thể dừng/quay lui' },
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -83,6 +141,16 @@ SS.addQuestions('microservices', [
     'Trong chuỗi call, mỗi service cần đủ context để **tự phân quyền** (user + client + scope). Forwarding đơn giản; token exchange an toàn hơn (least privilege, không lộ token gốc quá sâu).',
   example:
     'User gọi `GET /orders/5` → gateway verify JWT → `order-service`. order-service cần địa chỉ giao từ `customer-service`: token exchange lấy token scope `customer:read` cho user đó → gọi `customer-service` → customer-service kiểm tra "user X có được xem địa chỉ của customer trong order 5 không".',
+  viz: {
+    type: 'compare',
+    corner: 'Cách',
+    cols: ['Token forwarding', 'Token Exchange (RFC 8693)', 'On-behalf-of'],
+    rows: [
+      ['Cách làm', 'A truyền tiếp nguyên token user xuống B', 'A đổi token user lấy token mới, scope hẹp cho gọi B', 'như exchange, kèm danh tính A + user X'],
+      ['Scope', 'rộng (của user token)', 'hẹp ("chỉ đọc order")', 'hẹp + rõ chủ thể'],
+      ['An toàn', 'token gốc lộ sâu', 'least privilege, không lộ token gốc', 'least privilege + truy vết'],
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -97,6 +165,17 @@ SS.addQuestions('microservices', [
     'Tách "policy" (quy tắc, quản lý tập trung) khỏi "enforcement" (thực thi tại chỗ, phi tập trung). OPA cho bạn cả hai: một nguồn policy, thực thi cạnh mỗi service.',
   example:
     'OPA policy: "user role `support` được `read` mọi order nhưng không `refund` quá 1 triệu". `order-service` gọi OPA local với `{user, action: "refund", order: {amount}}` → deny nếu amount > 1M. Policy này áp cho mọi service, sửa một chỗ.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Trong từng service', 'Tập trung — OPA (policy as code)'],
+    rows: [
+      ['Logic phân quyền', 'rải rác, dễ lệch', 'một nguồn: Rego, version hoá, test được'],
+      ['Audit toàn cục', 'khó', 'dễ'],
+      ['Nơi quyết định', 'trong code service', 'cạnh service (OPA local) — không network hop, không điểm lỗi trung tâm'],
+      ['Thực tế', 'fine-grained (chủ resource này?) cần domain data → ở service', 'coarse-grained (RBAC theo role) ở gateway/OPA'],
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -114,6 +193,17 @@ SS.addQuestions('microservices', [
     'Gateway lo "bạn là ai và có được vào khu vực này không". Service lo "bạn có được động vào *đúng cái này* không" — vì chỉ service mới biết dữ liệu để quyết định. Cả hai lớp, không lớp nào tin lớp kia tuyệt đối.',
   example:
     'Gateway: verify JWT, chặn nếu không có role `customer`. `order-service` nhận `GET /orders/5`: kiểm tra `order.customerId == jwt.sub` → deny 403 nếu user cố xem đơn của người khác (dù đã qua gateway). IDOR attack bị chặn ở tầng service.',
+  viz: {
+    type: 'compare',
+    corner: 'Trách nhiệm',
+    cols: ['Ở Gateway (edge)', 'Trong service (defense in depth)'],
+    rows: [
+      ['Câu hỏi', '"bạn là ai, có được vào khu vực này không"', '"bạn có được động vào ĐÚNG cái này không"'],
+      ['Xác thực', 'verify JWT signature/expiry/issuer — một lần', 'không tin mù header — vẫn verify token hoặc mTLS + signed context'],
+      ['Authorization', 'coarse (role chạm nhóm endpoint)', 'fine-grained cần domain data ("user này là chủ resource?")'],
+      ['Thêm', 'rate limit, quota, WAF', 'chặn IDOR (order.customerId == jwt.sub)'],
+    ],
+  },
 },
 {
   cat: 'Testing',
@@ -129,6 +219,17 @@ SS.addQuestions('microservices', [
     'Đảo ngược "ice cream cone" (nhiều e2e, ít unit). E2E test cho microservices cực đắt và giòn — thay phần lớn giá trị của nó bằng **contract test + component test**. Chỉ giữ vài e2e cho critical path.',
   example:
     '`order-service`: 400 unit test (logic tính giá, trạng thái), 30 component test (`@SpringBootTest` + WireMock cho payment + Testcontainers Postgres), 5 Pact contract (với web-bff, inventory-service), 2 e2e (đặt hàng thành công, đặt hàng khi hết tồn kho).',
+  viz: {
+    type: 'layers',
+    title: 'Đảo ngược "ice cream cone" — thay e2e bằng contract + component test',
+    layers: [
+      { name: 'End-to-end', tag: 'ít nhất, giòn nhất', note: 'vài luồng critical qua nhiều service thật trong staging' },
+      { name: 'Integration', tag: '', note: 'service + backing service thật (DB, broker) qua Testcontainers' },
+      { name: 'Contract (Pact)', tag: '', note: 'provider–consumer không lệch hợp đồng, mỗi phía chạy riêng' },
+      { name: 'Component / service', tag: '', note: 'nguyên một service, downstream stub (WireMock), DB thật' },
+      { name: 'Unit', tag: 'nhiều nhất, rẻ nhất', note: 'logic thuần, mock mọi phụ thuộc' },
+    ],
+  },
 },
 {
   cat: 'Testing',
@@ -143,6 +244,16 @@ SS.addQuestions('microservices', [
     'Contract test dịch chuyển "phát hiện breaking change" từ e2e/production (muộn, đắt) sang CI của từng service (sớm, rẻ). Consumer định nghĩa "tôi cần gì", provider chứng minh "tôi cung cấp đủ".',
   example:
     '`web-bff` khai báo pact: cần `estimatedDelivery` (ISO date) từ `order-service`. Dev order-service đổi field thành timestamp epoch → CI order-service chạy pact verify → FAIL: "web-bff expects ISO string" → biết ngay, không merge. `can-i-deploy` cũng sẽ chặn.',
+  viz: {
+    type: 'flow',
+    title: 'Dịch "phát hiện breaking change" từ production sang CI của từng service',
+    nodes: ['Consumer viết pact test (mock provider) → sinh file pact', 'Publish pact lên Pact Broker (version + branch)', 'Provider CI: lấy pact, dựng provider thật + state setup, replay, assert', 'Provider publish kết quả verification', 'can-i-deploy: "tương thích với consumer production?" → chặn nếu phá'],
+    steps: [
+      { to: 0, label: '"given order 1 exists, when GET /orders/1, then {...}"' },
+      { to: 2, label: '"given order 1 exists" → seed DB' },
+      { to: 4, label: 'Consumer định nghĩa "tôi cần gì", provider chứng minh "tôi cung cấp đủ"' },
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -156,6 +267,17 @@ SS.addQuestions('microservices', [
     'Đừng để query xuyên service thành N call runtime. Vật chất hoá kết quả từ event stream (read model cho query nghiệp vụ nóng) hoặc trong warehouse (cho analytics). Chấp nhận độ trễ đổi lấy tốc độ và độ tin cậy.',
   example:
     'Dashboard "doanh thu theo cửa hàng theo ngày" cần data từ `order`, `payment`, `store`. Không query 3 service: CDC cả 3 → ClickHouse; dashboard query ClickHouse, trả trong < 1s. Dữ liệu trễ ~2 phút — chấp nhận được cho báo cáo.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Read model service (CQRS)', 'Data lake / warehouse'],
+    rows: [
+      ['Nguồn', 'lắng nghe event từ các service liên quan', 'ETL/CDC từ mọi service DB'],
+      ['Dùng cho', 'query nghiệp vụ nóng, cần latency thấp', 'analytics, BI — không đụng OLTP'],
+      ['Query', 'SELECT một bảng denormalized', 'Snowflake/BigQuery/ClickHouse'],
+      ['Đánh đổi', 'eventual consistency (trễ vài giây), maintain projection (cần replay được)', 'trễ vài phút, chấp nhận cho báo cáo'],
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -169,6 +291,16 @@ SS.addQuestions('microservices', [
     'Chọn mô hình theo trục "chi phí vận hành ↔ mức cô lập". Điểm khó riêng của microservices: tenant context phải đi xuyên suốt toàn bộ chuỗi call/event, và MỖI service phải tự thực thi cô lập.',
   example:
     'SaaS B2B: shared schema + Postgres RLS (`CREATE POLICY tenant_isolation USING (tenant_id = current_setting(\'app.tenant\')::uuid)`) cho 5000 tenant nhỏ; database riêng cho 8 khách enterprise có yêu cầu compliance. `tenant_id` nằm trong JWT, mọi service set `SET app.tenant` đầu mỗi request.',
+  viz: {
+    type: 'compare',
+    corner: 'Mô hình',
+    cols: ['Shared schema', 'Schema per tenant', 'Database per tenant'],
+    rows: [
+      ['Chi phí vận hành', 'thấp nhất (một migration)', 'trung bình (migration N lần)', 'cao (N database)'],
+      ['Mức cô lập', 'thấp — quên WHERE tenant_id = rò rỉ (dùng RLS)', 'khá — backup/restore per-tenant', 'tối đa'],
+      ['Điểm khó riêng của microservices', 'tenant_id phải propagate qua MỌI call & event; MỖI service tự enforce cô lập', '', ''],
+    ],
+  },
 },
 {
   cat: 'Bảo mật',
@@ -183,6 +315,16 @@ SS.addQuestions('microservices', [
     'Xoá cứng xuyên hệ phân tán (nhất là với event sourcing / backup bất biến) gần như bất khả thi. Crypto-shredding (xoá = huỷ khoá giải mã) là kỹ thuật thực dụng nhất để "quên" dữ liệu ở mọi nơi cùng lúc.',
   example:
     'Mỗi user có một AES key lưu trong `key-vault`. Order-service lưu `shippingAddress` đã mã hoá bằng key đó. User yêu cầu xoá → `privacy-service` huỷ key trong vault → mọi bản mã hoá (DB, event `OrderPlaced` trong Kafka, backup S3) không giải mã được nữa. Đơn hàng vẫn còn (`total`, `date`) cho kế toán nhưng không còn PII.',
+  viz: {
+    type: 'flow',
+    title: 'Xoá cứng xuyên phân tán gần bất khả thi — crypto-shredding là thực dụng nhất',
+    nodes: ['privacy-service phát UserDeletionRequested', 'Mỗi service xoá / ẩn danh dữ liệu user', 'Xác nhận UserDataDeleted', 'Theo dõi tới khi tất cả xong'],
+    steps: [
+      { to: 1, label: 'Crypto-shredding: dữ liệu mã hoá bằng key riêng user → "xoá" = huỷ key → backup & event log append-only cũng không đọc được' },
+      { to: 2, label: 'Anonymization thay delete cho dữ liệu cần giữ (đơn hàng cho kế toán) — thay PII bằng placeholder' },
+      { to: 3, label: 'Orchestrated deletion — biết khi nào hoàn tất' },
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -199,6 +341,19 @@ SS.addQuestions('microservices', [
     'Cache trong microservices là **bản sao có thể sai** của dữ liệu do service khác sở hữu. Nhất quán = TTL ngắn (đơn giản) hoặc invalidation qua event (realtime hơn). Mỗi service cache độc lập, đồng bộ qua event, không chia sẻ cache store cho business data.',
   example:
     '`product-service` sở hữu catalog. `search-service`, `pricing-service` mỗi cái cache tên/thuộc tính sản phẩm (TTL 5 phút) + nghe event `ProductUpdated` để xoá key ngay. Admin sửa tên sản phẩm → event → cả hai service xoá cache trong ~100ms, không chờ hết 5 phút.',
+  viz: {
+    type: 'tree',
+    title: 'Cache = bản sao có thể sai của dữ liệu do service khác sở hữu',
+    root: {
+      label: 'Mỗi service cache độc lập, đồng bộ qua event — không chia sẻ cache store cho business data',
+      children: [
+        { label: 'TTL ngắn', note: 'chấp nhận stale vài giây/phút — đơn giản nhất, đủ cho phần lớn' },
+        { label: 'Event-driven invalidation', note: 'service sở hữu phát XChanged → mọi instance xoá key (Redis pub/sub, Kafka)' },
+        { label: 'Versioned key', note: 'product:v{updatedAt}:{id} — đổi data → key mới, key cũ tự hết hạn' },
+        { label: 'Tránh', note: 'nhiều service ghi chung một Redis cache cho cùng data → quay lại shared-database' },
+      ],
+    },
+  },
 },
 {
   cat: 'Bảo mật',
@@ -214,6 +369,20 @@ SS.addQuestions('microservices', [
     'Secret là dữ liệu động, được quản lý bên ngoài artifact và tự xoay. Image và code phải "vô danh" — cùng một image chạy được ở mọi môi trường vì secret được bơm vào lúc chạy.',
   example:
     'RDS password xoay mỗi 30 ngày qua Secrets Manager rotation Lambda. `order-service` dùng AWS JDBC wrapper tự lấy password mới nhất từ Secrets Manager mỗi khi tạo connection → xoay password không cần restart service, không downtime.',
+  viz: {
+    type: 'tree',
+    title: 'Image và code phải "vô danh" — secret bơm vào lúc chạy',
+    root: {
+      label: 'Cùng một image chạy được ở mọi môi trường',
+      children: [
+        { label: 'KHÔNG secret trong', note: 'source code, Dockerfile, env của image, ConfigMap, git (kể cả private)' },
+        { label: 'Secret trong secret manager', note: 'Vault / Secrets Manager — inject runtime (K8s Secret + encryption, CSI, Vault agent)' },
+        { label: 'Rotation', note: 'secret manager đổi định kỳ; app đọc lại (poll/watch), không hardcode lúc startup' },
+        { label: 'Least privilege', note: 'mỗi service chỉ đọc secret của nó (IAM/Vault policy theo path)' },
+        { label: 'Detect leak', note: 'gitleaks trong CI; lộ → xoay ngay' },
+      ],
+    },
+  },
 },
 {
   cat: 'Testing',
@@ -230,6 +399,20 @@ SS.addQuestions('microservices', [
     'Dữ liệu test phải được tạo qua API/hook chính thức (đảm bảo hợp lệ), cô lập theo test/PR (ephemeral env hoặc tenant riêng), và tái lập được. "Shared golden dataset" là nguồn của flaky test.',
   example:
     'CI cho một PR: tạo namespace `pr-1234`, deploy 6 service + Postgres/Kafka, chạy job seed gọi `POST /customers`, `POST /products` (qua API). Chạy e2e suite. Xoá namespace. Mỗi PR có môi trường sạch, không ảnh hưởng PR khác.',
+  viz: {
+    type: 'tree',
+    title: '"Shared golden dataset" là nguồn của flaky test',
+    root: {
+      label: 'Dữ liệu test: tạo qua API/hook chính thức, cô lập theo PR, tái lập được',
+      children: [
+        { label: 'Test setup qua API công khai', note: 'không đụng DB trực tiếp → dữ liệu qua đúng validation' },
+        { label: 'Provider state cho contract test', note: 'endpoint/hook "given X exists" chỉ dùng cho test' },
+        { label: 'Ephemeral environment per PR', note: 'namespace K8s riêng + đủ service + seed data → xong thì xoá' },
+        { label: 'Data builder / factory dùng chung, versioned', note: '' },
+        { label: 'Tránh "big shared test DB"', note: 'mọi test giẫm chân nhau, giòn' },
+      ],
+    },
+  },
 },
 {
   cat: 'Giao tiếp',
@@ -247,6 +430,17 @@ SS.addQuestions('microservices', [
     'DTO là "hình dạng dữ liệu tại ranh giới"; domain model là "hình dạng dữ liệu để xử lý nghiệp vụ". Chúng tiến hoá với nhịp khác nhau — trộn lẫn khiến mọi refactor nội bộ thành breaking change.',
   example:
     '`Order` entity có `List<OrderLine>`, `AuditInfo`, `PricingStrategy`, quan hệ tới `Customer`. API trả `OrderDto{ id, status, total, itemCount, customerName }`. Đổi `PricingStrategy` thành interface mới → API không đổi, consumer không biết.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Domain model', 'DTO'],
+    rows: [
+      ['Vai trò', 'entity/aggregate bên trong — logic, invariant', 'cấu trúc phẳng, không logic — input/output API, event payload'],
+      ['Nhịp thay đổi', 'thường xuyên (refactor nội bộ)', 'chậm (là contract)'],
+      ['Lộ ra ngoài', 'không — field kỹ thuật, quan hệ', 'chỉ đúng field cần'],
+      ['Trộn lẫn thì', 'mọi refactor nội bộ thành breaking change', '—'],
+    ],
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -259,6 +453,18 @@ SS.addQuestions('microservices', [
     'Cùng một pattern outbox, khác cơ chế "chuyển tiếp": polling đơn giản/độ trễ cao/tải DB; CDC realtime/hạ tầng nặng hơn. Hệ nhỏ → polling; hệ nhiều event, cần realtime, đã có Kafka Connect → CDC.',
   example:
     'Startup ~50 event/s, chấp nhận trễ 1–2s: `@Scheduled(fixedDelay=1000)` poll outbox, publish, xoá. Công ty nhiều service cần event realtime: Debezium theo dõi bảng `outbox`, SMT `EventRouter` tách message theo `aggregate_type` sang đúng topic.',
+  viz: {
+    type: 'compare',
+    corner: 'Khía cạnh',
+    cols: ['Polling publisher', 'CDC (Debezium)'],
+    rows: [
+      ['Cơ chế', 'job SELECT ... WHERE published=false LIMIT n, publish, đánh dấu', 'đọc WAL/binlog, phát mỗi INSERT outbox thành event'],
+      ['Độ trễ', '= chu kỳ polling', '~ms'],
+      ['Tải lên DB', 'thêm query định kỳ', 'không query'],
+      ['Hạ tầng', 'không thêm gì (cần FOR UPDATE SKIP LOCKED)', 'Kafka Connect + Debezium + replication slot'],
+      ['Hợp với', 'hệ nhỏ', 'nhiều event, cần realtime, đã có Kafka Connect'],
+    ],
+  },
 },
 {
   cat: 'Nền tảng',
@@ -275,6 +481,20 @@ SS.addQuestions('microservices', [
     'Cách hai service tích hợp phản ánh quan hệ quyền lực & tin cậy giữa hai team. Published Language + Open Host Service (event schema chuẩn + API ổn định) là mô hình lành mạnh nhất cho microservices ở quy mô.',
   example:
     '`order` (downstream) cần dữ liệu từ `pricing` (upstream). Nếu cùng team: có thể Customer/Supplier. Nếu `pricing` là hệ dùng chung nhiều team: `pricing` publish **Published Language** — event `PriceChanged` theo Avro schema trong registry, `order` conform theo schema đó (hoặc ACL nếu schema xấu).',
+  viz: {
+    type: 'tree',
+    title: 'Cách hai service tích hợp phản ánh quan hệ quyền lực & tin cậy giữa team',
+    root: {
+      label: 'DDD Context Mapping',
+      children: [
+        { label: 'Shared Kernel', note: 'chia sẻ một phần model/code — rủi ro coupling, chỉ khi hai team phối hợp chặt' },
+        { label: 'Customer/Supplier', note: 'downstream có tiếng nói với upstream về nhu cầu' },
+        { label: 'Conformist', note: 'downstream chấp nhận model upstream nguyên trạng (không ACL)' },
+        { label: 'Anti-Corruption Layer', note: 'downstream dịch model upstream sang model của mình' },
+        { label: 'Published Language + Open Host Service', note: 'schema chung version hoá + API ổn định — lành mạnh nhất ở quy mô' },
+      ],
+    },
+  },
 },
 {
   cat: 'Dữ liệu',
@@ -289,5 +509,15 @@ SS.addQuestions('microservices', [
     'Ownership rõ ràng = một nguồn sự thật, một nơi ghi, một nơi enforce invariant. Chia sẻ quyền truy cập dữ liệu (dù chỉ đọc) là chia sẻ coupling — và bạn không kiểm soát được ai phụ thuộc gì.',
   example:
     '`analytics-service` muốn số liệu order. Sai: kết nối vào Postgres của `order-service`, `SELECT * FROM orders`. Đúng: đăng ký consumer Kafka topic `orders` (do order-service phát), dựng bảng riêng trong DB analytics. Order-service đổi schema thoải mái, chỉ cần giữ event contract.',
+  viz: {
+    type: 'flow',
+    title: 'Một nguồn sự thật, một nơi ghi, một nơi enforce invariant',
+    nodes: ['Mỗi mẩu dữ liệu: đúng MỘT service sở hữu', 'Service khác cần dữ liệu đó', 'Query qua API (đồng bộ, mới nhất, coupling runtime)', 'HOẶC giữ replica cập nhật qua event (bất đồng bộ, có thể stale, tách rời)'],
+    steps: [
+      { to: 0, label: 'Service sở hữu = nguồn sự thật, nơi duy nhất ghi' },
+      { to: 2, label: 'Không đọc trực tiếp DB của service khác — phá đóng gói, ranh giới trách nhiệm' },
+      { to: 3, label: 'analytics đăng ký Kafka topic orders → dựng bảng riêng; order-service đổi schema thoải mái' },
+    ],
+  },
 },
 ]);
