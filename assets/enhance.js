@@ -30,38 +30,83 @@
     nav.appendChild(btn);
   })();
 
-  /* ---- Lượt xem (đếm phía client, mốc khởi điểm 985) ---- */
-  (function viewCounter() {
-    var els = document.querySelectorAll('.js-view-count');
-    if (!els.length) return;
-    var BASE = 985;
-    var LAUNCH = Date.UTC(2026, 7, 27, 12);   // ~thời điểm site lên
-    var PER_HOUR = 0.62;
-    var k = 'iv-views', st;
-    try { st = JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { st = {}; }
-    var now = Date.now();
-    st.visits = (st.visits || 0) + 1;
-    try { localStorage.setItem(k, JSON.stringify(st)); } catch (e) {}
-    var hours = Math.max(0, (now - LAUNCH) / 3600000);
-    var day = Math.floor(hours / 24);
-    var wiggle = ((day * 2654435761) % 11) - 5;
-    var total = Math.max(BASE, Math.floor(BASE + hours * PER_HOUR + wiggle)) + st.visits;
-
+  /* ---- Thống kê lượt xem: gửi pageview + hiện số thật (fallback: đếm tạm phía client) ---- */
+  function animateNumber(els, target, dur) {
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.querySelectorAll('[data-views]').forEach(function (e) { e.hidden = false; });
-    if (reduce) {
-      els.forEach(function (e) { e.textContent = total.toLocaleString('vi-VN'); });
+    if (reduce || typeof target !== 'number') {
+      els.forEach(function (e) { e.textContent = Number(target || 0).toLocaleString('vi-VN'); });
       return;
     }
-    var from = Math.max(BASE, total - 60), t0 = 0, DUR = 900;
-    function tick(ts) {
+    var from = Math.max(0, target - 60), t0 = 0;
+    requestAnimationFrame(function tick(ts) {
       if (!t0) t0 = ts;
-      var p = Math.min(1, (ts - t0) / DUR);
-      var v = Math.round(from + (total - from) * (1 - Math.pow(1 - p, 3)));
+      var p = Math.min(1, (ts - t0) / dur);
+      var v = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3)));
       els.forEach(function (e) { e.textContent = v.toLocaleString('vi-VN'); });
       if (p < 1) requestAnimationFrame(tick);
+    });
+  }
+
+  (function analytics() {
+    var els = document.querySelectorAll('.js-view-count');
+    var base = window.IV_ANALYTICS;
+
+    if (!base) { fakeCounter(); return; }
+    base = base.replace(/\/+$/, '');
+
+    var dnt = navigator.doNotTrack === '1' || window.doNotTrack === '1' || navigator.msDoNotTrack === '1';
+    var vid = null;
+    try {
+      vid = localStorage.getItem('iv-vid');
+      if (!vid) {
+        vid = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+        localStorage.setItem('iv-vid', vid);
+      }
+    } catch (e) {}
+
+    var tp = document.querySelector('.topic-page');
+    var topic = tp ? tp.getAttribute('data-topic')
+      : document.querySelector('.stats-page') ? 'stats' : 'hub';
+
+    if (!dnt && vid) {
+      try {
+        fetch(base + '/collect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify({ v: vid, t: topic, p: location.pathname }),
+          keepalive: true, credentials: 'omit', mode: 'cors',
+        }).catch(function () {});
+      } catch (e) {}
     }
-    requestAnimationFrame(tick);
+
+    if (!els.length) return;
+    var s = null;
+    try { s = JSON.parse(sessionStorage.getItem('iv-stats') || 'null'); } catch (e) {}
+    if (s && Date.now() - s._t < 300000) { animateNumber(els, s.totalViews, 800); return; }
+
+    fetch(base + '/stats', { credentials: 'omit', mode: 'cors' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        d._t = Date.now();
+        try { sessionStorage.setItem('iv-stats', JSON.stringify(d)); } catch (e) {}
+        animateNumber(els, d.totalViews, 800);
+      })
+      .catch(function () {});
+
+    function fakeCounter() {
+      if (!els.length) return;
+      var BASE = 985, LAUNCH = Date.UTC(2026, 7, 27, 12), k = 'iv-views', st = {};
+      try { st = JSON.parse(localStorage.getItem(k)) || {}; } catch (e) {}
+      st.visits = (st.visits || 0) + 1;
+      try { localStorage.setItem(k, JSON.stringify(st)); } catch (e) {}
+      var hours = Math.max(0, (Date.now() - LAUNCH) / 3600000);
+      var wiggle = ((Math.floor(hours / 24) * 2654435761) % 11) - 5;
+      animateNumber(els, Math.max(BASE, Math.floor(BASE + hours * 0.62 + wiggle)) + st.visits, 900);
+    }
   })();
 
   var main = document.querySelector('.topic-page');

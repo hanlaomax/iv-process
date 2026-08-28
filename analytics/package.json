@@ -1,0 +1,16 @@
+{
+  "name": "iv-analytics",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Worker + D1 thống kê truy cập cho Interview Vault",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:schema": "wrangler d1 execute iv-analytics --remote --file=schema.sql",
+    "db:schema:local": "wrangler d1 execute iv-analytics --local --file=schema.sql",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.99.0"
+  }
+}

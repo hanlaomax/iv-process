@@ -97,7 +97,7 @@ function diagramFigure(id) {
 }
 
 /* Trang chủ đề */
-export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz }) {
+export function renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz, analyticsUrl }) {
   const url = `${siteUrl}${topic.id}/`;
   const groups = groupByCat(list);
   const idx = topics.findIndex((t) => t.id === topic.id);
@@ -193,13 +193,65 @@ ${footer('../')}`;
       root: '../',
       ogType: 'article',
       jsonld: faqJsonLd(topic, list, url),
+      analyticsUrl,
+    }),
+    body,
+  });
+}
+
+/* Trang thống kê /stats — khung tĩnh, assets/stats.js nạp số liệu từ Worker */
+export function renderStatsPage({ topics, siteUrl, analyticsUrl }) {
+  const url = `${siteUrl}stats/`;
+  const body = `${header({ root: '../', topics, current: null })}
+<main id="main" class="stats-page">
+  <div class="wrap stats-wrap">
+    ${breadcrumb([{ name: 'Trang chủ', href: '../' }, { name: 'Thống kê' }])}
+    <h1 class="topic-h1"><span class="topic-h1-icon" aria-hidden="true">📈</span>Thống kê truy cập</h1>
+    <p class="lede">Số liệu ẩn danh: không cookie, không lưu IP. Một "khách" là một trình duyệt
+      (mã ngẫu nhiên trong <code>localStorage</code>). Tôn trọng Do Not Track.</p>
+
+    <p class="stats-state" data-stats-state hidden></p>
+
+    <div class="stats-tiles" data-stats-tiles hidden>
+      <div class="stat-tile"><b data-k="totalViews">—</b><span>Tổng lượt xem</span></div>
+      <div class="stat-tile"><b data-k="totalVisitors">—</b><span>Khách duy nhất</span></div>
+      <div class="stat-tile"><b data-k="returningVisitors">—</b><span>Khách quay lại <em data-k="returningPct"></em></span></div>
+      <div class="stat-tile"><b data-k="todayViews">—</b><span>Lượt xem hôm nay</span></div>
+    </div>
+
+    <section class="stats-section" data-stats-chart-wrap hidden>
+      <h2>30 ngày gần nhất</h2>
+      <div class="stats-chart" data-stats-chart></div>
+      <p class="stats-legend">Cột = lượt xem/ngày. Rê chuột để xem số khách.</p>
+    </section>
+
+    <section class="stats-section" data-stats-topics-wrap hidden>
+      <h2>Lượt xem theo chủ đề</h2>
+      <div class="stats-bars" data-stats-topics></div>
+    </section>
+
+    <p class="stats-meta muted" data-stats-meta hidden></p>
+  </div>
+</main>
+${footer('../')}`;
+
+  return page({
+    root: '../',
+    scripts: ['assets/stats.js'],
+    head: head({
+      title: 'Thống kê truy cập — Interview Vault',
+      description: 'Số liệu truy cập ẩn danh của Interview Vault: tổng lượt xem, khách duy nhất, khách quay lại, 30 ngày gần nhất.',
+      canonical: url,
+      root: '../',
+      robots: 'noindex, follow',
+      analyticsUrl,
     }),
     body,
   });
 }
 
 /* Trang chủ */
-export function renderHub({ topics, counts, total, siteUrl }) {
+export function renderHub({ topics, counts, total, siteUrl, analyticsUrl }) {
   const cards = topics
     .map(
       (t) => `<a class="topic-card" href="${t.id}/" data-topic="${t.id}">
@@ -275,6 +327,7 @@ ${footer('')}`;
       canonical: siteUrl,
       root: '',
       jsonld,
+      analyticsUrl,
     }),
     body,
   });

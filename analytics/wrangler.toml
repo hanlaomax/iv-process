@@ -1,0 +1,18 @@
+name = "iv-analytics"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+# Chạy: wrangler d1 create iv-analytics  → dán database_id vào đây
+[[d1_databases]]
+binding = "DB"
+database_name = "iv-analytics"
+database_id = "7c776535-8d38-471a-a5ba-bab3061a083d"
+
+[vars]
+# Origin của site tĩnh (GitHub Pages). Để "*" nếu chưa rõ, nhưng nên đặt đúng.
+ALLOW_ORIGIN = "https://hanlaomax.github.io"
+
+# Dọn bảng visitor_day cũ mỗi ngày (giữ ~90 ngày)
+[triggers]
+crons = ["17 3 * * *"]

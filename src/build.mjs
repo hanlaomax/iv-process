@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync } f
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hash } from './format.mjs';
-import { renderHub, renderTopicPage, renderSitemap, render404 } from './render.mjs';
+import { renderHub, renderTopicPage, renderStatsPage, renderSitemap, render404 } from './render.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -17,6 +17,9 @@ if (!siteUrl) {
   } catch {}
 }
 siteUrl = (siteUrl || 'https://example.github.io/interview-vault').replace(/\/?$/, '/');
+
+/* URL backend thống kê (Cloudflare Worker) — trống thì site dùng bộ đếm tạm phía client */
+const analyticsUrl = (process.env.ANALYTICS_URL || '').trim().replace(/\/+$/, '');
 
 /* Shim tối thiểu để chạy các file dữ liệu viết theo kiểu biến toàn cục SS */
 const SS = { topics: [], q: {} };
@@ -73,7 +76,11 @@ for (const entry of readdirSync(DIST)) rmSync(join(DIST, entry), { recursive: tr
 mkdirSync(join(DIST, 'assets'), { recursive: true });
 
 /* Trang chủ */
-writeFileSync(join(DIST, 'index.html'), renderHub({ topics, counts, total, siteUrl }));
+writeFileSync(join(DIST, 'index.html'), renderHub({ topics, counts, total, siteUrl, analyticsUrl }));
+
+/* Trang thống kê */
+mkdirSync(join(DIST, 'stats'), { recursive: true });
+writeFileSync(join(DIST, 'stats', 'index.html'), renderStatsPage({ topics, siteUrl, analyticsUrl }));
 
 /* Có file hình minh hoạ cho chủ đề nào? */
 const diagramDir = join(ROOT, 'assets', 'diagrams');
@@ -93,13 +100,14 @@ for (const topic of topics) {
   const hasViz = list.some((q) => q.viz);
   writeFileSync(
     join(dir, 'index.html'),
-    renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz })
+    renderTopicPage({ topic, list, topics, siteUrl, hasDiagrams, hasViz, analyticsUrl })
   );
 }
 
 /* Tài nguyên tĩnh */
 cpSync(join(ROOT, 'assets', 'styles.css'), join(DIST, 'assets', 'styles.css'));
 cpSync(join(ROOT, 'assets', 'enhance.js'), join(DIST, 'assets', 'enhance.js'));
+cpSync(join(ROOT, 'assets', 'stats.js'), join(DIST, 'assets', 'stats.js'));
 cpSync(join(ROOT, 'assets', 'topic-graph.js'), join(DIST, 'assets', 'topic-graph.js'));
 cpSync(join(ROOT, 'assets', 'viz'), join(DIST, 'assets', 'viz'), { recursive: true });
 if (diagramTopics.size) cpSync(diagramDir, join(DIST, 'assets', 'diagrams'), { recursive: true });

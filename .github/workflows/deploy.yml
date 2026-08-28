@@ -31,6 +31,7 @@ jobs:
         run: node src/build.mjs
         env:
           SITE_URL: ${{ steps.pages.outputs.base_url }}
+          ANALYTICS_URL: ${{ vars.ANALYTICS_URL }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

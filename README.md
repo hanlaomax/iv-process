@@ -37,6 +37,21 @@ npm run serve
 > Nếu muốn dùng làm **user site** (`<username>.github.io`): đặt tên repo là `<username>.github.io`
 > — mọi thứ vẫn chạy, base URL thành `https://<username>.github.io/`.
 
+## Thống kê truy cập (tuỳ chọn)
+
+Backend riêng trong [`analytics/`](analytics/) — **Cloudflare Worker + D1** (SQLite), miễn phí.
+Xem [`analytics/README.md`](analytics/README.md) để set up database và deploy.
+
+Sau khi deploy Worker, đặt **repo variable** `ANALYTICS_URL` = URL Worker
+(*Settings → Secrets and variables → Actions → Variables*) rồi build lại (push hoặc re-run Actions).
+
+- Có `ANALYTICS_URL`: footer hiện **số thật**, thêm trang **`/stats`** (tổng lượt xem, khách duy
+  nhất, khách quay lại, biểu đồ 30 ngày, lượt xem theo chủ đề).
+- Chưa có: footer dùng bộ đếm tạm phía client, `/stats` báo "chưa cấu hình".
+
+Dữ liệu **ẩn danh**: visitor id là chuỗi ngẫu nhiên trong `localStorage` (không cookie, không lưu
+IP); tôn trọng Do Not Track; bot bị lọc theo User-Agent.
+
 ## SEO
 
 - Mỗi chủ đề là một URL riêng (`/java/`, `/kafka/`…) với toàn bộ nội dung trong HTML.
@@ -52,12 +67,14 @@ src/
   data/                 # 35 file câu hỏi + _topics.js (nội dung, tự đăng ký qua SS.addQuestions)
   format.mjs            # markdown-lite -> HTML, slug, hash id, strip
   templates.mjs         # <head> đầy đủ SEO, header, footer, breadcrumb, khung trang
-  render.mjs            # sinh trang chủ, trang chủ đề, sitemap, 404
-  build.mjs             # đọc data -> kiểm tra toàn vẹn -> ghi dist/
+  render.mjs            # sinh trang chủ, trang chủ đề, trang /stats, sitemap, 404
+  build.mjs             # đọc data -> kiểm tra toàn vẹn -> ghi dist/  (đọc env ANALYTICS_URL)
   serve.mjs             # máy chủ tĩnh tối giản để xem thử
 assets/
-  styles.css           # thiết kế (IBM Plex Sans/Mono + Newsreader; màu theo chủ đề; sáng/tối)
-  enhance.js            # tiện ích client (không bắt buộc)
+  styles.css           # thiết kế (IBM Plex Sans/Mono + Lora; màu theo chủ đề; sáng/tối)
+  enhance.js            # tiện ích client + gửi lượt xem (không bắt buộc)
+  stats.js             # nạp & vẽ số liệu cho trang /stats
+analytics/             # Cloudflare Worker + D1 — backend thống kê (deploy riêng)
 .github/workflows/deploy.yml
 ```
 

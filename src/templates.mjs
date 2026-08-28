@@ -4,7 +4,7 @@ import { esc } from './format.mjs';
 const FAVICON =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AF%3C/text%3E%3C/svg%3E";
 
-/* head: {title, description, canonical, root, jsonld, keywords, ogType} */
+/* head: {title, description, canonical, root, jsonld, keywords, ogType, robots, analyticsUrl} */
 export function head(o) {
   const t = esc(o.title);
   const d = esc(o.description);
@@ -14,7 +14,7 @@ export function head(o) {
 <meta name="description" content="${d}">
 ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords)}">` : ''}
 <link rel="canonical" href="${esc(o.canonical)}">
-<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="robots" content="${esc(o.robots || 'index, follow, max-image-preview:large, max-snippet:-1')}">
 <meta property="og:site_name" content="Interview Vault">
 <meta property="og:title" content="${t}">
 <meta property="og:description" content="${d}">
@@ -31,6 +31,7 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords)}">` : ''}
 <link rel="stylesheet" href="${o.root}assets/styles.css">
 <link rel="sitemap" type="application/xml" href="${o.root}sitemap.xml">
 <script>(function(){try{var t=localStorage.getItem('iv-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+${o.analyticsUrl ? `<script>window.IV_ANALYTICS=${JSON.stringify(o.analyticsUrl)};</script>` : ''}
 ${o.jsonld ? `<script type="application/ld+json">${o.jsonld}</script>` : ''}`;
 }
 
@@ -71,7 +72,7 @@ export function footer(root) {
     <p class="footer-views" data-views hidden>👁 <b class="js-view-count">—</b> lượt xem</p>
     <p>Interview Vault — bộ câu hỏi phỏng vấn cấp độ Middle. Nội dung tiếng Việt, giữ nguyên thuật ngữ tiếng Anh.</p>
     <p class="muted">Cập nhật ${year}. Trang tĩnh, hoạt động không cần JavaScript.</p>
-    <p><a href="${root}">Trang chủ</a> · <a href="${root}sitemap.xml">Sitemap</a></p>
+    <p><a href="${root}">Trang chủ</a> · <a href="${root}stats/">Thống kê</a> · <a href="${root}sitemap.xml">Sitemap</a></p>
   </div>
 </footer>`;
 }
