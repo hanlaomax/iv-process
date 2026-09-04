@@ -21,6 +21,34 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'giảm max.poll.records hoặc tăng interval khi xử lý nặng' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "poll() làm nhiều việc hơn tên gọi của nó",
+      code:
+        "Properties p = new Properties();\n" +
+        "p.put(\"max.poll.records\", \"500\");          // số record TỐI ĐA mỗi lần poll trả về\n" +
+        "p.put(\"max.poll.interval.ms\", \"300000\");   // 5 phút: khoảng cách TỐI ĐA giữa hai lần poll\n" +
+        "\n" +
+        "KafkaConsumer<String, String> consumer = new KafkaConsumer<>(p);\n" +
+        "consumer.subscribe(List.of(\"orders\"));\n" +
+        "\n" +
+        "while (running) {\n" +
+        "    var records = consumer.poll(Duration.ofMillis(1000));\n" +
+        "    for (var r : records) process(r);       // TOÀN BỘ 500 record phải xong\n" +
+        "    consumer.commitSync();                  // trước lần poll kế tiếp\n" +
+        "}\n" +
+        "// poll() KHÔNG chỉ lấy dữ liệu. Nó còn: tham gia/duy trì group, chạy rebalance,\n" +
+        "// gửi offset auto-commit, và cập nhật metadata. Không gọi poll() = coi như chết.\n" +
+        "\n" +
+        "// BẪY KINH ĐIỂN: xử lý một record mất 1 giây, max.poll.records=500\n" +
+        "// -> 500 giây > max.poll.interval.ms 300 giây -> broker coi consumer đã chết\n" +
+        "// -> ĐÁ RA KHỎI GROUP giữa chừng -> rebalance -> commit thất bại\n" +
+        "// -> lô đó bị xử lý LẠI -> lặp vô hạn.\n" +
+        "// Chữa: giảm max.poll.records (ví dụ 50), hoặc tăng max.poll.interval.ms,\n" +
+        "// hoặc đẩy phần việc nặng sang thread pool và dùng pause()/resume().",
+    },
+  ],
 },
 {
   cat: 'Rebalancing',
@@ -49,6 +77,36 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cái gì kích hoạt rebalance và vì sao nó tốn kém",
+      code:
+        "// Rebalance = phân công lại partition cho các consumer trong group.\n" +
+        "// Trong lúc đó, với giao thức eager, TOÀN BỘ group NGỪNG xử lý (stop-the-world).\n" +
+        "\n" +
+        "// Bị kích hoạt khi:\n" +
+        "//  1) consumer mới tham gia (scale up, hoặc pod khởi động lại)\n" +
+        "//  2) consumer rời đi: gọi close(), hoặc quá session.timeout.ms không heartbeat,\n" +
+        "//     hoặc quá max.poll.interval.ms không gọi poll()  <- nguyên nhân hay gặp nhất\n" +
+        "//  3) số partition của topic tăng\n" +
+        "//  4) topic khớp pattern subscribe được tạo/xoá\n" +
+        "\n" +
+        "consumer.subscribe(Pattern.compile(\"orders-.*\"));   // topic mới khớp -> rebalance\n" +
+        "\n" +
+        "// Giảm rebalance không cần thiết:\n" +
+        "p.put(\"group.instance.id\", \"consumer-1\");           // static membership (xem câu riêng)\n" +
+        "p.put(\"partition.assignment.strategy\",\n" +
+        "      CooperativeStickyAssignor.class.getName());   // không dừng toàn bộ group\n" +
+        "p.put(\"max.poll.records\", \"100\");                   // xử lý một lô nhanh hơn\n" +
+        "\n" +
+        "// Đóng đúng cách để consumer rời group NGAY, không phải chờ hết session timeout:\n" +
+        "Runtime.getRuntime().addShutdownHook(new Thread(consumer::wakeup));\n" +
+        "try { pollLoop(); }\n" +
+        "catch (WakeupException e) { /* thoát bình thường */ }\n" +
+        "finally { consumer.close(); }   // gửi LeaveGroup -> rebalance nhanh gọn",
+    },
+  ],
 },
 {
   cat: 'Rebalancing',
@@ -70,6 +128,32 @@ SS.addQuestions('kafka', [
       ['Thêm 1 consumer vào group 10', 'cả 10 dừng, chia lại 100%', 'chỉ ~1/11 partition chuyển'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Nhả hết vs chỉ nhả phần cần đổi",
+      code:
+        "# EAGER (RangeAssignor, RoundRobinAssignor — kiểu cũ):\n" +
+        "#   mọi consumer NHẢ TOÀN BỘ partition -> chờ phân công lại -> nhận về.\n" +
+        "#   Cả group ngừng xử lý trong suốt quá trình. Group 50 consumer mà một pod\n" +
+        "#   restart cũng làm cả 50 dừng.\n" +
+        "\n" +
+        "# COOPERATIVE (CooperativeStickyAssignor — nên dùng):\n" +
+        "#   chỉ những partition THỰC SỰ phải chuyển chủ mới bị nhả. Consumer không\n" +
+        "#   liên quan tiếp tục xử lý bình thường.\n" +
+        "partition.assignment.strategy=org.apache.kafka.clients.consumer.CooperativeStickyAssignor\n" +
+        "\n" +
+        "# Cơ chế: rebalance chạy HAI VÒNG. Vòng 1 tính phân công mới và chỉ yêu cầu\n" +
+        "# nhả phần dư; vòng 2 gán phần vừa nhả cho chủ mới.\n" +
+        "\n" +
+        "# NÂNG CẤP AN TOÀN (không được nhảy thẳng, sẽ lỗi giao thức):\n" +
+        "#   bước 1: deploy với strategy = [CooperativeSticky, RangeAssignor]  (cả hai)\n" +
+        "#   bước 2: khi mọi instance đã chạy bản trên -> deploy chỉ còn CooperativeSticky\n" +
+        "\n" +
+        "# Kafka 3.7+ có KIP-848 (giao thức rebalance mới, broker tự tính phân công)\n" +
+        "# -> giảm mạnh thời gian rebalance, đang dần thành mặc định.",
+    },
+  ],
 },
 {
   cat: 'Rebalancing',
@@ -92,6 +176,33 @@ SS.addQuestions('kafka', [
       ['Khuyến nghị', '—', '—', '—', 'hiện nay'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Bốn chiến lược và điểm khác biệt thật sự",
+      code:
+        "# RangeAssignor (mặc định cũ) — chia theo DẢI, cho TỪNG topic một.\n" +
+        "#   2 topic x 3 partition, 2 consumer -> C1 nhận p0,p1 của CẢ HAI topic; C2 nhận p2.\n" +
+        "#   -> LỆCH TẢI có hệ thống khi số partition không chia hết cho số consumer.\n" +
+        "#   Ưu điểm duy nhất: cùng partition number của nhiều topic về cùng consumer -> tiện join.\n" +
+        "partition.assignment.strategy=org.apache.kafka.clients.consumer.RangeAssignor\n" +
+        "\n" +
+        "# RoundRobinAssignor — rải đều mọi partition của MỌI topic.\n" +
+        "#   Cân bằng tốt hơn, nhưng rebalance là xáo trộn lại gần như toàn bộ.\n" +
+        "\n" +
+        "# StickyAssignor — cân bằng NHƯ round-robin, nhưng cố GIỮ NGUYÊN phân công cũ\n" +
+        "#   nhiều nhất có thể khi rebalance -> ít mất cache/state hơn.\n" +
+        "\n" +
+        "# CooperativeStickyAssignor — sticky + rebalance tăng dần. LỰA CHỌN MẶC ĐỊNH\n" +
+        "#   nên dùng cho hệ thống mới.\n" +
+        "partition.assignment.strategy=org.apache.kafka.clients.consumer.CooperativeStickyAssignor\n" +
+        "\n" +
+        "# Tự viết khi cần logic đặc thù (ví dụ gán theo rack để tránh phí liên vùng):\n" +
+        "#   kế thừa AbstractPartitionAssignor và cài đặt assign().\n" +
+        "# Mọi consumer trong group phải có ÍT NHẤT MỘT chiến lược chung, nếu không\n" +
+        "# group không thể hình thành.",
+    },
+  ],
 },
 {
   cat: 'Offset',
@@ -113,6 +224,48 @@ SS.addQuestions('kafka', [
       ['Dùng', 'đơn giản, chấp nhận at-most/at-least tuỳ timing', 'shutdown / sau lô / finally', 'trong vòng lặp (throughput)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba kiểu commit và ngữ nghĩa mất/trùng của từng kiểu",
+      code:
+        "// AUTO-COMMIT: commit theo ĐỒNG HỒ, không theo tiến độ xử lý -> có thể MẤT message\n" +
+        "p.put(\"enable.auto.commit\", \"true\");\n" +
+        "p.put(\"auto.commit.interval.ms\", \"5000\");\n" +
+        "// poll xong -> 5s trôi qua -> auto-commit chạy -> crash giữa lúc xử lý\n" +
+        "// -> khởi động lại bỏ qua những message chưa xử lý xong. Tránh ở hệ thống nghiêm túc.\n" +
+        "\n" +
+        "p.put(\"enable.auto.commit\", \"false\");    // luôn tắt\n" +
+        "\n" +
+        "// commitSync: CHẶN và tự retry tới khi thành công. Chậm nhưng chắc.\n" +
+        "while (running) {\n" +
+        "    var records = consumer.poll(Duration.ofMillis(1000));\n" +
+        "    for (var r : records) process(r);\n" +
+        "    consumer.commitSync();               // at-least-once: xử lý xong RỒI mới commit\n" +
+        "}\n" +
+        "\n" +
+        "// commitAsync: không chặn -> throughput cao hơn, nhưng KHÔNG retry\n" +
+        "// (retry một commit cũ có thể ghi đè lên commit mới hơn -> tụt offset).\n" +
+        "consumer.commitAsync((offsets, ex) -> {\n" +
+        "    if (ex != null) log.warn(\"commit lỗi, lần poll sau sẽ commit lại\", ex);\n" +
+        "});\n" +
+        "\n" +
+        "// MẪU CHUẨN: async trong vòng lặp cho nhanh, sync một lần lúc đóng cho chắc\n" +
+        "try {\n" +
+        "    while (running) {\n" +
+        "        var records = consumer.poll(Duration.ofMillis(1000));\n" +
+        "        for (var r : records) process(r);\n" +
+        "        consumer.commitAsync();\n" +
+        "    }\n" +
+        "} finally {\n" +
+        "    try { consumer.commitSync(); } finally { consumer.close(); }\n" +
+        "}\n" +
+        "\n" +
+        "// Commit chính xác tới từng partition (khi xử lý theo nhóm):\n" +
+        "consumer.commitSync(Map.of(tp, new OffsetAndMetadata(lastOffset + 1)));\n" +
+        "// LƯU Ý: commit offset là \"offset SẼ ĐỌC TIẾP\", tức lastProcessed + 1.",
+    },
+  ],
 },
 {
   cat: 'Offset',
@@ -134,6 +287,36 @@ SS.addQuestions('kafka', [
       ['Dùng cho', 'ETL, backfill, dựng lại state', 'streaming realtime', 'buộc xử lý tường minh'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Chỉ có tác dụng khi KHÔNG có offset đã commit",
+      code:
+        "# Áp dụng cho đúng hai tình huống:\n" +
+        "#   1) consumer group HOÀN TOÀN MỚI (chưa từng commit)\n" +
+        "#   2) offset đã commit KHÔNG CÒN TỒN TẠI (dữ liệu bị xoá theo retention\n" +
+        "#      trong lúc consumer chết lâu ngày)\n" +
+        "auto.offset.reset=earliest\n" +
+        "\n" +
+        "# earliest — đọc từ message cũ nhất còn giữ.\n" +
+        "#   Dùng cho: xử lý dữ liệu không được sót (thanh toán, CDC, ETL), topic compacted\n" +
+        "#   (phải đọc hết mới dựng được trạng thái).\n" +
+        "#   Rủi ro: group mới trên topic 7 ngày dữ liệu -> nuốt hàng trăm triệu message.\n" +
+        "\n" +
+        "# latest (MẶC ĐỊNH) — chỉ đọc message tới TỪ BÂY GIỜ.\n" +
+        "#   Dùng cho: metric, giám sát, thông báo real-time — dữ liệu cũ vô nghĩa.\n" +
+        "#   Rủi ro: consumer chết quá lâu -> ÂM THẦM bỏ qua toàn bộ phần tồn đọng\n" +
+        "#   mà không có cảnh báo nào.\n" +
+        "\n" +
+        "# none — ném NoOffsetForPartitionException, buộc ứng dụng tự quyết.\n" +
+        "#   An toàn nhất cho hệ thống quan trọng: mất offset là SỰ CỐ cần con người xem,\n" +
+        "#   không phải chuyện im lặng bỏ qua hoặc đọc lại từ đầu.\n" +
+        "\n" +
+        "# Đặt lại offset thủ công (consumer phải đang DỪNG):\n" +
+        "#   kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group g1 \\\n" +
+        "#     --topic orders --reset-offsets --to-datetime 2026-09-01T00:00:00.000 --execute",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -156,6 +339,35 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'scale 4→8 pod (topic 12 partition) → tiêu thụ ~2x, lag rút về 0' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đo lag và phân biệt hai nguyên nhân",
+      code:
+        "kafka-consumer-groups.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --describe --group order-processor\n" +
+        "# TOPIC   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG    CONSUMER-ID\n" +
+        "# orders  0          10500           10500           0\n" +
+        "# orders  1          8200            15000           6800   <- partition này nghẽn\n" +
+        "\n" +
+        "# LAG = LOG-END-OFFSET - CURRENT-OFFSET, tính theo TỪNG partition.\n" +
+        "# Đừng chỉ nhìn tổng: lag dồn vào MỘT partition là dấu hiệu khác hẳn\n" +
+        "# so với lag dàn đều.\n" +
+        "\n" +
+        "# Lag dồn một partition -> LỆCH KEY (một key nóng chiếm hết) hoặc\n" +
+        "#   consumer giữ partition đó đang chậm/treo.\n" +
+        "# Lag đều mọi partition -> thiếu năng lực xử lý nói chung.\n" +
+        "\n" +
+        "# XỬ LÝ, theo thứ tự nên thử:\n" +
+        "#  1) tăng số consumer — CHỈ hiệu quả tới bằng số partition\n" +
+        "#  2) tăng max.poll.records và xử lý theo lô (batch insert thay vì từng dòng)\n" +
+        "#  3) tách phần chậm (gọi API ngoài) sang thread pool, dùng pause()/resume()\n" +
+        "#  4) cuối cùng mới tăng partition — đổi ánh xạ key, cân nhắc kỹ\n" +
+        "\n" +
+        "# Cảnh báo nên đặt theo THỜI GIAN chứ không theo số message:\n" +
+        "#   lag_seconds = lag / throughput  -> \"chậm hơn 5 phút\" dễ hiểu hơn \"lag 2 triệu\".",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -179,6 +391,32 @@ SS.addQuestions('kafka', [
       ['Consumer heartbeat ok nhưng lô lâu', '→ vẫn "còn sống"', '→ vẫn bị đá'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Hai đồng hồ khác nhau cho hai kiểu chết khác nhau",
+      code:
+        "# heartbeat chạy ở THREAD NỀN riêng, độc lập với việc xử lý.\n" +
+        "heartbeat.interval.ms=3000       # gửi nhịp tim mỗi 3 giây\n" +
+        "session.timeout.ms=45000         # không nhận nhịp tim trong 45s -> coi là CHẾT\n" +
+        "# Quy tắc: heartbeat.interval.ms <= session.timeout.ms / 3\n" +
+        "\n" +
+        "# session.timeout.ms bắt \"tiến trình chết / mất mạng\" -> thread nền im lặng.\n" +
+        "# max.poll.interval.ms bắt \"tiến trình sống nhưng TREO khi xử lý\" -> vẫn gửi\n" +
+        "# nhịp tim nhưng không gọi poll() nữa.\n" +
+        "max.poll.interval.ms=300000\n" +
+        "\n" +
+        "# Hai loại lỗi khác nhau nên có hai đồng hồ khác nhau — trước Kafka 0.10.1\n" +
+        "# chỉ có một, khiến việc xử lý chậm bị nhầm là chết.\n" +
+        "\n" +
+        "# Chỉnh thế nào:\n" +
+        "#  - session.timeout NGẮN  -> phát hiện chết nhanh, nhưng dễ rebalance oan\n" +
+        "#    khi mạng chớp nháy hoặc GC pause dài\n" +
+        "#  - session.timeout DÀI   -> ít rebalance oan, nhưng partition bị \"treo\"\n" +
+        "#    lâu hơn khi consumer chết thật\n" +
+        "# Broker chặn khoảng cho phép: group.min.session.timeout.ms / group.max.session.timeout.ms",
+    },
+  ],
 },
 {
   cat: 'Rebalancing',
@@ -201,6 +439,33 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'hợp K8s StatefulSet: group.instance.id=$(POD_NAME), session.timeout.ms=120s' },
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Restart mà không gây rebalance",
+      code:
+        "# VẤN ĐỀ: mỗi lần rolling update, mỗi pod rời đi rồi quay lại được coi là một\n" +
+        "# thành viên MỚI -> hai lần rebalance cho mỗi pod. Group 20 pod = 40 lần\n" +
+        "# rebalance cho một lần deploy, mỗi lần cả group dừng xử lý.\n" +
+        "group.instance.id=order-consumer-3      # ID ỔN ĐỊNH, DUY NHẤT trong group\n" +
+        "session.timeout.ms=120000               # nới rộng để bao trọn thời gian restart\n" +
+        "\n" +
+        "# Có ID tĩnh, consumer rời đi KHÔNG kích hoạt rebalance ngay. Broker giữ nguyên\n" +
+        "# phân công partition cho tới khi hết session.timeout.ms. Quay lại trong khoảng\n" +
+        "# đó -> nhận LẠI ĐÚNG partition cũ, không rebalance lần nào.\n" +
+        "\n" +
+        "# Rất hợp với StatefulSet trên Kubernetes (hostname đã sẵn ổn định):\n" +
+        "#   group.instance.id = ${HOSTNAME}     # order-consumer-0, -1, -2...\n" +
+        "\n" +
+        "# ĐÁNH ĐỔI phải hiểu rõ: consumer CHẾT THẬT thì partition của nó bị BỎ TRỐNG\n" +
+        "# cho tới hết session.timeout.ms (ở đây là 2 phút) -> lag tăng trong khoảng đó.\n" +
+        "# Đặt session.timeout đủ dài để bao restart, nhưng đủ ngắn để không chịu nổi\n" +
+        "# một pod chết hẳn.\n" +
+        "\n" +
+        "# Trùng group.instance.id giữa hai instance -> FencedInstanceIdException,\n" +
+        "# instance cũ bị đá ra. Đừng bao giờ để hai pod dùng chung một ID.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -227,6 +492,40 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Trùng là chuyện bình thường — thiết kế để chịu được",
+      code:
+        "// CÓ. At-least-once là mặc định, và trùng đến từ:\n" +
+        "//  - xử lý xong nhưng crash TRƯỚC khi commit -> lô đó chạy lại\n" +
+        "//  - rebalance giữa chừng -> partition chuyển sang consumer khác từ offset cũ\n" +
+        "//  - commitAsync thất bại lặng lẽ\n" +
+        "\n" +
+        "// CÁCH ĐÚNG: làm cho việc xử lý IDEMPOTENT, đừng cố chống trùng ở tầng Kafka.\n" +
+        "\n" +
+        "// 1) UPSERT theo khoá tự nhiên — đơn giản và hiệu quả nhất\n" +
+        "jdbc.update(\"\"\"\n" +
+        "    INSERT INTO orders (id, status, total) VALUES (?, ?, ?)\n" +
+        "    ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, total = EXCLUDED.total\n" +
+        "    \"\"\", r.key(), status, total);\n" +
+        "\n" +
+        "// 2) Bảng dedup theo message id — khi thao tác không thể upsert\n" +
+        "boolean isNew = jdbc.update(\n" +
+        "    \"INSERT INTO processed (msg_id, at) VALUES (?, now()) ON CONFLICT DO NOTHING\",\n" +
+        "    r.topic() + \"-\" + r.partition() + \"-\" + r.offset()) == 1;\n" +
+        "if (!isNew) return;      // đã xử lý rồi, bỏ qua\n" +
+        "process(r);\n" +
+        "// Nhớ đặt TTL/job dọn bảng này, nếu không nó phình vô hạn.\n" +
+        "\n" +
+        "// 3) Lưu offset CÙNG transaction với dữ liệu nghiệp vụ -> exactly-once phía sink\n" +
+        "tx.begin();\n" +
+        "saveOrder(order);\n" +
+        "saveOffset(r.partition(), r.offset() + 1);\n" +
+        "tx.commit();\n" +
+        "// Khi khởi động: consumer.seek(tp, loadOffsetFromDatabase(tp));",
+    },
+  ],
 },
 {
   cat: 'Rebalancing',
@@ -250,6 +549,43 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'cooperative: mất partition bất thường, không kịp commit' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Móc vào đúng lúc mất và nhận partition",
+      code:
+        "consumer.subscribe(List.of(\"orders\"), new ConsumerRebalanceListener() {\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {\n" +
+        "        // Gọi TRƯỚC khi mất quyền sở hữu -> đây là cơ hội CUỐI CÙNG để commit.\n" +
+        "        // Không commit ở đây thì mọi thứ xử lý từ lần commit trước sẽ chạy LẠI\n" +
+        "        // trên consumer mới -> trùng lặp.\n" +
+        "        log.info(\"nhả {}\", partitions);\n" +
+        "        consumer.commitSync(currentOffsets);\n" +
+        "        flushPendingWrites();          // đẩy nốt buffer xuống DB\n" +
+        "    }\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {\n" +
+        "        // Gọi SAU khi nhận partition, TRƯỚC lần poll đầu tiên trên chúng.\n" +
+        "        log.info(\"nhận {}\", partitions);\n" +
+        "        for (TopicPartition tp : partitions) {\n" +
+        "            long offset = loadOffsetFromDatabase(tp);   // tự quản offset\n" +
+        "            if (offset >= 0) consumer.seek(tp, offset);\n" +
+        "            warmUpCacheFor(tp);                         // nạp state cần thiết\n" +
+        "        }\n" +
+        "    }\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public void onPartitionsLost(Collection<TopicPartition> partitions) {\n" +
+        "        // Chỉ với cooperative: partition bị lấy mất ĐỘT NGỘT (đã hết session).\n" +
+        "        // ĐỪNG commit ở đây — partition đã có chủ mới, commit sẽ ghi đè sai.\n" +
+        "        discardLocalState(partitions);\n" +
+        "    }\n" +
+        "});",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -273,6 +609,39 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Điều tiết luồng và điều khiển vị trí đọc",
+      code:
+        "// pause/resume: tạm ngừng nhận dữ liệu của MỘT SỐ partition mà VẪN gọi poll()\n" +
+        "// -> vẫn gửi nhịp tim, KHÔNG bị đá khỏi group. Đây là chìa khoá để xử lý\n" +
+        "// bất đồng bộ mà không vi phạm max.poll.interval.ms.\n" +
+        "var records = consumer.poll(Duration.ofMillis(1000));\n" +
+        "for (var r : records) queue.offer(r);              // đẩy sang thread pool\n" +
+        "\n" +
+        "if (queue.size() > HIGH_WATERMARK) {\n" +
+        "    consumer.pause(consumer.assignment());          // ngừng nhận thêm\n" +
+        "} else if (queue.size() < LOW_WATERMARK) {\n" +
+        "    consumer.resume(consumer.assignment());         // nhận lại\n" +
+        "}\n" +
+        "consumer.poll(Duration.ZERO);   // vẫn phải poll đều để giữ chỗ trong group\n" +
+        "\n" +
+        "// Dùng pause khi: hệ thống đích (DB, API) đang chậm/lỗi, cần chờ hồi phục\n" +
+        "// mà không muốn mất quyền sở hữu partition.\n" +
+        "\n" +
+        "// seek: điều khiển vị trí đọc — chỉ dùng được sau khi đã có phân công partition\n" +
+        "consumer.poll(Duration.ZERO);                        // kích hoạt phân công\n" +
+        "consumer.seek(new TopicPartition(\"orders\", 0), 5000);\n" +
+        "consumer.seekToBeginning(consumer.assignment());     // phát lại toàn bộ\n" +
+        "consumer.seekToEnd(consumer.assignment());           // bỏ qua tồn đọng\n" +
+        "\n" +
+        "// Tua theo THỜI GIAN — cách hay dùng nhất khi xử lý sự cố\n" +
+        "long ts = Instant.parse(\"2026-09-01T00:00:00Z\").toEpochMilli();\n" +
+        "consumer.offsetsForTimes(Map.of(tp, ts))\n" +
+        "        .forEach((k, v) -> { if (v != null) consumer.seek(k, v.offset()); });",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -296,6 +665,40 @@ SS.addQuestions('kafka', [
       ['Độ phức tạp', 'thấp — an toàn nhất', 'cao'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "KHÔNG — và ba mô hình đa luồng",
+      code:
+        "// KafkaConsumer KHÔNG thread-safe. Gọi từ thread khác -> ConcurrentModificationException.\n" +
+        "// Ngoại lệ DUY NHẤT: wakeup() gọi được từ thread khác (để dừng vòng poll).\n" +
+        "\n" +
+        "// MÔ HÌNH 1: mỗi thread một consumer (phổ biến nhất, đơn giản nhất)\n" +
+        "for (int i = 0; i < 4; i++) {\n" +
+        "    executor.submit(() -> {\n" +
+        "        try (var c = new KafkaConsumer<String, String>(props)) {\n" +
+        "            c.subscribe(List.of(\"orders\"));\n" +
+        "            while (running) c.poll(Duration.ofSeconds(1)).forEach(this::process);\n" +
+        "        }\n" +
+        "    });\n" +
+        "}\n" +
+        "// + đơn giản, giữ thứ tự trong partition. - trần song song = số partition,\n" +
+        "// mỗi consumer tốn một kết nối TCP riêng.\n" +
+        "\n" +
+        "// MÔ HÌNH 2: một consumer + thread pool xử lý -> vượt trần partition\n" +
+        "var records = consumer.poll(Duration.ofSeconds(1));\n" +
+        "for (var r : records) {\n" +
+        "    int slot = Math.abs(r.key().hashCode()) % workers.length;\n" +
+        "    workers[slot].submit(() -> process(r));   // PHÂN LUỒNG THEO KEY để giữ thứ tự\n" +
+        "}\n" +
+        "// Bắt buộc kèm pause()/resume() và commit thủ công theo tiến độ THẬT của worker,\n" +
+        "// nếu không sẽ commit trước khi xử lý xong -> mất message.\n" +
+        "\n" +
+        "// MÔ HÌNH 3: dùng framework lo hộ — Spring Kafka\n" +
+        "@KafkaListener(topics = \"orders\", concurrency = \"4\")   // tạo 4 consumer\n" +
+        "public void on(ConsumerRecord<String, String> r) { process(r); }",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -319,6 +722,32 @@ SS.addQuestions('kafka', [
       ['Dùng cho', 'realtime alerting', 'analytics throughput cao'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Đánh đổi độ trễ lấy hiệu quả, ở phía consumer",
+      code:
+        "# Consumer gửi fetch request tới broker. Broker CHỜ tới khi gom đủ\n" +
+        "# fetch.min.bytes dữ liệu, HOẶC hết fetch.max.wait.ms, rồi mới trả lời.\n" +
+        "fetch.min.bytes=1              # mặc định 1 = trả về ngay khi có bất kỳ dữ liệu nào\n" +
+        "fetch.max.wait.ms=500          # trần thời gian chờ\n" +
+        "\n" +
+        "# fetch.min.bytes=1 nghĩa là khi tải nhẹ, consumer bắn liên tục fetch request\n" +
+        "# và nhận về từng ít một -> tốn CPU broker và nhiều round-trip mạng.\n" +
+        "# Tăng lên (ví dụ 64KB) khi throughput cao và không cần độ trễ dưới giây:\n" +
+        "fetch.min.bytes=65536\n" +
+        "fetch.max.wait.ms=500          # trần độ trễ thêm vào là 500ms\n" +
+        "\n" +
+        "# Các trần khác cần biết:\n" +
+        "max.partition.fetch.bytes=1048576   # tối đa mỗi partition trả về một lần\n" +
+        "fetch.max.bytes=52428800            # tối đa cho CẢ fetch request\n" +
+        "\n" +
+        "# BẪY: max.partition.fetch.bytes phải >= message lớn nhất, nếu không consumer\n" +
+        "# sẽ TREO vĩnh viễn ở message đó (không đọc nổi, không tiến lên được).\n" +
+        "# Kafka hiện đại vẫn trả về message vượt trần nếu nó là record đầu tiên,\n" +
+        "# nhưng đừng dựa vào đó.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -344,6 +773,47 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'Spring Kafka: RetryableTopic + DeadLetterPublishingRecoverer' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Retry topic có backoff và DLQ",
+      code:
+        "// Nguyên tắc: KHÔNG bao giờ chặn partition vì một message xấu, và KHÔNG bao giờ\n" +
+        "// vứt im lặng. Chuyển nó sang chỗ khác rồi tiếp tục.\n" +
+        "\n" +
+        "// 1) Phân biệt lỗi TẠM THỜI và lỗi VĨNH VIỄN — hai loại xử lý khác hẳn nhau\n" +
+        "try {\n" +
+        "    process(r);\n" +
+        "} catch (TransientException e) {          // DB timeout, API 503 -> đáng retry\n" +
+        "    sendToRetryTopic(r, attempt + 1);\n" +
+        "} catch (Exception e) {                   // JSON hỏng, thiếu field -> retry vô ích\n" +
+        "    sendToDlq(r, e);\n" +
+        "}\n" +
+        "\n" +
+        "// 2) Retry topic phân tầng theo độ trễ (Spring Kafka làm sẵn)\n" +
+        "@RetryableTopic(\n" +
+        "    attempts = \"4\",\n" +
+        "    backoff = @Backoff(delay = 1000, multiplier = 4.0),   // 1s -> 4s -> 16s\n" +
+        "    dltStrategy = DltStrategy.FAIL_ON_ERROR,\n" +
+        "    exclude = {DeserializationException.class})           // lỗi này vào thẳng DLT\n" +
+        "@KafkaListener(topics = \"orders\")\n" +
+        "public void on(Order o) { process(o); }\n" +
+        "\n" +
+        "@DltHandler\n" +
+        "public void dlt(Order o, @Header(KafkaHeaders.EXCEPTION_MESSAGE) String err) {\n" +
+        "    log.error(\"vào DLQ: {} — {}\", o, err);\n" +
+        "    alert.fire(o, err);       // DLQ phải CÓ NGƯỜI THEO DÕI, không thì vô dụng\n" +
+        "}\n" +
+        "\n" +
+        "// 3) Gắn ngữ cảnh vào header để còn điều tra và phát lại được\n" +
+        "record.headers().add(\"original-topic\", r.topic().getBytes(UTF_8));\n" +
+        "record.headers().add(\"original-offset\", String.valueOf(r.offset()).getBytes(UTF_8));\n" +
+        "record.headers().add(\"error\", e.getMessage().getBytes(UTF_8));\n" +
+        "\n" +
+        "// CẢNH BÁO: retry topic PHÁ VỠ THỨ TỰ (message lỗi bị đẩy về sau).\n" +
+        "// Nghiệp vụ cần thứ tự tuyệt đối thì phải dừng partition và xử lý thủ công.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -364,6 +834,32 @@ SS.addQuestions('kafka', [
       ['Bắt buộc khi', '—', 'upstream dùng transactional producer'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Chỉ đọc dữ liệu của transaction đã commit",
+      code:
+        "isolation.level=read_committed      # mặc định là read_uncommitted\n" +
+        "\n" +
+        "# read_uncommitted (mặc định): thấy MỌI record trong log, kể cả record thuộc\n" +
+        "# transaction chưa commit hoặc đã bị ABORT. Nhanh nhất, nhưng phá vỡ EOS.\n" +
+        "\n" +
+        "# read_committed: consumer bỏ qua record của transaction bị abort, và KHÔNG\n" +
+        "# đọc vượt qua LSO (Last Stable Offset) — offset của transaction đang mở\n" +
+        "# sớm nhất. Bắt buộc nếu producer dùng transaction.\n" +
+        "\n" +
+        "# HỆ QUẢ ĐỘ TRỄ cần hiểu: message đã nằm trên đĩa nhưng consumer KHÔNG thấy\n" +
+        "# cho tới khi marker commit được ghi. Transaction dài = độ trễ end-to-end dài.\n" +
+        "# Tệ hơn: một transaction TREO (producer chết giữa chừng) làm NGHẼN toàn bộ\n" +
+        "# partition cho tới hết transaction.timeout.ms.\n" +
+        "\n" +
+        "# Kiểm tra transaction treo khi consumer đứng im mà lag vẫn tăng:\n" +
+        "#   kafka-transactions.sh --bootstrap-server localhost:9092 list\n" +
+        "#   kafka-transactions.sh --bootstrap-server localhost:9092 describe --transactional-id tx-1\n" +
+        "\n" +
+        "# Với Kafka Streams: processing.guarantee=exactly_once_v2 tự đặt read_committed.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -384,6 +880,33 @@ SS.addQuestions('kafka', [
       ['Hệ quả', 'chưa tận dụng hết', 'tối ưu', 'thêm consumer vô ích → phải tăng partition'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Một partition không bao giờ chia cho hai consumer cùng group",
+      code:
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic orders\n" +
+        "# Partitions: 6\n" +
+        "\n" +
+        "# 6 partition, 3 consumer -> mỗi consumer 2 partition\n" +
+        "# 6 partition, 6 consumer -> mỗi consumer 1 partition   <- điểm tối đa hữu ích\n" +
+        "# 6 partition, 10 consumer -> 4 consumer NGỒI KHÔNG, lag không hề giảm\n" +
+        "\n" +
+        "# Vì sao Kafka thiết kế vậy: để đảm bảo THỨ TỰ trong partition. Hai consumer\n" +
+        "# cùng đọc một partition thì không còn thứ tự nào cả.\n" +
+        "\n" +
+        "# 4 consumer \"dự phòng\" không hoàn toàn vô ích: một consumer chết thì rebalance\n" +
+        "# gán ngay partition đó cho consumer rảnh -> failover nhanh. Nhưng chúng\n" +
+        "# KHÔNG làm tăng throughput.\n" +
+        "\n" +
+        "# Khi đụng trần mà vẫn lag, theo thứ tự nên thử:\n" +
+        "#  1) làm việc xử lý nhanh hơn (batch, bỏ N+1 query, bỏ gọi API đồng bộ)\n" +
+        "#  2) một consumer + thread pool phân luồng theo key -> vượt trần partition\n" +
+        "#  3) cuối cùng mới tăng partition:\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic orders --partitions 12\n" +
+        "# -> đổi ánh xạ key, phá thứ tự của key hiện có. Không giảm lại được.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -406,6 +929,38 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'service mới dựng lại toàn bộ state mà không cần lịch sử đầy đủ — chính là KTable' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bạn nhận trạng thái, không phải lịch sử",
+      code:
+        "// Trên topic compacted, đọc từ đầu KHÔNG cho bạn toàn bộ lịch sử — chỉ cho\n" +
+        "// bản ghi MỚI NHẤT của mỗi key (cộng phần \"dirty\" chưa được nén).\n" +
+        "p.put(\"auto.offset.reset\", \"earliest\");\n" +
+        "consumer.subscribe(List.of(\"user-profiles\"));\n" +
+        "\n" +
+        "Map<String, Profile> state = new HashMap<>();\n" +
+        "while (catchingUp) {\n" +
+        "    var records = consumer.poll(Duration.ofMillis(500));\n" +
+        "    for (var r : records) {\n" +
+        "        if (r.value() == null) state.remove(r.key());   // TOMBSTONE = đã xoá\n" +
+        "        else state.put(r.key(), parse(r.value()));      // bản mới ghi đè bản cũ\n" +
+        "    }\n" +
+        "    // Dựng xong khi đã bắt kịp cuối log\n" +
+        "    catchingUp = !caughtUp(consumer);\n" +
+        "}\n" +
+        "\n" +
+        "// Ba điều phải nhớ:\n" +
+        "//  1) OFFSET KHÔNG LIÊN TỤC — bản ghi bị nén đã biến mất, offset nhảy cóc.\n" +
+        "//     Đừng viết code giả định offset tăng đều từng bước.\n" +
+        "//  2) Có thể thấy NHIỀU bản của cùng một key (phần chưa được nén) -> phải\n" +
+        "//     xử lý theo kiểu ghi đè, bản sau thắng bản trước.\n" +
+        "//  3) TOMBSTONE (value = null) chỉ tồn tại trong delete.retention.ms (24h).\n" +
+        "//     Dựng lại trạng thái sau thời gian đó sẽ KHÔNG thấy lệnh xoá nữa.\n" +
+        "\n" +
+        "// Đây chính là cơ chế changelog topic của Kafka Streams dùng để khôi phục state store.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -428,6 +983,30 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'GHI vẫn luôn qua leader; chỉ ĐỌC định tuyến theo rack (trễ hơn leader vài ms)' },
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Cắt chi phí truyền dữ liệu liên vùng",
+      code:
+        "# Mặc định, consumer LUÔN đọc từ LEADER. Leader nằm ở AZ khác -> mọi byte đọc\n" +
+        "# đều tính phí truyền liên vùng, và độ trễ cao hơn. Với lưu lượng lớn,\n" +
+        "# đây thường là khoản tiền lớn nhất trong hoá đơn Kafka.\n" +
+        "\n" +
+        "# Trên BROKER — cho phép phục vụ đọc từ follower:\n" +
+        "replica.selector.class=org.apache.kafka.common.replica.RackAwareReplicaSelector\n" +
+        "broker.rack=ap-southeast-1a          # đặt đúng AZ của từng broker\n" +
+        "\n" +
+        "# Trên CONSUMER — khai báo mình đang ở đâu:\n" +
+        "client.rack=ap-southeast-1a\n" +
+        "# -> Kafka trả về replica CÙNG rack nếu có, không thì rơi về leader như cũ.\n" +
+        "\n" +
+        "# CÁI GIÁ: follower luôn tụt sau leader một chút, và consumer chỉ đọc được\n" +
+        "# tới HIGH WATERMARK -> độ trễ end-to-end tăng nhẹ. Đổi lại là tiền và băng thông.\n" +
+        "\n" +
+        "# Ghi thì vẫn BẮT BUỘC qua leader — follower fetching chỉ áp dụng cho ĐỌC.\n" +
+        "# Cần cả Kafka 2.4+ ở broker lẫn client.",
+    },
+  ],
 },
 {
   cat: 'Consumer',
@@ -450,5 +1029,52 @@ SS.addQuestions('kafka', [
       ['Ví dụ', 'gửi email khi đơn > 10 triệu', 'doanh thu 5 phút theo cửa hàng', 'Postgres → Kafka (Debezium)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba công cụ cho ba loại việc",
+      code:
+        "// PLAIN CONSUMER — cần kiểm soát hoàn toàn, hoặc logic không hợp mô hình luồng\n" +
+        "consumer.subscribe(List.of(\"orders\"));\n" +
+        "while (running) consumer.poll(Duration.ofSeconds(1)).forEach(this::callExternalApi);\n" +
+        "// Hợp khi: gọi API bên ngoài, logic nghiệp vụ phức tạp, cần tự quản offset.\n" +
+        "// Phải tự lo: rebalance, commit, retry, DLQ, đa luồng.\n" +
+        "\n" +
+        "// KAFKA STREAMS — biến đổi Kafka -> Kafka, có TRẠNG THÁI\n" +
+        "StreamsBuilder b = new StreamsBuilder();\n" +
+        "b.stream(\"orders\", Consumed.with(Serdes.String(), orderSerde))\n" +
+        " .filter((k, v) -> v.total() > 100)\n" +
+        " .groupByKey()\n" +
+        " .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)))\n" +
+        " .aggregate(Stats::new, (k, v, agg) -> agg.add(v), Materialized.as(\"stats-store\"))\n" +
+        " .toStream()\n" +
+        " .to(\"order-stats\");\n" +
+        "// Hợp khi: join, aggregate, cửa sổ thời gian, exactly-once. Nó lo hộ state\n" +
+        "// store + changelog topic + khôi phục sau sự cố. Chỉ là một THƯ VIỆN,\n" +
+        "// không cần cụm xử lý riêng.\n" +
+        "\n" +
+        "// KAFKA CONNECT — di chuyển dữ liệu giữa Kafka và hệ thống ngoài, KHÔNG viết code\n" +
+        "// (cấu hình JSON, chạy ở chế độ distributed, có sẵn retry/offset/scale)\n" +
+        "// Hợp khi: CDC từ Postgres (Debezium), đổ sang S3/Elasticsearch/BigQuery.\n" +
+        "// Đừng viết tay consumer để làm việc mà connector có sẵn đã làm tốt hơn.",
+    },
+    {
+      lang: "json",
+      title: "Ví dụ một connector thay cho hàng trăm dòng code",
+      code:
+        "{\n" +
+        "  \"name\": \"postgres-source\",\n" +
+        "  \"config\": {\n" +
+        "    \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",\n" +
+        "    \"database.hostname\": \"postgres\",\n" +
+        "    \"database.dbname\": \"orders\",\n" +
+        "    \"topic.prefix\": \"cdc\",\n" +
+        "    \"plugin.name\": \"pgoutput\",\n" +
+        "    \"transforms\": \"unwrap\",\n" +
+        "    \"transforms.unwrap.type\": \"io.debezium.transforms.ExtractNewRecordState\"\n" +
+        "  }\n" +
+        "}",
+    },
+  ],
 },
 ]);

@@ -20,6 +20,35 @@ SS.addQuestions('kafka', [
       ['Cách đạt', 'commit offset TRƯỚC khi xử lý', 'commit SAU khi xử lý', 'idempotent producer + tx + read_committed, hoặc consumer idempotent/dedup'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mức, khác nhau ở CHỖ ĐẶT lệnh commit",
+      code:
+        "// AT-MOST-ONCE: commit TRƯỚC khi xử lý -> crash là MẤT message, không bao giờ trùng\n" +
+        "var records = consumer.poll(Duration.ofSeconds(1));\n" +
+        "consumer.commitSync();                 // commit trước\n" +
+        "for (var r : records) process(r);      // crash ở đây -> lô này mất vĩnh viễn\n" +
+        "// Dùng cho: metric, log, dữ liệu mà mất một ít không sao.\n" +
+        "\n" +
+        "// AT-LEAST-ONCE (mặc định, dùng nhiều nhất): xử lý xong RỒI commit\n" +
+        "for (var r : records) process(r);\n" +
+        "consumer.commitSync();                 // crash trước dòng này -> lô chạy LẠI -> TRÙNG\n" +
+        "// Không mất, nhưng phải làm việc xử lý idempotent.\n" +
+        "\n" +
+        "// EXACTLY-ONCE: offset và kết quả xử lý phải cùng thành công hoặc cùng thất bại.\n" +
+        "// Hai cách duy nhất:\n" +
+        "//  1) Trong nội bộ Kafka -> transaction (sendOffsetsToTransaction)\n" +
+        "//  2) Ra hệ thống ngoài -> lưu offset CÙNG transaction với dữ liệu\n" +
+        "tx.begin();\n" +
+        "saveOrder(order);\n" +
+        "saveOffset(r.partition(), r.offset() + 1);   // cùng một transaction DB\n" +
+        "tx.commit();\n" +
+        "\n" +
+        "// Không có \"exactly-once qua mạng\" theo nghĩa tuyệt đối — cái đạt được là\n" +
+        "// \"hiệu ứng đúng một lần\", nhờ nguyên tử hoặc nhờ idempotent.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -44,6 +73,33 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn nguồn trùng lặp",
+      code:
+        "// 1) PRODUCER retry khi ack bị mất trên đường về\n" +
+        "producer.send(record);   // broker đã ghi, nhưng ack rớt -> client retry -> ghi 2 lần\n" +
+        "p.put(\"enable.idempotence\", \"true\");    // CHỮA: broker khử theo sequence number\n" +
+        "\n" +
+        "// 2) CONSUMER crash sau khi xử lý, trước khi commit\n" +
+        "for (var r : records) process(r);\n" +
+        "// <- crash ở đây: lần khởi động sau đọc lại từ offset cũ\n" +
+        "consumer.commitSync();\n" +
+        "\n" +
+        "// 3) REBALANCE: partition chuyển sang consumer khác từ offset đã commit gần nhất\n" +
+        "// -> mọi thứ xử lý sau lần commit đó bị làm lại trên consumer mới.\n" +
+        "// CHỮA (giảm bớt): commit trong onPartitionsRevoked\n" +
+        "\n" +
+        "// 4) COMMIT ASYNC thất bại lặng lẽ, không retry\n" +
+        "\n" +
+        "// Vì sao mặc định là at-least-once chứ không phải exactly-once:\n" +
+        "// EOS đòi transaction -> thêm coordinator, thêm marker, thêm độ trễ, và\n" +
+        "// consumer phải read_committed (không đọc vượt transaction đang mở).\n" +
+        "// Với đa số hệ thống, làm việc xử lý IDEMPOTENT rẻ hơn và bền hơn nhiều\n" +
+        "// so với bật EOS toàn tuyến.",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -72,6 +128,33 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "PID + sequence number cho mỗi partition",
+      code:
+        "p.put(\"enable.idempotence\", \"true\");    // mặc định true từ Kafka 3.0\n" +
+        "\n" +
+        "// CƠ CHẾ:\n" +
+        "//  1) Producer xin broker cấp một PID (producer id) khi khởi tạo.\n" +
+        "//  2) Mỗi (PID, partition) có một sequence number tăng dần từ 0.\n" +
+        "//  3) Mỗi batch gửi đi mang theo PID + sequence đầu tiên của batch.\n" +
+        "//  4) Broker nhớ sequence CUỐI CÙNG đã ghi cho mỗi (PID, partition):\n" +
+        "//        seq == lastSeq + 1  -> ghi bình thường, cập nhật lastSeq\n" +
+        "//        seq <= lastSeq      -> ĐÃ GHI RỒI -> bỏ qua, trả ack thành công\n" +
+        "//        seq >  lastSeq + 1  -> thủng lỗ -> OutOfOrderSequenceException\n" +
+        "\n" +
+        "// Broker giữ 5 batch gần nhất cho mỗi (PID, partition) -> đây chính là lý do\n" +
+        "// max.in.flight.requests.per.connection phải <= 5 khi bật idempotence.\n" +
+        "\n" +
+        "// GIỚI HẠN quan trọng, hay bị hiểu nhầm:\n" +
+        "//  - chỉ trong MỘT PHIÊN producer. Restart -> PID mới -> không khử được nữa.\n" +
+        "//  - chỉ khử trùng do RETRY của client. Ứng dụng tự gọi send() hai lần thì\n" +
+        "//    đó là hai message khác nhau, Kafka không biết.\n" +
+        "//  - transactional.id giải quyết phần \"qua các phiên\": PID được giữ nguyên\n" +
+        "//    theo transactional.id khi khởi động lại.",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -95,6 +178,34 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'abort → message bị bỏ qua. Transaction Coordinator quản lý trạng thái trong __transaction_state' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Marker và transaction coordinator",
+      code:
+        "p.put(\"transactional.id\", \"payment-processor-1\");   // ổn định qua các lần restart\n" +
+        "KafkaProducer<String, String> producer = new KafkaProducer<>(p);\n" +
+        "producer.initTransactions();\n" +
+        "\n" +
+        "producer.beginTransaction();\n" +
+        "producer.send(new ProducerRecord<>(\"payments\", key, payment));\n" +
+        "producer.send(new ProducerRecord<>(\"ledger\",   key, entry));\n" +
+        "producer.commitTransaction();\n" +
+        "\n" +
+        "// CƠ CHẾ THẬT (khác với hình dung thường gặp):\n" +
+        "//  - Record được ghi vào log NGAY khi send, KHÔNG bị giữ lại ở đâu cả.\n" +
+        "//  - commitTransaction() ghi thêm một CONTROL RECORD (marker COMMIT) vào\n" +
+        "//    từng partition liên quan. abort thì ghi marker ABORT.\n" +
+        "//  - Consumer read_committed đọc log, gặp marker mới biết record trước đó\n" +
+        "//    là hợp lệ hay phải bỏ qua.\n" +
+        "//  - Transaction coordinator (một broker) ghi trạng thái transaction vào\n" +
+        "//    topic nội bộ __transaction_state để khôi phục được sau sự cố.\n" +
+        "\n" +
+        "// Vì record đã nằm sẵn trong log, EOS KHÔNG làm chậm việc GHI đáng kể.\n" +
+        "// Cái chậm nằm ở phía ĐỌC: consumer phải chờ marker mới thấy dữ liệu,\n" +
+        "// và không đọc vượt qua LSO (transaction đang mở sớm nhất).",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -123,6 +234,42 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'commit thành công → output đã ghi VÀ offset đã tiến, cùng nhau; abort/crash → cả hai không xảy ra, lô xử lý lại' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Đưa offset vào chính transaction",
+      code:
+        "// Đây là mẫu EOS quan trọng nhất trong Kafka: đọc từ topic A, biến đổi,\n" +
+        "// ghi sang topic B, và commit offset của A — TẤT CẢ trong một transaction.\n" +
+        "p.put(\"transactional.id\", \"enricher-\" + instanceId);\n" +
+        "consumerProps.put(\"isolation.level\", \"read_committed\");\n" +
+        "consumerProps.put(\"enable.auto.commit\", \"false\");   // BẮT BUỘC tắt\n" +
+        "\n" +
+        "producer.initTransactions();\n" +
+        "while (running) {\n" +
+        "    var records = consumer.poll(Duration.ofMillis(1000));\n" +
+        "    if (records.isEmpty()) continue;\n" +
+        "\n" +
+        "    producer.beginTransaction();\n" +
+        "    try {\n" +
+        "        for (var r : records) {\n" +
+        "            producer.send(new ProducerRecord<>(\"orders-enriched\", r.key(), enrich(r.value())));\n" +
+        "        }\n" +
+        "        // MẤU CHỐT: offset được ghi BỞI PRODUCER, nằm TRONG transaction\n" +
+        "        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();\n" +
+        "        for (var tp : records.partitions()) {\n" +
+        "            var last = records.records(tp).get(records.records(tp).size() - 1);\n" +
+        "            offsets.put(tp, new OffsetAndMetadata(last.offset() + 1));\n" +
+        "        }\n" +
+        "        producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());\n" +
+        "        producer.commitTransaction();   // dữ liệu ra + offset vào: cùng nguyên tử\n" +
+        "    } catch (KafkaException e) {\n" +
+        "        producer.abortTransaction();    // không ghi gì, offset cũng không nhích\n" +
+        "    }\n" +
+        "}\n" +
+        "// KHÔNG bao giờ gọi consumer.commitSync() trong mẫu này — sẽ phá vỡ nguyên tử.",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -146,6 +293,39 @@ SS.addQuestions('kafka', [
       { from: 1, to: 0, label: 'ProducerFencedException', dashed: true },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chặn instance cũ \"sống lại\" ghi đè dữ liệu",
+      code:
+        "// VẤN ĐỀ: instance A bị treo (GC dài, mạng đứt) -> hệ thống tưởng chết, khởi\n" +
+        "// động instance B thay thế. Rồi A tỉnh lại và tiếp tục ghi -> hai instance\n" +
+        "// cùng ghi cho một luồng dữ liệu -> hỏng dữ liệu.\n" +
+        "\n" +
+        "p.put(\"transactional.id\", \"payment-processor-1\");   // GIỐNG NHAU giữa A và B\n" +
+        "producer.initTransactions();\n" +
+        "// initTransactions() làm hai việc:\n" +
+        "//  1) đăng ký transactional.id với coordinator\n" +
+        "//  2) TĂNG EPOCH của transactional.id đó lên 1\n" +
+        "\n" +
+        "// B gọi initTransactions() -> epoch từ 5 lên 6.\n" +
+        "// A (epoch 5) gửi tiếp -> broker thấy epoch cũ -> TỪ CHỐI:\n" +
+        "try {\n" +
+        "    producer.send(record);\n" +
+        "    producer.commitTransaction();\n" +
+        "} catch (ProducerFencedException e) {\n" +
+        "    // A biết mình đã bị thay thế. KHÔNG được retry, KHÔNG cứu được.\n" +
+        "    log.error(\"instance này đã bị fence, thoát\", e);\n" +
+        "    producer.close();\n" +
+        "    System.exit(1);          // để orchestrator dọn dẹp\n" +
+        "}\n" +
+        "\n" +
+        "// Điều kiện để fencing hoạt động: transactional.id phải ỔN ĐỊNH và gắn với\n" +
+        "// PHÂN VÙNG CÔNG VIỆC, không phải ngẫu nhiên mỗi lần khởi động.\n" +
+        "// UUID mới mỗi lần start -> không fence được gì cả.\n" +
+        "// Thường đặt theo partition hoặc theo ordinal của StatefulSet.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -168,6 +348,56 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'chuyển sang Kafka là at-least-once + idempotent; DB rollback → không có dòng outbox → không có sự kiện sai' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hai hệ thống, không có transaction chung",
+      code:
+        "// DUAL-WRITE: ghi vào hai hệ thống không có transaction chung -> luôn có\n" +
+        "// cửa sổ mà một cái thành công, cái kia thất bại.\n" +
+        "@Transactional\n" +
+        "public void placeOrder(Order o) {\n" +
+        "    repo.save(o);                        // DB commit\n" +
+        "    producer.send(new ProducerRecord<>(\"orders\", o.id(), json(o)));\n" +
+        "    // Kafka chết ở đây -> DB có đơn, hệ thống khác KHÔNG BAO GIỜ biết\n" +
+        "    // Đảo ngược thứ tự cũng không cứu được: Kafka xong, DB rollback -> sự kiện ma\n" +
+        "}\n" +
+        "\n" +
+        "// OUTBOX: chỉ ghi vào MỘT hệ thống (DB), trong CÙNG transaction\n" +
+        "@Transactional\n" +
+        "public void placeOrder(Order o) {\n" +
+        "    repo.save(o);\n" +
+        "    outboxRepo.save(new OutboxEvent(\n" +
+        "        UUID.randomUUID(), \"Order\", o.id(), \"OrderPlaced\", json(o)));\n" +
+        "    // Cả hai cùng commit hoặc cùng rollback — DB lo hộ tính nguyên tử\n" +
+        "}\n" +
+        "// Một tiến trình riêng đọc bảng outbox và đẩy sang Kafka. Nó có thể gửi TRÙNG\n" +
+        "// (crash sau khi gửi, trước khi đánh dấu) -> at-least-once, và consumer\n" +
+        "// phải idempotent. Nhưng KHÔNG BAO GIỜ MẤT.",
+    },
+    {
+      lang: "sql",
+      title: "Bảng outbox",
+      code:
+        "CREATE TABLE outbox (\n" +
+        "  id             UUID PRIMARY KEY,\n" +
+        "  aggregate_type TEXT        NOT NULL,   -- \"Order\"\n" +
+        "  aggregate_id   TEXT        NOT NULL,   -- dùng làm message key -> giữ thứ tự\n" +
+        "  event_type     TEXT        NOT NULL,   -- \"OrderPlaced\"\n" +
+        "  payload        JSONB       NOT NULL,\n" +
+        "  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),\n" +
+        "  published_at   TIMESTAMPTZ                        -- NULL = chưa gửi\n" +
+        ");\n" +
+        "\n" +
+        "-- Index một phần: chỉ đánh index dòng chưa gửi -> luôn nhỏ và nhanh\n" +
+        "CREATE INDEX idx_outbox_unpublished ON outbox (created_at) WHERE published_at IS NULL;\n" +
+        "\n" +
+        "-- Publisher lấy việc, khoá dòng để nhiều instance không giành nhau\n" +
+        "SELECT * FROM outbox WHERE published_at IS NULL\n" +
+        "ORDER BY created_at LIMIT 100\n" +
+        "FOR UPDATE SKIP LOCKED;",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -194,6 +424,38 @@ SS.addQuestions('kafka', [
       { to: 4, label: '0 dòng → đã xử lý rồi. Dedup store cần TTL > khoảng thời gian có thể replay' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Khoá dedup, TTL, và chọn chỗ lưu",
+      code:
+        "// Khoá dedup phải ổn định qua các lần phát lại. Hai lựa chọn:\n" +
+        "//  a) toạ độ Kafka: topic-partition-offset  -> ổn định, nhưng phát lại từ\n" +
+        "//     producer (gửi lại message y hệt) sẽ có offset khác -> không khử được\n" +
+        "//  b) id nghiệp vụ do producer sinh (eventId trong payload) -> tốt hơn\n" +
+        "String dedupKey = event.eventId();\n" +
+        "\n" +
+        "// LƯU Ở DB — chắc chắn nhất, và dùng chung transaction với dữ liệu nghiệp vụ\n" +
+        "@Transactional\n" +
+        "public void handle(OrderEvent e) {\n" +
+        "    int inserted = jdbc.update(\n" +
+        "        \"INSERT INTO processed_events (id, at) VALUES (?, now()) ON CONFLICT DO NOTHING\",\n" +
+        "        e.eventId());\n" +
+        "    if (inserted == 0) return;        // đã xử lý -> bỏ qua, KHÔNG làm lại\n" +
+        "    applyBusinessLogic(e);            // cùng transaction -> nguyên tử thật sự\n" +
+        "}\n" +
+        "\n" +
+        "// LƯU Ở REDIS — nhanh hơn nhưng KHÔNG nguyên tử với DB\n" +
+        "Boolean isNew = redis.opsForValue().setIfAbsent(\"dedup:\" + e.eventId(), \"1\", Duration.ofDays(7));\n" +
+        "if (Boolean.FALSE.equals(isNew)) return;\n" +
+        "// Rủi ro: set Redis xong rồi crash trước khi xử lý -> message bị BỎ QUA vĩnh viễn.\n" +
+        "// -> chỉ dùng Redis khi mất một ít là chấp nhận được, hoặc set SAU khi xử lý xong.\n" +
+        "\n" +
+        "// TTL là bắt buộc: cửa sổ trùng lặp thực tế chỉ vài phút tới vài giờ,\n" +
+        "// nhưng phải dài hơn retention của topic nếu có thể phát lại toàn bộ.\n" +
+        "DELETE FROM processed_events WHERE at < now() - INTERVAL \u00277 days\u0027;",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -221,6 +483,33 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Cái giá của exactly-once",
+      code:
+        "processing.guarantee=exactly_once_v2     # Kafka Streams\n" +
+        "# hoặc producer transactional + consumer read_committed\n" +
+        "\n" +
+        "# GIÁ PHẢI TRẢ:\n" +
+        "# 1) ĐỘ TRỄ: consumer read_committed không đọc vượt qua LSO. Message nằm sẵn\n" +
+        "#    trên đĩa nhưng phải chờ marker commit. Transaction dài = độ trễ dài.\n" +
+        "# 2) THROUGHPUT: thêm marker record, thêm round-trip tới coordinator.\n" +
+        "#    Thực tế giảm ~3-20% tuỳ kích thước transaction (transaction quá nhỏ thì\n" +
+        "#    overhead marker chiếm tỉ trọng lớn).\n" +
+        "# 3) VẬN HÀNH PHỨC TẠP: transaction TREO làm nghẽn cả partition tới hết\n" +
+        "#    transaction.timeout.ms. Phải theo dõi và biết cách xử lý.\n" +
+        "# 4) CHỈ TRONG PHẠM VI KAFKA: ghi ra DB/API bên ngoài thì transaction Kafka\n" +
+        "#    không bao trùm được. Đây là hiểu nhầm phổ biến nhất về EOS.\n" +
+        "# 5) transactional.id phải quản lý cẩn thận, nếu không fencing vô tác dụng.\n" +
+        "\n" +
+        "# KHI NÀO KHÔNG NÊN DÙNG:\n" +
+        "#  - sink là hệ thống ngoài -> làm idempotent ở sink rẻ và bền hơn nhiều\n" +
+        "#  - dữ liệu chịu được trùng (metric, log, cache warming)\n" +
+        "#  - cần độ trễ thấp nhất có thể\n" +
+        "#  - việc xử lý vốn đã idempotent (upsert theo khoá) -> EOS không thêm gì cả",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -246,6 +535,38 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'state (đếm, join, window) và stream ra ngoài luôn nhất quán; v2 = 1 producer/instance (nhẹ hơn v1)' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Một dòng cấu hình, và nó lo phần còn lại",
+      code:
+        "Properties p = new Properties();\n" +
+        "p.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);\n" +
+        "p.put(StreamsConfig.APPLICATION_ID_CONFIG, \"order-aggregator\");   // -> transactional.id\n" +
+        "\n" +
+        "// Streams tự làm những việc sau trong MỘT transaction cho mỗi lô:\n" +
+        "//  1) ghi kết quả ra topic đầu ra\n" +
+        "//  2) ghi thay đổi state store ra CHANGELOG TOPIC\n" +
+        "//  3) commit offset của topic đầu vào (sendOffsetsToTransaction)\n" +
+        "// -> ba thứ này cùng thành công hoặc cùng bị huỷ. Đây là điểm mạnh nhất\n" +
+        "// của Streams so với tự viết consumer: state store cũng được bao gồm.\n" +
+        "\n" +
+        "StreamsBuilder b = new StreamsBuilder();\n" +
+        "b.stream(\"orders\")\n" +
+        " .groupByKey()\n" +
+        " .count(Materialized.as(\"order-counts\"))   // state store, có changelog\n" +
+        " .toStream()\n" +
+        " .to(\"order-counts-topic\");\n" +
+        "\n" +
+        "// EOS_V2 (Kafka 2.5+) dùng MỘT producer cho mỗi instance thay vì mỗi\n" +
+        "// task -> giảm mạnh số transaction và tài nguyên so với exactly_once cũ.\n" +
+        "// Cần broker >= 2.5.\n" +
+        "\n" +
+        "p.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, \"100\");\n" +
+        "// Với EOS, commit interval quyết định độ trễ end-to-end (mặc định 100ms\n" +
+        "// khi bật EOS, thay vì 30 giây). Tăng lên -> throughput tốt hơn, trễ hơn.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -272,6 +593,39 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mục tiêu không mâu thuẫn nếu phân vùng đúng",
+      code:
+        "// Chìa khoá: THỨ TỰ chỉ cần trong phạm vi một THỰC THỂ, không phải toàn hệ thống.\n" +
+        "// Chọn key đúng thì cả ba mục tiêu đạt được cùng lúc.\n" +
+        "\n" +
+        "// 1) THỨ TỰ: mọi message của một thực thể vào cùng partition\n" +
+        "producer.send(new ProducerRecord<>(\"orders\", order.id(), json));   // key = id đơn hàng\n" +
+        "\n" +
+        "// 2) EXACTLY-ONCE: idempotence + transaction (hoặc idempotent ở sink)\n" +
+        "p.put(\"enable.idempotence\", \"true\");\n" +
+        "p.put(\"max.in.flight.requests.per.connection\", \"5\");   // vẫn giữ thứ tự nhờ sequence\n" +
+        "p.put(\"acks\", \"all\");\n" +
+        "\n" +
+        "// 3) THROUGHPUT: song song theo PARTITION, không phải theo message\n" +
+        "p.put(\"linger.ms\", \"20\");\n" +
+        "p.put(\"batch.size\", \"65536\");\n" +
+        "p.put(\"compression.type\", \"lz4\");\n" +
+        "// Phía consumer: nhiều consumer, mỗi consumer nhiều partition;\n" +
+        "// trong một partition thì xử lý TUẦN TỰ để giữ thứ tự.\n" +
+        "\n" +
+        "// Vượt trần partition mà vẫn giữ thứ tự: phân luồng theo key trong một consumer\n" +
+        "int slot = Math.abs(r.key().hashCode()) % workers.length;\n" +
+        "workers[slot].submit(() -> process(r));   // cùng key -> cùng worker -> đúng thứ tự\n" +
+        "// Kèm theo: pause()/resume() và chỉ commit tới offset mà MỌI worker đã xong.\n" +
+        "\n" +
+        "// Cái KHÔNG đạt được: thứ tự TOÀN CỤC trên nhiều partition + throughput cao.\n" +
+        "// Muốn thứ tự toàn cục thì phải 1 partition -> mất hết song song. Hầu như\n" +
+        "// không nghiệp vụ nào thật sự cần điều đó.",
+    },
+  ],
 },
 {
   cat: 'Exactly-once',
@@ -293,6 +647,36 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'timeout (mặc định 60s) là van an toàn — hoặc producer mới cùng transactional.id epoch cao hơn' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Transaction treo và cách xử lý",
+      code:
+        "# transaction.timeout.ms (producer, mặc định 60s): coordinator chờ tối đa bao lâu\n" +
+        "# trước khi tự ABORT một transaction đang mở.\n" +
+        "# Bị chặn trên bởi broker: transaction.max.timeout.ms (mặc định 15 phút).\n" +
+        "\n" +
+        "# TRANSACTION TREO xảy ra khi producer chết giữa beginTransaction() và\n" +
+        "# commit/abort. Hậu quả nghiêm trọng: LSO của partition đó đứng yên ->\n" +
+        "# consumer read_committed KHÔNG đọc được gì thêm, dù dữ liệu mới vẫn đổ vào.\n" +
+        "# Triệu chứng điển hình: lag tăng đều mà consumer hoàn toàn khoẻ mạnh.\n" +
+        "\n" +
+        "kafka-transactions.sh --bootstrap-server localhost:9092 list\n" +
+        "kafka-transactions.sh --bootstrap-server localhost:9092 \\\n" +
+        "  describe --transactional-id payment-processor-1\n" +
+        "\n" +
+        "# Tìm transaction treo lâu hơn ngưỡng:\n" +
+        "kafka-transactions.sh --bootstrap-server localhost:9092 \\\n" +
+        "  find-hanging --broker-id 1 --max-transaction-timeout 900000\n" +
+        "\n" +
+        "# Ép abort (chỉ khi đã chắc producer đó chết hẳn):\n" +
+        "kafka-transactions.sh --bootstrap-server localhost:9092 \\\n" +
+        "  abort --topic orders --partition 3 --start-offset 12345\n" +
+        "\n" +
+        "# PHÒNG hơn chống: đặt transaction.timeout.ms ngắn (30-60s), giữ transaction\n" +
+        "# NHỎ, và luôn có abortTransaction() trong khối catch.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -315,6 +699,37 @@ SS.addQuestions('kafka', [
       ['Cho hệ đa thành phần', 'không — dùng saga / outbox', 'tránh trong hệ hiện đại'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hai cách giải cùng một bài toán, chi phí rất khác",
+      code:
+        "// 2PC/XA: một transaction manager điều phối NHIỀU hệ thống khác nhau\n" +
+        "UserTransaction tx = ctx.lookup(\"java:comp/UserTransaction\");\n" +
+        "tx.begin();\n" +
+        "jdbcResource.insert(order);      // DB\n" +
+        "jmsResource.send(message);       // message broker\n" +
+        "tx.commit();                     // hai pha: prepare tất cả -> commit tất cả\n" +
+        "// VẤN ĐỀ:\n" +
+        "//  - KHOÁ tài nguyên suốt cả hai pha -> throughput thấp\n" +
+        "//  - coordinator chết giữa hai pha -> tài nguyên bị khoá treo, phải can thiệp tay\n" +
+        "//  - mọi hệ thống tham gia phải hỗ trợ XA (nhiều DB/API hiện đại thì không)\n" +
+        "//  - không mở rộng được ra quy mô lớn\n" +
+        "\n" +
+        "// KAFKA EOS: KHÔNG phải distributed transaction. Nó chỉ nguyên tử TRONG Kafka.\n" +
+        "producer.beginTransaction();\n" +
+        "producer.send(recordA);                                   // topic A\n" +
+        "producer.send(recordB);                                   // topic B\n" +
+        "producer.sendOffsetsToTransaction(offsets, groupMetadata); // offset\n" +
+        "producer.commitTransaction();\n" +
+        "// Rẻ hơn nhiều vì: không khoá gì cả (chỉ append + marker), coordinator là\n" +
+        "// một broker Kafka bình thường, trạng thái nằm trong một topic có nhân bản.\n" +
+        "\n" +
+        "// Ra ngoài Kafka thì dùng gì: OUTBOX (một transaction DB duy nhất) hoặc\n" +
+        "// SAGA (chuỗi bước có bù trừ). Cả hai đều chấp nhận trạng thái trung gian\n" +
+        "// và tính nhất quán cuối cùng, đổi lại là khả năng mở rộng.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -338,6 +753,33 @@ SS.addQuestions('kafka', [
       ['Ghi ra store idempotent', 'dùng key làm _id → replay là ghi đè', 'không'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Key là danh tính bản ghi, không chỉ là cách chia partition",
+      code:
+        "// COMPACTION: key chính là danh tính. Kafka giữ bản ghi MỚI NHẤT của mỗi key.\n" +
+        "producer.send(new ProducerRecord<>(\"user-profiles\", \"user-7\", v1));\n" +
+        "producer.send(new ProducerRecord<>(\"user-profiles\", \"user-7\", v2));\n" +
+        "// sau compaction chỉ còn v2. key = null trên topic compacted -> InvalidRecordException.\n" +
+        "\n" +
+        "producer.send(new ProducerRecord<>(\"user-profiles\", \"user-7\", null));   // tombstone: xoá\n" +
+        "\n" +
+        "// DEDUP: chọn key sai thì trùng lặp không khử được đúng.\n" +
+        "//  - key = id thực thể (order-123): mọi thay đổi của đơn đó cùng partition\n" +
+        "//    -> consumer thấy đúng thứ tự -> upsert cho kết quả đúng\n" +
+        "//  - key = ngẫu nhiên/null: hai bản của cùng một đơn rơi vào hai partition\n" +
+        "//    -> hai consumer xử lý song song -> ghi đè lẫn nhau theo thứ tự ngẫu nhiên\n" +
+        "\n" +
+        "// ĐÂY LÀ MỘT KEY TỆ cho topic compacted:\n" +
+        "producer.send(new ProducerRecord<>(\"events\", UUID.randomUUID().toString(), v));\n" +
+        "// mỗi message một key duy nhất -> compaction KHÔNG bao giờ nén được gì\n" +
+        "// -> topic phình vô hạn mà vẫn mang tiếng là \"compacted\".\n" +
+        "\n" +
+        "// Quy tắc: key trên topic compacted = khoá chính của thực thể.\n" +
+        "// Key trên topic sự kiện = thứ mà bạn cần giữ thứ tự theo nó.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -360,6 +802,40 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'offset vẫn tiến, EOS nguyên vẹn cho phần còn lại, pipeline không kẹt' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Tách message xấu ra mà không phá vỡ transaction",
+      code:
+        "// VẤN ĐỀ: trong pipeline EOS, một message không xử lý được sẽ làm abort cả\n" +
+        "// transaction -> lô đó chạy lại -> gặp lại đúng message đó -> LẶP VÔ HẠN,\n" +
+        "// và partition đứng im hoàn toàn.\n" +
+        "\n" +
+        "producer.beginTransaction();\n" +
+        "try {\n" +
+        "    for (var r : records) {\n" +
+        "        try {\n" +
+        "            producer.send(new ProducerRecord<>(\"out\", r.key(), transform(r.value())));\n" +
+        "        } catch (DeserializationException | ValidationException e) {\n" +
+        "            // MẤU CHỐT: gửi vào DLQ NGAY TRONG CÙNG TRANSACTION.\n" +
+        "            // Không ném ra ngoài -> transaction vẫn commit -> offset vẫn tiến.\n" +
+        "            producer.send(new ProducerRecord<>(\"out-dlq\", r.key(), r.value()));\n" +
+        "            metrics.increment(\"poison.message\");\n" +
+        "        }\n" +
+        "    }\n" +
+        "    producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());\n" +
+        "    producer.commitTransaction();\n" +
+        "} catch (KafkaException e) {          // chỉ abort với lỗi HẠ TẦNG\n" +
+        "    producer.abortTransaction();\n" +
+        "}\n" +
+        "// Nguyên tắc: lỗi DỮ LIỆU -> chuyển sang DLQ trong transaction, tiếp tục chạy.\n" +
+        "//             lỗi HẠ TẦNG -> abort và thử lại nguyên lô.\n" +
+        "\n" +
+        "// Với Kafka Streams, cùng ý tưởng qua handler:\n" +
+        "p.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,\n" +
+        "      LogAndContinueExceptionHandler.class);   // hoặc tự viết để đẩy vào DLQ",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -381,6 +857,34 @@ SS.addQuestions('kafka', [
       ['Kafka cung cấp', '—', 'message truyền nhiều lần, hiệu ứng 1 lần (idempotence + atomic commit)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vì sao \"đúng một lần\" là nói về HIỆU ỨNG, không phải về số lần gửi",
+      code:
+        "// Định lý Two Generals: trên mạng không tin cậy, KHÔNG THỂ đảm bảo một\n" +
+        "// message được gửi và xác nhận đúng một lần. Ack có thể mất, và bên gửi\n" +
+        "// không bao giờ phân biệt được \"chưa tới\" với \"tới rồi nhưng ack mất\".\n" +
+        "\n" +
+        "// Nên cái Kafka làm KHÔNG phải \"gửi đúng một lần\" mà là:\n" +
+        "//  1) gửi nhiều lần (retry) — chấp nhận điều đó\n" +
+        "//  2) khử trùng bằng PID + sequence\n" +
+        "//  3) làm cho HIỆU ỨNG chỉ xảy ra một lần (nguyên tử/idempotent)\n" +
+        "// -> \"effectively-once\" mô tả đúng bản chất hơn.\n" +
+        "\n" +
+        "// Và giới hạn quan trọng nhất: EOS chỉ áp dụng TRONG Kafka.\n" +
+        "producer.beginTransaction();\n" +
+        "producer.send(new ProducerRecord<>(\"out\", key, value));   // trong transaction\n" +
+        "httpClient.post(\"https://api.doi-tac.com/charge\", body);  // NGOÀI transaction!\n" +
+        "producer.commitTransaction();\n" +
+        "// Transaction abort -> record Kafka bị huỷ, nhưng tiền ĐÃ TRỪ ở đối tác.\n" +
+        "// -> Ra ngoài Kafka thì phải dùng idempotency key ở phía API.\n" +
+        "\n" +
+        "// Kết luận thực dụng: đừng hỏi \"có exactly-once không\", hãy hỏi\n" +
+        "// \"hiệu ứng của việc xử lý lại một message có gây sai lệch không\".\n" +
+        "// Nếu không -> at-least-once + idempotent là đủ, và đơn giản hơn nhiều.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -403,6 +907,46 @@ SS.addQuestions('kafka', [
       ['Bù trừ', 'mỗi service tự quyết định', 'orchestrator quyết định thứ tự bù'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chuỗi transaction cục bộ + bước bù trừ",
+      code:
+        "// Saga thay thế distributed transaction: mỗi bước là một transaction CỤC BỘ,\n" +
+        "// mỗi bước có một hành động BÙ TRỪ để quay lui khi bước sau thất bại.\n" +
+        "\n" +
+        "// CHOREOGRAPHY — mỗi service nghe sự kiện và tự quyết bước tiếp theo\n" +
+        "@KafkaListener(topics = \"order-created\")\n" +
+        "public void onOrderCreated(OrderCreated e) {\n" +
+        "    try {\n" +
+        "        payment.charge(e.orderId(), e.amount());\n" +
+        "        producer.send(new ProducerRecord<>(\"payment-succeeded\", e.orderId(), json));\n" +
+        "    } catch (PaymentFailedException ex) {\n" +
+        "        producer.send(new ProducerRecord<>(\"payment-failed\", e.orderId(), json));\n" +
+        "    }\n" +
+        "}\n" +
+        "@KafkaListener(topics = \"payment-failed\")\n" +
+        "public void compensate(PaymentFailed e) { orderService.cancel(e.orderId()); }  // bù trừ\n" +
+        "// + không có điểm nghẽn trung tâm, service tách rời hoàn toàn\n" +
+        "// - luồng nghiệp vụ nằm RẢI RÁC, không ai nhìn thấy toàn cảnh; dễ tạo vòng lặp sự kiện\n" +
+        "\n" +
+        "// ORCHESTRATION — một service điều phối giữ toàn bộ luồng\n" +
+        "public void execute(String orderId) {\n" +
+        "    var saga = sagaRepo.create(orderId);\n" +
+        "    try {\n" +
+        "        saga.step(\"payment\",   () -> payment.charge(orderId));\n" +
+        "        saga.step(\"inventory\", () -> inventory.reserve(orderId));\n" +
+        "        saga.step(\"shipping\",  () -> shipping.schedule(orderId));\n" +
+        "    } catch (Exception e) {\n" +
+        "        saga.compensateAll();      // chạy ngược các bước đã xong\n" +
+        "    }\n" +
+        "}\n" +
+        "// + luồng tường minh ở MỘT chỗ, dễ debug và giám sát\n" +
+        "// - orchestrator thành điểm phụ thuộc chung, và cần lưu trạng thái bền\n" +
+        "// Chọn: dưới 3-4 bước -> choreography. Nhiều bước, cần nhìn thấy trạng thái\n" +
+        "// -> orchestration (Temporal, Camunda, hoặc tự viết trên state machine).",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -428,6 +972,45 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'retry / double-click / timeout-rồi-thử-lại → trả kết quả cũ, KHÔNG charge lần 2' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chống trùng ở nơi request đi vào hệ thống",
+      code:
+        "// Client sinh key (mỗi Ý ĐỊNH một key, giữ nguyên khi retry) và gửi kèm:\n" +
+        "//   POST /payments\n" +
+        "//   Idempotency-Key: 8f3a-...-c21b\n" +
+        "@PostMapping(\"/payments\")\n" +
+        "public ResponseEntity<PaymentResult> pay(\n" +
+        "        @RequestHeader(\"Idempotency-Key\") String key,\n" +
+        "        @RequestBody PaymentRequest req) {\n" +
+        "\n" +
+        "    // 1) Cố GIÀNH CHỖ cho key này — atomic, chống cả hai request đồng thời\n" +
+        "    boolean acquired = jdbc.update(\"\"\"\n" +
+        "        INSERT INTO idempotency (key, request_hash, status, created_at)\n" +
+        "        VALUES (?, ?, \u0027IN_PROGRESS\u0027, now()) ON CONFLICT DO NOTHING\n" +
+        "        \"\"\", key, hash(req)) == 1;\n" +
+        "\n" +
+        "    if (!acquired) {\n" +
+        "        var existing = repo.find(key);\n" +
+        "        // 2) Cùng key nhưng payload KHÁC -> client dùng sai key\n" +
+        "        if (!existing.requestHash().equals(hash(req)))\n" +
+        "            return ResponseEntity.status(422).build();\n" +
+        "        // 3) Đang xử lý -> bảo client thử lại sau, ĐỪNG xử lý song song\n" +
+        "        if (existing.status() == IN_PROGRESS)\n" +
+        "            return ResponseEntity.status(409).header(\"Retry-After\", \"2\").build();\n" +
+        "        // 4) Đã xong -> trả về ĐÚNG kết quả cũ, không làm lại\n" +
+        "        return ResponseEntity.ok(existing.response());\n" +
+        "    }\n" +
+        "\n" +
+        "    PaymentResult result = paymentService.charge(req);\n" +
+        "    jdbc.update(\"UPDATE idempotency SET status=\u0027DONE\u0027, response=? WHERE key=?\",\n" +
+        "                json(result), key);\n" +
+        "    return ResponseEntity.ok(result);\n" +
+        "}\n" +
+        "// TTL 24-48h là đủ cho mọi retry hợp lý. Đây là cách Stripe, PayPal làm.",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -450,6 +1033,55 @@ SS.addQuestions('kafka', [
       ['Hạ tầng', 'không thêm (một @Scheduled)', 'Kafka Connect + Debezium'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hai cách đẩy outbox lên Kafka",
+      code:
+        "// CÁCH 1: POLLING PUBLISHER — job định kỳ quét bảng outbox\n" +
+        "@Scheduled(fixedDelay = 500)\n" +
+        "@Transactional\n" +
+        "public void publish() {\n" +
+        "    var events = jdbc.query(\"\"\"\n" +
+        "        SELECT * FROM outbox WHERE published_at IS NULL\n" +
+        "        ORDER BY created_at LIMIT 100\n" +
+        "        FOR UPDATE SKIP LOCKED\n" +
+        "        \"\"\", mapper);                      // SKIP LOCKED: nhiều instance không giành nhau\n" +
+        "    for (var e : events) {\n" +
+        "        producer.send(new ProducerRecord<>(\"orders\", e.aggregateId(), e.payload()));\n" +
+        "        jdbc.update(\"UPDATE outbox SET published_at = now() WHERE id = ?\", e.id());\n" +
+        "    }\n" +
+        "}\n" +
+        "// + đơn giản, không thêm hạ tầng, dễ hiểu dễ debug\n" +
+        "// - thêm tải cho DB (poll liên tục), độ trễ = chu kỳ poll,\n" +
+        "//   và crash giữa send với update -> gửi trùng (chấp nhận được, cần idempotent)\n" +
+        "\n" +
+        "// CÁCH 2: CDC — Debezium đọc WAL/binlog của DB, KHÔNG truy vấn bảng\n" +
+        "// + độ trễ mili-giây, gần như không thêm tải cho DB, không mất sự kiện nào\n" +
+        "// - thêm Kafka Connect + Debezium vào hệ thống phải vận hành\n" +
+        "// - cần quyền replication trên DB và cấu hình WAL đúng",
+    },
+    {
+      lang: "json",
+      title: "Cấu hình Debezium outbox",
+      code:
+        "{\n" +
+        "  \"name\": \"outbox-connector\",\n" +
+        "  \"config\": {\n" +
+        "    \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",\n" +
+        "    \"database.hostname\": \"postgres\",\n" +
+        "    \"database.dbname\": \"orders\",\n" +
+        "    \"table.include.list\": \"public.outbox\",\n" +
+        "    \"transforms\": \"outbox\",\n" +
+        "    \"transforms.outbox.type\":\n" +
+        "      \"io.debezium.transforms.outbox.EventRouter\",\n" +
+        "    \"transforms.outbox.route.by.field\": \"aggregate_type\",\n" +
+        "    \"transforms.outbox.table.field.event.key\": \"aggregate_id\",\n" +
+        "    \"transforms.outbox.table.field.event.payload\": \"payload\"\n" +
+        "  }\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Delivery semantics',
@@ -478,5 +1110,40 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn lớp phòng thủ",
+      code:
+        "// Rebalance -> partition chuyển chủ từ offset commit gần nhất -> mọi thứ xử lý\n" +
+        "// sau lần commit đó bị làm LẠI. Không tránh được hoàn toàn, chỉ giảm và chịu được.\n" +
+        "\n" +
+        "// LỚP 1: commit ngay trước khi mất partition\n" +
+        "consumer.subscribe(List.of(\"orders\"), new ConsumerRebalanceListener() {\n" +
+        "    @Override public void onPartitionsRevoked(Collection<TopicPartition> parts) {\n" +
+        "        consumer.commitSync(currentOffsets);     // cửa sổ trùng lặp thu về gần 0\n" +
+        "    }\n" +
+        "    @Override public void onPartitionsAssigned(Collection<TopicPartition> parts) {}\n" +
+        "});\n" +
+        "\n" +
+        "// LỚP 2: giảm số lần rebalance\n" +
+        "p.put(\"group.instance.id\", System.getenv(\"HOSTNAME\"));   // static membership\n" +
+        "p.put(\"partition.assignment.strategy\", CooperativeStickyAssignor.class.getName());\n" +
+        "p.put(\"max.poll.records\", \"100\");        // lô nhỏ -> commit thường xuyên hơn\n" +
+        "\n" +
+        "// LỚP 3: commit thường xuyên hơn, hoặc theo lô nhỏ\n" +
+        "if (++count % 50 == 0) consumer.commitAsync();\n" +
+        "\n" +
+        "// LỚP 4 (quan trọng nhất): làm việc xử lý IDEMPOTENT — ba lớp trên chỉ\n" +
+        "// thu hẹp cửa sổ, không đóng được nó.\n" +
+        "jdbc.update(\"\"\"\n" +
+        "    INSERT INTO orders (id, status) VALUES (?, ?)\n" +
+        "    ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status\n" +
+        "    \"\"\", r.key(), status);\n" +
+        "\n" +
+        "// Và đóng consumer cho tử tế để không phải chờ hết session timeout:\n" +
+        "Runtime.getRuntime().addShutdownHook(new Thread(consumer::wakeup));",
+    },
+  ],
 },
 ]);

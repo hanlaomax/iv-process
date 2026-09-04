@@ -20,6 +20,31 @@ SS.addQuestions('kafka', [
       ['Đi kèm', '—', '—', 'min.insync.replicas ≥ 2'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Ba mức đánh đổi giữa độ bền và độ trễ",
+      code:
+        "# acks=0 — gửi rồi quên. Không chờ phản hồi nào.\n" +
+        "#   nhanh nhất, nhưng broker chết là mất sạch mà producer KHÔNG HỀ BIẾT.\n" +
+        "#   Chỉ dùng cho metric/log chấp nhận mất.\n" +
+        "acks=0\n" +
+        "\n" +
+        "# acks=1 — chờ LEADER ghi xong. Không chờ follower.\n" +
+        "#   Mất dữ liệu khi: leader ack xong rồi chết TRƯỚC khi follower kịp sao chép.\n" +
+        "#   Đây là cửa sổ mất mát nhỏ nhưng có thật.\n" +
+        "acks=1\n" +
+        "\n" +
+        "# acks=all (= -1) — chờ mọi replica TRONG ISR ghi xong.\n" +
+        "#   MẶC ĐỊNH từ Kafka 3.0. Không mất dữ liệu miễn còn một replica trong ISR sống.\n" +
+        "acks=all\n" +
+        "min.insync.replicas=2       # đặt Ở TOPIC, xem câu sau — thiếu nó thì acks=all vô nghĩa\n" +
+        "\n" +
+        "# Chi phí: acks=all thêm một vòng nhân bản vào độ trễ (thường +2..10ms trong\n" +
+        "# cùng vùng). Với idempotence + batch tốt, throughput giảm ít hơn nhiều so với\n" +
+        "# cảm giác — đừng đánh đổi độ bền lấy độ trễ khi chưa đo.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -42,6 +67,31 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'thiếu → TỪ CHỐI ghi, không ghi rủi ro mất. acks=1/0 bỏ qua min.insync.replicas' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Hai tham số phải đi cùng nhau mới có tác dụng",
+      code:
+        "# acks=all nghĩa là \"chờ mọi replica TRONG ISR\". Nhưng nếu ISR co lại còn 1\n" +
+        "# (hai follower chết), thì \"mọi ISR\" = một mình leader -> acks=all trở nên\n" +
+        "# vô nghĩa mà không báo lỗi gì. min.insync.replicas là chốt chặn cho việc đó.\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --entity-type topics --entity-name orders \\\n" +
+        "  --add-config min.insync.replicas=2\n" +
+        "\n" +
+        "# Với RF=3, min.insync.replicas=2, acks=all:\n" +
+        "#   ISR = 3 -> ghi bình thường, chịu được mất 1 broker\n" +
+        "#   ISR = 2 -> vẫn ghi được (đúng ngưỡng)\n" +
+        "#   ISR = 1 -> producer nhận NotEnoughReplicasException, TỪ CHỐI ghi\n" +
+        "# Từ chối ghi là ĐÚNG: thà dừng còn hơn ghi vào chỗ sắp mất.\n" +
+        "\n" +
+        "# BẪY: RF=3 + min.insync.replicas=3 -> mất một broker là topic ngừng ghi hoàn toàn.\n" +
+        "# Luôn để min.insync.replicas = RF - 1.\n" +
+        "\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --describe \\\n" +
+        "  --entity-type topics --entity-name orders",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -65,6 +115,31 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'chỉ khử trùng do retry TRONG một session — không khử producer restart hay xử lý lại phía consumer' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chống trùng do RETRY, không chống trùng do gửi lại từ ứng dụng",
+      code:
+        "Properties p = new Properties();\n" +
+        "p.put(\"enable.idempotence\", \"true\");    // MẶC ĐỊNH true từ Kafka 3.0\n" +
+        "// Bật cái này thì Kafka tự ép: acks=all, retries=Integer.MAX_VALUE,\n" +
+        "// max.in.flight.requests.per.connection <= 5. Đặt ngược lại -> ConfigException.\n" +
+        "\n" +
+        "// CƠ CHẾ: producer được cấp một PID (producer id), mỗi partition có một\n" +
+        "// sequence number tăng dần. Broker nhớ sequence cuối cùng của mỗi (PID, partition):\n" +
+        "//   seq = lastSeq + 1 -> ghi bình thường\n" +
+        "//   seq <= lastSeq     -> ĐÃ GHI RỒI, bỏ qua và trả về ack thành công (dedup)\n" +
+        "//   seq >  lastSeq + 1 -> thủng lỗ -> OutOfOrderSequenceException\n" +
+        "\n" +
+        "// Trước khi có idempotence: ack bị mất trên đường về -> producer retry\n" +
+        "// -> message vào log HAI LẦN. Đây là nguồn trùng lặp phổ biến nhất.\n" +
+        "\n" +
+        "// GIỚI HẠN QUAN TRỌNG: chỉ khử trùng trong PHIÊN của một producer.\n" +
+        "producer.send(record);      // ứng dụng crash rồi khởi động lại\n" +
+        "producer.send(record);      // PID mới -> Kafka coi là message MỚI, KHÔNG khử được\n" +
+        "// Muốn chống cả trường hợp đó -> transaction hoặc khoá idempotency ở tầng nghiệp vụ.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -89,6 +164,30 @@ SS.addQuestions('kafka', [
       ['Dùng cho', 'trading, lệnh nhạy latency', 'pipeline ingest throughput cao'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Đổi một chút độ trễ lấy rất nhiều throughput",
+      code:
+        "# Producer gom record thành BATCH theo từng partition. Batch được gửi khi\n" +
+        "# ĐẦY (batch.size) HOẶC HẾT GIỜ CHỜ (linger.ms) — cái nào tới trước.\n" +
+        "batch.size=32768        # byte, mặc định 16384. Là TRẦN của một batch, không phải mục tiêu\n" +
+        "linger.ms=10            # mặc định 0 = gửi ngay, gần như không gom được gì\n" +
+        "\n" +
+        "# linger.ms=0 nghĩa là mỗi record một request khi tải nhẹ -> tốn overhead khủng khiếp.\n" +
+        "# Chỉ cần đặt 5-20ms là batch đầy lên rõ rệt: ít request hơn, nén hiệu quả hơn\n" +
+        "# (nén cả batch), CPU broker nhẹ hơn. Throughput thường tăng vài lần.\n" +
+        "\n" +
+        "# Nén chỉ thật sự hiệu quả khi batch đủ lớn — nén 1 record thì gần như vô ích.\n" +
+        "compression.type=lz4\n" +
+        "\n" +
+        "# Chỉnh thế nào:\n" +
+        "#  - cần độ trễ thấp nhất (giao dịch) -> linger.ms=0..5\n" +
+        "#  - throughput cao (log, CDC, ETL)   -> linger.ms=50..100, batch.size=128KB\n" +
+        "# Theo dõi batch-size-avg và records-per-request-avg: batch trung bình còn\n" +
+        "# nhỏ hơn nhiều so với batch.size nghĩa là linger.ms đang quá ngắn.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -114,6 +213,32 @@ SS.addQuestions('kafka', [
       ['Khuyến nghị', 'khi cần nén tối đa', 'cân bằng cũ', 'mặc định tốt', 'hiện đại (client/broker đủ mới)'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Bốn lựa chọn và tiêu chí chọn",
+      code:
+        "compression.type=lz4       # mặc định nên dùng\n" +
+        "\n" +
+        "# none   — không nén. Chỉ hợp khi payload đã nén sẵn (ảnh, video, protobuf nhỏ).\n" +
+        "# gzip   — nén TỐT nhất (~70-80%), nhưng ngốn CPU nhất. Hợp khi băng thông\n" +
+        "#          đắt hơn CPU: truyền qua WAN, MirrorMaker liên vùng.\n" +
+        "# snappy — nhanh, tỉ lệ nén trung bình. Lựa chọn cũ, giờ lz4 thường tốt hơn.\n" +
+        "# lz4    — nhanh gần snappy, nén tốt hơn. Cân bằng nhất -> mặc định thực dụng.\n" +
+        "# zstd   — nén xấp xỉ gzip nhưng nhanh hơn NHIỀU (Kafka 2.1+). Tốt nhất nếu\n" +
+        "#          client và broker đều đủ mới. Chỉnh được mức nén.\n" +
+        "\n" +
+        "# NGUYÊN TẮC then chốt: dữ liệu được giữ NGUYÊN DẠNG NÉN suốt chặng\n" +
+        "# producer -> broker (lưu thẳng lên đĩa) -> consumer. Broker KHÔNG giải nén\n" +
+        "# (trừ khi phải chuyển đổi định dạng cho client cũ, hoặc để validate).\n" +
+        "# -> nén tiết kiệm cả băng thông LẪN dung lượng đĩa LẪN CPU broker.\n" +
+        "\n" +
+        "# Đặt nén ở TOPIC để ép mọi producer tuân theo:\n" +
+        "#   kafka-configs.sh --alter --entity-type topics --entity-name orders \\\n" +
+        "#     --add-config compression.type=zstd\n" +
+        "# Giá trị \u0027producer\u0027 (mặc định của broker) nghĩa là giữ nguyên cái producer gửi lên.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -135,6 +260,37 @@ SS.addQuestions('kafka', [
       ['Dùng khi', 'phần lớn trường hợp', 'sự kiện độc lập, tối ưu batch', 'định tuyến theo value, cách ly "khách nóng"'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba nhánh của partitioner mặc định và khi nào tự viết",
+      code:
+        "// Có key      -> partition = murmur2(keyBytes) % numPartitions   (ổn định, lặp lại được)\n" +
+        "// Không key   -> sticky partitioning: dồn vào MỘT partition cho tới khi batch đầy\n" +
+        "//                rồi mới đổi sang partition khác (Kafka 2.4+). Batch to hơn\n" +
+        "//                round-robin thuần -> độ trễ thấp hơn ở tải nhẹ.\n" +
+        "// Chỉ định rõ -> dùng đúng partition đó, bỏ qua mọi tính toán.\n" +
+        "\n" +
+        "// Tự viết partitioner khi ánh xạ mặc định gây LỆCH TẢI nghiêm trọng:\n" +
+        "public class TenantPartitioner implements Partitioner {\n" +
+        "    @Override\n" +
+        "    public int partition(String topic, Object key, byte[] keyBytes,\n" +
+        "                         Object value, byte[] valueBytes, Cluster cluster) {\n" +
+        "        int n = cluster.partitionCountForTopic(topic);\n" +
+        "        String tenant = (String) key;\n" +
+        "        // Tenant khổng lồ được cấp riêng một dải partition, phần còn lại chia đều\n" +
+        "        if (tenant.startsWith(\"BIGCORP\")) return Math.abs(tenant.hashCode()) % 4;\n" +
+        "        return 4 + Math.abs(tenant.hashCode()) % (n - 4);\n" +
+        "    }\n" +
+        "    @Override public void close() {}\n" +
+        "    @Override public void configure(Map<String, ?> configs) {}\n" +
+        "}\n" +
+        "p.put(\"partitioner.class\", TenantPartitioner.class.getName());\n" +
+        "\n" +
+        "// CẢNH BÁO: đổi partitioner (hoặc đổi số partition) làm key cũ đi sang\n" +
+        "// partition khác -> phá vỡ thứ tự và làm hỏng compaction. Cân nhắc rất kỹ.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -159,6 +315,29 @@ SS.addQuestions('kafka', [
       { to: 5, label: 'hết thời gian → TimeoutException; app trả 503 / ghi outbox' },
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Điều gì xảy ra khi gửi nhanh hơn Kafka nhận",
+      code:
+        "# Producer KHÔNG gửi ngay mà đưa record vào buffer trong bộ nhớ, một thread\n" +
+        "# nền (Sender) mới đẩy đi. buffer.memory là tổng dung lượng buffer đó.\n" +
+        "buffer.memory=67108864      # 64MB, mặc định 32MB\n" +
+        "max.block.ms=60000          # send() chặn tối đa bao lâu khi buffer đầy\n" +
+        "\n" +
+        "# Buffer đầy (Kafka chậm, hoặc mạng nghẽn, hoặc broker chết) thì send() sẽ CHẶN.\n" +
+        "# Chặn quá max.block.ms -> ném TimeoutException.\n" +
+        "# -> Đây chính là backpressure: producer bị làm chậm lại để không nuốt hết RAM.\n" +
+        "\n" +
+        "# BẪY 1: max.block.ms lớn trên luồng xử lý request HTTP -> request treo hàng phút.\n" +
+        "#        Đặt ngắn (vài giây) rồi tự xử lý lỗi thì tốt hơn.\n" +
+        "# BẪY 2: send() là bất đồng bộ nên nhiều người tưởng nó không bao giờ chặn.\n" +
+        "#        Nó CÓ chặn — ở đúng chỗ buffer đầy và lúc chờ metadata lần đầu.\n" +
+        "\n" +
+        "# Theo dõi: buffer-available-bytes tụt về 0 và waiting-threads > 0\n" +
+        "# là dấu hiệu producer đang bị nghẽn.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -181,6 +360,27 @@ SS.addQuestions('kafka', [
       ['Ảnh hưởng thứ tự', '—', '—', '>1 + retry không idempotence → đảo thứ tự'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Ba tham số quyết định \"gửi được hay không\" và \"có giữ thứ tự không\"",
+      code:
+        "# Từ Kafka 2.1, delivery.timeout.ms là TRẦN TỔNG THỜI GIAN cho một record,\n" +
+        "# tính từ lúc send() tới lúc thành công hoặc bỏ cuộc. Nó bao trùm cả retry.\n" +
+        "delivery.timeout.ms=120000       # nên chỉnh CÁI NÀY thay vì chỉnh retries\n" +
+        "request.timeout.ms=30000         # timeout của MỘT request tới broker\n" +
+        "retry.backoff.ms=100\n" +
+        "retries=2147483647               # để mặc định; delivery.timeout.ms mới là thứ dừng cuộc chơi\n" +
+        "# Ràng buộc: delivery.timeout.ms >= request.timeout.ms + linger.ms\n" +
+        "\n" +
+        "# THỨ TỰ: nhiều request bay song song trên một connection, cái đầu lỗi phải\n" +
+        "# gửi lại trong khi cái sau đã ghi xong -> ĐẢO THỨ TỰ.\n" +
+        "max.in.flight.requests.per.connection=5\n" +
+        "enable.idempotence=true          # broker sắp xếp lại theo sequence -> vẫn giữ thứ tự\n" +
+        "# Nếu TẮT idempotence mà vẫn cần thứ tự tuyệt đối thì buộc phải đặt\n" +
+        "# max.in.flight=1 -> throughput giảm mạnh. Bật idempotence là lựa chọn đúng.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -206,6 +406,35 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Một instance dùng chung cho cả ứng dụng",
+      code:
+        "// KafkaProducer THREAD-SAFE. Chia sẻ MỘT instance giữa mọi thread là cách\n" +
+        "// dùng ĐÚNG và NHANH NHẤT — nhiều thread cùng ghi giúp batch đầy nhanh hơn.\n" +
+        "@Configuration\n" +
+        "public class ProducerConfig {\n" +
+        "    @Bean(destroyMethod = \"close\")           // đóng đúng lúc ứng dụng tắt\n" +
+        "    public KafkaProducer<String, String> producer() {\n" +
+        "        Properties p = new Properties();\n" +
+        "        p.put(\"bootstrap.servers\", \"kafka:9092\");\n" +
+        "        p.put(\"key.serializer\", StringSerializer.class.getName());\n" +
+        "        p.put(\"value.serializer\", StringSerializer.class.getName());\n" +
+        "        p.put(\"enable.idempotence\", \"true\");\n" +
+        "        return new KafkaProducer<>(p);\n" +
+        "    }\n" +
+        "}\n" +
+        "// Mỗi producer nuôi một thread nền (Sender) + buffer riêng.\n" +
+        "// Tạo producer cho mỗi request là sai lầm nặng: mất kết nối, mất metadata,\n" +
+        "// batch luôn rỗng, và rò rỉ thread.\n" +
+        "\n" +
+        "// Khi nào cần NHIỀU producer:\n" +
+        "//  - cần cấu hình KHÁC nhau (acks=all cho giao dịch, acks=1 cho log)\n" +
+        "//  - dùng transaction: mỗi transactional.id phải có producer RIÊNG\n" +
+        "//  - muốn cách ly tài nguyên giữa các luồng nghiệp vụ quan trọng khác nhau",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -232,6 +461,43 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba cách gửi và phân biệt lỗi tạm thời với lỗi vĩnh viễn",
+      code:
+        "// 1) FIRE-AND-FORGET: mất message mà không biết. Chỉ dùng cho dữ liệu bỏ được.\n" +
+        "producer.send(record);\n" +
+        "\n" +
+        "// 2) ĐỒNG BỘ: chắc chắn nhưng giết throughput (chờ từng cái một)\n" +
+        "try {\n" +
+        "    RecordMetadata md = producer.send(record).get();\n" +
+        "} catch (ExecutionException e) {\n" +
+        "    Throwable cause = e.getCause();\n" +
+        "}\n" +
+        "\n" +
+        "// 3) BẤT ĐỒNG BỘ + CALLBACK: cách nên dùng\n" +
+        "producer.send(record, (metadata, ex) -> {\n" +
+        "    if (ex == null) {\n" +
+        "        log.debug(\"đã ghi {}-{}@{}\", metadata.topic(), metadata.partition(), metadata.offset());\n" +
+        "        return;\n" +
+        "    }\n" +
+        "    if (ex instanceof RetriableException) {\n" +
+        "        // NotLeaderOrFollower, NetworkException, Timeout... client ĐÃ tự retry\n" +
+        "        // tới hết delivery.timeout.ms rồi mới báo lên đây -> giờ là lỗi thật\n" +
+        "        metrics.increment(\"kafka.send.failed.retriable\");\n" +
+        "        deadLetter.save(record);                 // cứu lấy message, gửi lại sau\n" +
+        "    } else {\n" +
+        "        // RecordTooLargeException, SerializationException, AuthorizationException\n" +
+        "        // -> retry vô ích, phải sửa dữ liệu hoặc cấu hình\n" +
+        "        log.error(\"lỗi không thể retry\", ex);\n" +
+        "        alert.fire(ex);\n" +
+        "    }\n" +
+        "});\n" +
+        "// LƯU Ý: callback chạy trên THREAD SENDER của producer. Làm việc nặng hoặc\n" +
+        "// chặn trong callback sẽ làm nghẽn toàn bộ việc gửi của mọi partition.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -257,6 +523,38 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'commit → tất cả xuất hiện; abort → không cái nào. Consumer đặt isolation.level=read_committed' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ghi nguyên tử nhiều partition trong một lần",
+      code:
+        "Properties p = new Properties();\n" +
+        "p.put(\"transactional.id\", \"order-processor-1\");  // PHẢI ổn định và DUY NHẤT\n" +
+        "p.put(\"enable.idempotence\", \"true\");             // transaction bao hàm idempotence\n" +
+        "KafkaProducer<String, String> producer = new KafkaProducer<>(p);\n" +
+        "\n" +
+        "producer.initTransactions();     // gọi MỘT lần lúc khởi động: đăng ký với\n" +
+        "                                 // transaction coordinator và \"chặn\" producer cũ\n" +
+        "                                 // cùng transactional.id (zombie fencing)\n" +
+        "try {\n" +
+        "    producer.beginTransaction();\n" +
+        "    producer.send(new ProducerRecord<>(\"orders\",   key, orderJson));\n" +
+        "    producer.send(new ProducerRecord<>(\"payments\", key, paymentJson));\n" +
+        "    producer.send(new ProducerRecord<>(\"audit\",    key, auditJson));\n" +
+        "    producer.commitTransaction();     // ba topic hoặc CÙNG hiện, hoặc KHÔNG cái nào\n" +
+        "} catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {\n" +
+        "    producer.close();                 // KHÔNG cứu được: phải tạo producer mới\n" +
+        "} catch (KafkaException e) {\n" +
+        "    producer.abortTransaction();      // cứu được: huỷ rồi thử lại\n" +
+        "}\n" +
+        "\n" +
+        "// Consumer chỉ thấy dữ liệu đã commit khi đặt isolation.level=read_committed.\n" +
+        "// Bản chất: broker vẫn ghi mọi record vào log ngay, kèm marker COMMIT/ABORT.\n" +
+        "// Consumer read_committed lọc bỏ phần bị abort khi đọc.\n" +
+        "// GIÁ PHẢI TRẢ: thêm độ trễ (chờ marker) và consumer không đọc vượt qua\n" +
+        "// transaction đang mở (LSO) -> một transaction treo làm nghẽn cả partition.",
+    },
+  ],
 },
 {
   cat: 'Serialization',
@@ -281,6 +579,31 @@ SS.addQuestions('kafka', [
       ['Hợp khi', 'mặc định hệ Kafka', 'đã dùng gRPC', 'cần debug dễ'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hợp đồng dữ liệu và ba định dạng",
+      code:
+        "// VẤN ĐỀ: producer đổi cấu trúc JSON, consumer vỡ lúc chạy. Không ai biết\n" +
+        "// topic đang chứa cái gì. Schema Registry biến schema thành HỢP ĐỒNG được kiểm tra.\n" +
+        "p.put(\"value.serializer\", KafkaAvroSerializer.class.getName());\n" +
+        "p.put(\"schema.registry.url\", \"http://schema-registry:8081\");\n" +
+        "p.put(\"auto.register.schemas\", \"false\");   // production: đăng ký qua CI, không tự động\n" +
+        "\n" +
+        "// Serializer gửi schema lên registry, nhận về SCHEMA ID (4 byte) và chỉ nhúng\n" +
+        "// id đó vào message thay vì cả schema:\n" +
+        "//   [magic byte 0][schema id 4 byte][payload đã mã hoá]\n" +
+        "// -> message nhỏ, và consumer tra id để biết đọc theo schema nào.\n" +
+        "\n" +
+        "// AVRO      — nhỏ gọn nhất, hỗ trợ tiến hoá schema tốt nhất, mặc định trong\n" +
+        "//             hệ sinh thái Kafka. Cần file .avsc và sinh code.\n" +
+        "// PROTOBUF  — nhỏ gọn, đa ngôn ngữ mạnh, hợp khi đã dùng gRPC.\n" +
+        "// JSON SCHEMA — dễ đọc, dễ debug, nhưng payload to hơn nhiều và tiến hoá lỏng lẻo hơn.\n" +
+        "\n" +
+        "// Với Avro, luôn đặt default cho field mới -> thêm field không phá consumer cũ:\n" +
+        "//   {\"name\":\"discount\",\"type\":[\"null\",\"double\"],\"default\":null}",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -308,6 +631,35 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Metadata tách khỏi payload",
+      code:
+        "// Header cho phép mang thông tin KỸ THUẬT mà không phải nhét vào payload\n" +
+        "// nghiệp vụ — quan trọng vì payload thường bị ràng buộc bởi schema.\n" +
+        "ProducerRecord<String, byte[]> record = new ProducerRecord<>(\"orders\", key, value);\n" +
+        "record.headers()\n" +
+        "      .add(\"trace-id\",     traceId.getBytes(UTF_8))       // truy vết phân tán\n" +
+        "      .add(\"source\",       \"checkout-svc\".getBytes(UTF_8))\n" +
+        "      .add(\"schema-version\", \"3\".getBytes(UTF_8))\n" +
+        "      .add(\"event-type\",   \"OrderPlaced\".getBytes(UTF_8)) // định tuyến không cần parse payload\n" +
+        "      .add(\"retry-count\",  \"0\".getBytes(UTF_8));          // dùng cho retry topic\n" +
+        "\n" +
+        "// Phía consumer: lọc/định tuyến mà KHÔNG phải giải mã payload -> rẻ hơn nhiều\n" +
+        "for (var r : records) {\n" +
+        "    Header h = r.headers().lastHeader(\"event-type\");\n" +
+        "    String type = h == null ? \"\" : new String(h.value(), UTF_8);\n" +
+        "    if (!\"OrderPlaced\".equals(type)) continue;\n" +
+        "    process(r);\n" +
+        "}\n" +
+        "\n" +
+        "// Lưu ý: header là byte[], có thể LẶP cùng một key (dùng lastHeader để lấy cái cuối).\n" +
+        "// Header KHÔNG được nén riêng và tính vào kích thước message -> đừng nhét\n" +
+        "// dữ liệu lớn. Cũng đừng đặt dữ liệu nghiệp vụ vào header: nó nằm ngoài schema,\n" +
+        "// không ai kiểm tra được.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -334,6 +686,32 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Bốn chỗ phải chỉnh cùng lúc, và cách tốt hơn",
+      code:
+        "# Mặc định trần là 1MB. Vượt -> RecordTooLargeException.\n" +
+        "# Muốn tăng, phải chỉnh ĐỦ BỐN chỗ, thiếu một là vẫn lỗi ở chỗ khác:\n" +
+        "message.max.bytes=10485760              # broker: nhận\n" +
+        "replica.fetch.max.bytes=10485760        # broker: nhân bản giữa các replica\n" +
+        "max.request.size=10485760               # producer\n" +
+        "max.partition.fetch.bytes=10485760      # consumer\n" +
+        "fetch.max.bytes=52428800                # consumer: tổng cho một lần fetch\n" +
+        "\n" +
+        "# NHƯNG tăng trần là lựa chọn TỆ: message lớn làm phình page cache, kéo dài\n" +
+        "# thời gian nhân bản, gây timeout rebalance, và một message xấu có thể\n" +
+        "# làm nghẽn cả partition.\n" +
+        "\n" +
+        "# CÁCH ĐÚNG — claim check pattern: đẩy payload lên object storage,\n" +
+        "# Kafka chỉ mang con trỏ:\n" +
+        "#   { \"bucket\": \"s3://payloads\", \"key\": \"2026/09/abc123\", \"size\": 8912345 }\n" +
+        "# Message vài trăm byte, Kafka làm đúng việc của nó, và storage rẻ hơn nhiều.\n" +
+        "\n" +
+        "# Cách khác: chia nhỏ (chunking) cùng key rồi ghép lại ở consumer —\n" +
+        "# phức tạp và dễ sai, chỉ dùng khi không có object storage.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -362,6 +740,32 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Sáu metric nói lên gần như mọi vấn đề",
+      code:
+        "// Lấy metric qua chính client (hoặc JMX / Micrometer)\n" +
+        "for (var e : producer.metrics().entrySet()) {\n" +
+        "    MetricName n = e.getKey();\n" +
+        "    if (n.group().equals(\"producer-metrics\")) log.info(\"{} = {}\", n.name(), e.getValue().metricValue());\n" +
+        "}\n" +
+        "\n" +
+        "// 1) record-error-rate       > 0 là có message MẤT -> cảnh báo ngay\n" +
+        "// 2) record-retry-rate       tăng = mạng/broker không ổn định, hoặc leader đang chuyển\n" +
+        "// 3) request-latency-avg     độ trễ tới broker; tăng đột biến = broker quá tải\n" +
+        "// 4) buffer-available-bytes  tụt về 0 = producer bị nghẽn, send() sắp chặn\n" +
+        "// 5) batch-size-avg          nhỏ hơn nhiều so với batch.size = linger.ms quá ngắn\n" +
+        "//                            -> đang lãng phí throughput\n" +
+        "// 6) record-queue-time-avg   record nằm chờ trong buffer bao lâu; cao = Sender không kịp đẩy\n" +
+        "\n" +
+        "// Ngoài ra: compression-rate-avg (nén có hiệu quả không),\n" +
+        "//           records-per-request-avg (batch có thật sự gom được không)\n" +
+        "\n" +
+        "// Xuất sang Prometheus trong Spring Boot:\n" +
+        "//   new KafkaClientMetrics(producer).bindTo(meterRegistry);",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -386,6 +790,35 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'CDC/scheduler đọc outbox publish lại — không mất sự kiện, không kéo sập service' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chống nghẽn ứng dụng khi Kafka chết",
+      code:
+        "// Kafka chết mà producer cứ chặn -> kéo sập luôn dịch vụ đang gọi nó.\n" +
+        "// Nguyên tắc: LỖI NHANH ở producer, và có đường thoát cho dữ liệu.\n" +
+        "Properties p = new Properties();\n" +
+        "p.put(\"max.block.ms\", \"5000\");           // đừng để 60s mặc định trên luồng request\n" +
+        "p.put(\"delivery.timeout.ms\", \"30000\");\n" +
+        "p.put(\"retry.backoff.ms\", \"200\");\n" +
+        "\n" +
+        "// 1) Circuit breaker: hỏng liên tục thì ngừng gọi một lúc, tránh dồn đống\n" +
+        "@CircuitBreaker(name = \"kafka\", fallbackMethod = \"fallback\")\n" +
+        "public void publish(String key, String value) {\n" +
+        "    producer.send(new ProducerRecord<>(\"orders\", key, value), this::onComplete);\n" +
+        "}\n" +
+        "\n" +
+        "// 2) Fallback: KHÔNG được để mất dữ liệu nghiệp vụ quan trọng\n" +
+        "public void fallback(String key, String value, Throwable t) {\n" +
+        "    outbox.save(key, value);      // ghi xuống DB, job nền gửi lại sau\n" +
+        "    metrics.increment(\"kafka.fallback\");\n" +
+        "}\n" +
+        "\n" +
+        "// 3) Với dữ liệu bỏ được (metric, log): đếm rồi bỏ, đừng chặn nghiệp vụ\n" +
+        "// 4) Với dữ liệu quan trọng: OUTBOX ngay từ đầu là thiết kế đúng hơn —\n" +
+        "//    ghi DB và Kafka trong hai bước riêng luôn có nguy cơ lệch (dual-write).",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -407,6 +840,32 @@ SS.addQuestions('kafka', [
       ['Hợp lý khi', 'đa số trường hợp', 'kiểm soát tuyệt đối / migration'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Được phép, nhưng gần như luôn là ý tồi",
+      code:
+        "// Chỉ định partition cứng:\n" +
+        "producer.send(new ProducerRecord<>(\"orders\", 3, key, value));   // luôn vào partition 3\n" +
+        "\n" +
+        "// VÌ SAO THƯỜNG LÀ SAI:\n" +
+        "//  - partition 3 biến mất/đổi vai trò khi cụm thay đổi -> code phải sửa theo\n" +
+        "//  - tăng số partition thì logic phân bổ của bạn lệch ngay\n" +
+        "//  - dễ gây lệch tải: nhiều producer cùng chọn tay thì không ai cân bằng\n" +
+        "//  - mất đi khả năng gom theo key mà Kafka làm sẵn\n" +
+        "\n" +
+        "// CÁCH ĐÚNG gần như mọi trường hợp: dùng KEY và để Kafka tự ánh xạ\n" +
+        "producer.send(new ProducerRecord<>(\"orders\", customerId, value));\n" +
+        "\n" +
+        "// Trường hợp hợp lý hiếm hoi:\n" +
+        "//  - công cụ vận hành/test cần ghi vào đúng một partition để tái hiện lỗi\n" +
+        "//  - đã tự viết partitioner nhưng cần ghi đè cho một luồng đặc biệt\n" +
+        "//  - cần đọc lại và ghi lại đúng partition cũ khi sửa dữ liệu\n" +
+        "\n" +
+        "// Muốn biết topic có bao nhiêu partition trước khi tính toán:\n" +
+        "List<PartitionInfo> parts = producer.partitionsFor(\"orders\");",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -437,6 +896,36 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Bộ cấu hình throughput và cái giá của nó",
+      code:
+        "# Gom batch to — đây là đòn bẩy lớn nhất\n" +
+        "batch.size=131072                # 128KB\n" +
+        "linger.ms=50                     # chờ 50ms để batch đầy\n" +
+        "buffer.memory=134217728          # 128MB buffer\n" +
+        "\n" +
+        "# Nén cả batch — giảm băng thông và đĩa, thường TĂNG throughput vì mạng\n" +
+        "# là nút thắt trước CPU\n" +
+        "compression.type=lz4             # hoặc zstd nếu client/broker đủ mới\n" +
+        "\n" +
+        "# Nhiều request bay song song, vẫn giữ thứ tự nhờ idempotence\n" +
+        "max.in.flight.requests.per.connection=5\n" +
+        "enable.idempotence=true\n" +
+        "acks=all                         # ĐỪNG hạ xuống 1 để lấy tốc độ trước khi đo\n" +
+        "\n" +
+        "# Kết nối và bộ đệm socket (quan trọng khi độ trễ mạng cao, ví dụ liên vùng)\n" +
+        "send.buffer.bytes=1048576\n" +
+        "receive.buffer.bytes=1048576\n" +
+        "\n" +
+        "# Ngoài cấu hình:\n" +
+        "#  - dùng MỘT producer dùng chung, nhiều thread cùng gửi -> batch đầy nhanh\n" +
+        "#  - đủ partition để phân tán tải, nhưng không quá nhiều (batch bị chia nhỏ)\n" +
+        "#  - serializer nhanh (Avro/Protobuf thay vì JSON chuỗi dài)\n" +
+        "# ĐÁNH ĐỔI: linger.ms=50 nghĩa là thêm tối đa 50ms độ trễ cho mỗi message.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -459,6 +948,37 @@ SS.addQuestions('kafka', [
       ['Bỏ record chưa gửi', '—', 'close(Duration.ZERO)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Một cái đợi, một cái đợi rồi dọn",
+      code:
+        "// send() chỉ đưa record vào buffer. Chưa gọi flush/close mà thoát tiến trình\n" +
+        "// là MẤT toàn bộ record còn nằm trong buffer.\n" +
+        "\n" +
+        "producer.send(record1);\n" +
+        "producer.send(record2);\n" +
+        "producer.flush();     // CHẶN tới khi mọi record trong buffer được ack (hoặc lỗi).\n" +
+        "                      // Producer VẪN DÙNG TIẾP được sau flush.\n" +
+        "\n" +
+        "// Dùng flush() khi cần một điểm mốc chắc chắn:\n" +
+        "for (var row : batch) producer.send(toRecord(row));\n" +
+        "producer.flush();                 // chắc chắn cả lô đã lên Kafka\n" +
+        "checkpoint.save(batch.lastId());  // rồi mới ghi mốc tiến độ\n" +
+        "\n" +
+        "producer.close();                 // flush + đóng kết nối + dừng thread Sender.\n" +
+        "                                  // Sau close(), producer KHÔNG dùng lại được.\n" +
+        "producer.close(Duration.ofSeconds(30));   // có hạn: quá 30s thì bỏ record còn lại\n" +
+        "\n" +
+        "// Trong Spring: @Bean(destroyMethod = \"close\") hoặc try-with-resources\n" +
+        "try (KafkaProducer<String, String> p = new KafkaProducer<>(props)) {\n" +
+        "    p.send(record);\n" +
+        "}   // tự close -> tự flush\n" +
+        "\n" +
+        "// ĐỪNG gọi flush() sau MỖI send(): biến producer bất đồng bộ thành đồng bộ,\n" +
+        "// batch không bao giờ gom được, throughput sụp đổ.",
+    },
+  ],
 },
 {
   cat: 'Producer',
@@ -484,5 +1004,29 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Không key: sticky partitioning, và mất mọi đảm bảo về thứ tự",
+      code:
+        "producer.send(new ProducerRecord<>(\"logs\", null, logLine));   // key = null\n" +
+        "\n" +
+        "// Kafka 2.4+ dùng STICKY PARTITIONING: dồn record vào MỘT partition cho tới\n" +
+        "// khi batch đầy (hoặc hết linger.ms), rồi chọn ngẫu nhiên partition khác.\n" +
+        "// Trước 2.4 là round-robin từng record -> batch bé, nhiều request, chậm hơn.\n" +
+        "\n" +
+        "// HỆ QUẢ cần biết:\n" +
+        "//  1) Không có đảm bảo thứ tự nào giữa các message — chúng nằm rải mọi partition.\n" +
+        "//  2) Quan sát trong khoảng ngắn sẽ thấy \"lệch\": một partition nhận cả cụm\n" +
+        "//     record liên tiếp. Về dài hạn thì vẫn đều.\n" +
+        "//  3) Trên topic COMPACTED, key null là LỖI — compaction dựa vào key để biết\n" +
+        "//     giữ bản ghi nào. Broker từ chối với InvalidRecordException.\n" +
+        "\n" +
+        "// Khi nào key=null là đúng: log, metric, sự kiện độc lập không cần thứ tự,\n" +
+        "// và mỗi record tự đứng một mình.\n" +
+        "// Khi nào PHẢI có key: mọi thứ liên quan tới một thực thể (đơn hàng, user,\n" +
+        "// thiết bị) mà thứ tự có ý nghĩa, hoặc topic dùng compaction.",
+    },
+  ],
 },
 ]);

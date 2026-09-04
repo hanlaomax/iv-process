@@ -21,6 +21,29 @@ SS.addQuestions('kafka', [
       ['Dùng cho', 'dữ liệu tài chính', 'topic log / metric'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Đánh đổi giữa \"còn phục vụ\" và \"không mất dữ liệu\"",
+      code:
+        "# Follower tụt lại quá lâu -> bị loại khỏi ISR (shrink). Bắt kịp -> vào lại (expand).\n" +
+        "replica.lag.time.max.ms=30000     # không fetch kịp trong 30s -> ra khỏi ISR\n" +
+        "\n" +
+        "# UNCLEAN LEADER ELECTION: cho phép bầu leader từ replica NGOÀI ISR khi\n" +
+        "# không còn replica nào trong ISR sống.\n" +
+        "unclean.leader.election.enable=false    # MẶC ĐỊNH và nên giữ nguyên\n" +
+        "# false -> partition NGỪNG PHỤC VỤ cho tới khi một replica ISR quay lại.\n" +
+        "#          Chọn tính nhất quán: thà dừng còn hơn mất dữ liệu.\n" +
+        "# true  -> partition sống lại ngay, nhưng replica được bầu đang thiếu dữ liệu\n" +
+        "#          -> MẤT VĨNH VIỄN phần message đã ack. Chỉ dùng cho dữ liệu\n" +
+        "#          bỏ được (metric, log) mà tính sẵn sàng quan trọng hơn.\n" +
+        "\n" +
+        "# Theo dõi: ISR shrink liên tục là dấu hiệu sớm của sự cố\n" +
+        "#   kafka.server:type=ReplicaManager,name=IsrShrinksPerSec\n" +
+        "#   kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions   -> phải luôn = 0\n" +
+        "# Nguyên nhân thường gặp: I/O đĩa bão hoà, mạng giữa broker nghẽn, GC pause dài.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -49,6 +72,35 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Sáu tham số, thiếu một là thủng",
+      code:
+        "# --- PRODUCER ---\n" +
+        "acks=all                      # chờ toàn bộ ISR ghi xong\n" +
+        "enable.idempotence=true       # chống trùng do retry (mặc định true từ 3.0)\n" +
+        "delivery.timeout.ms=120000    # kiên nhẫn đủ lâu trước khi bỏ cuộc\n" +
+        "\n" +
+        "# --- TOPIC / BROKER ---\n" +
+        "# replication.factor=3        # đặt lúc tạo topic\n" +
+        "min.insync.replicas=2         # BẮT BUỘC, nếu không acks=all vô nghĩa khi ISR co lại\n" +
+        "unclean.leader.election.enable=false\n" +
+        "\n" +
+        "# --- CONSUMER ---\n" +
+        "enable.auto.commit=false      # commit SAU khi xử lý xong\n" +
+        "\n" +
+        "# Mắt xích yếu nhất quyết định tất cả. Ví dụ điển hình về việc thủng:\n" +
+        "#   acks=all + RF=3 nhưng QUÊN min.insync.replicas -> ISR co còn 1\n" +
+        "#   -> \"mọi ISR\" = một mình leader -> mất dữ liệu mà không có cảnh báo nào.\n" +
+        "\n" +
+        "# Còn một mắt xích nữa ít người để ý: flush xuống đĩa.\n" +
+        "# Kafka mặc định dựa vào page cache của OS, KHÔNG fsync mỗi message\n" +
+        "# (log.flush.interval.messages mặc định là vô hạn). Mất điện đồng thời cả 3\n" +
+        "# broker thì vẫn mất. Kafka chọn nhân bản thay vì fsync — đó là đánh đổi\n" +
+        "# có chủ ý, và với RF=3 trải nhiều AZ thì rủi ro là chấp nhận được.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -71,6 +123,39 @@ SS.addQuestions('kafka', [
       { to: 4, label: 'Cruise Control tự động hoá lập kế hoạch và cân bằng liên tục' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Broker mới KHÔNG tự nhận dữ liệu cũ",
+      code:
+        "# Hiểu nhầm phổ biến: thêm broker vào là tải tự cân bằng. KHÔNG.\n" +
+        "# Broker mới chỉ nhận partition của topic TẠO SAU đó. Phải reassign thủ công.\n" +
+        "\n" +
+        "# 1) Liệt kê topic cần chuyển\n" +
+        "cat > topics.json <<\u0027EOF\u0027\n" +
+        "{\"topics\": [{\"topic\": \"orders\"}, {\"topic\": \"payments\"}], \"version\": 1}\n" +
+        "EOF\n" +
+        "\n" +
+        "# 2) Sinh kế hoạch (broker-list gồm CẢ broker cũ lẫn mới)\n" +
+        "kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --topics-to-move-json-file topics.json \\\n" +
+        "  --broker-list \"1,2,3,4\" --generate > plan.json\n" +
+        "# LƯU LẠI phần \"current\" trong output — đó là đường lui nếu cần rollback\n" +
+        "\n" +
+        "# 3) Thực thi, kèm GIỚI HẠN BĂNG THÔNG (bắt buộc ở production)\n" +
+        "kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --reassignment-json-file plan.json --execute \\\n" +
+        "  --throttle 50000000        # 50 MB/s — không có nó, việc sao chép sẽ\n" +
+        "                             # bão hoà mạng và làm chết luồng nghiệp vụ\n" +
+        "\n" +
+        "# 4) Theo dõi tới khi xong, rồi GỠ throttle (quên gỡ là bóp băng thông mãi)\n" +
+        "kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --reassignment-json-file plan.json --verify\n" +
+        "\n" +
+        "# 5) Cân bằng lại vai trò leader\n" +
+        "kafka-leader-election.sh --bootstrap-server localhost:9092 --election-type preferred --all-topic-partitions",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -93,6 +178,34 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'nếu buộc phải tăng → coi như một migration (topic mới + dual-write + cắt sang)' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Chỉ tăng được, và nó phá vỡ ánh xạ key",
+      code:
+        "kafka-topics.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --alter --topic orders --partitions 12       # từ 6 lên 12\n" +
+        "\n" +
+        "# KHÔNG GIẢM ĐƯỢC. Muốn giảm phải tạo topic mới rồi chép dữ liệu sang.\n" +
+        "\n" +
+        "# HỆ QUẢ NGHIÊM TRỌNG NHẤT: partition = murmur2(key) % N. Đổi N là đổi ánh xạ.\n" +
+        "#   \"order-123\" trước ở partition 3, giờ sang partition 9.\n" +
+        "#   -> Lịch sử của một thực thể nằm ở HAI partition khác nhau\n" +
+        "#   -> THỨ TỰ bị phá vỡ: message cũ ở p3, message mới ở p9, hai consumer\n" +
+        "#      xử lý song song, không còn bảo đảm gì.\n" +
+        "\n" +
+        "# Trên topic COMPACTED thì tệ hơn nhiều: hai bản của cùng một key ở hai\n" +
+        "# partition -> compaction không bao giờ hợp nhất được -> trạng thái sai vĩnh viễn.\n" +
+        "\n" +
+        "# Hệ quả khác: rebalance toàn group, và consumer đang chạy phải làm mới metadata.\n" +
+        "\n" +
+        "# CÁCH LÀM AN TOÀN:\n" +
+        "#  - chọn dư partition NGAY TỪ ĐẦU (rẻ hơn nhiều so với sửa sau)\n" +
+        "#  - buộc phải đổi: tạo topic mới với số partition mới, chạy song song,\n" +
+        "#    chuyển consumer sang, rồi bỏ topic cũ\n" +
+        "#  - hoặc chọn thời điểm topic rỗng (đã qua hết retention)",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -118,6 +231,36 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Các tham số hay dùng nhất và ý nghĩa thật của chúng",
+      code:
+        "# XOÁ THEO THỜI GIAN/DUNG LƯỢNG\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --entity-type topics --entity-name events --add-config \\\n" +
+        "  cleanup.policy=delete,retention.ms=604800000,retention.bytes=53687091200,segment.ms=86400000\n" +
+        "# retention.bytes là GIỚI HẠN CHO MỖI PARTITION, không phải cho cả topic —\n" +
+        "# chỗ này rất hay bị tính nhầm khi ước lượng dung lượng đĩa.\n" +
+        "\n" +
+        "# NÉN THEO KEY\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --entity-type topics --entity-name user-state --add-config \\\n" +
+        "  cleanup.policy=compact,min.cleanable.dirty.ratio=0.5,delete.retention.ms=86400000,min.compaction.lag.ms=0\n" +
+        "# min.cleanable.dirty.ratio: tỉ lệ dữ liệu \"bẩn\" cần đạt trước khi cleaner chạy.\n" +
+        "#   thấp (0.1) -> nén sát hơn, tốn CPU/IO. cao (0.9) -> topic phình to hơn.\n" +
+        "# delete.retention.ms: tombstone sống bao lâu -> consumer chậm phải bắt kịp\n" +
+        "#   trong khoảng này, nếu không sẽ KHÔNG BAO GIỜ thấy lệnh xoá.\n" +
+        "# min.compaction.lag.ms: bảo đảm message nằm ít nhất bấy lâu mới bị nén,\n" +
+        "#   cho consumer kịp đọc bản gốc.\n" +
+        "\n" +
+        "# CẢ HAI: giữ trạng thái mới nhất nhưng vẫn dọn bản ghi quá cũ\n" +
+        "--add-config cleanup.policy=compact,delete,retention.ms=2592000000\n" +
+        "\n" +
+        "# LƯU Ý: segment ĐANG hoạt động không bao giờ bị nén hay xoá.\n" +
+        "# segment.ms quá lớn -> retention không có tác dụng như mong đợi.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -144,6 +287,34 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Topic nội bộ giữ toàn bộ tiến độ của mọi consumer group",
+      code:
+        "# 50 partition (offsets.topic.num.partitions), compacted, RF mặc định 3.\n" +
+        "# Key = (group.id, topic, partition) -> nhờ compaction chỉ giữ offset mới nhất.\n" +
+        "# Group được ánh xạ tới coordinator qua: abs(hash(group.id)) % 50\n" +
+        "\n" +
+        "kafka-console-consumer.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --topic __consumer_offsets --from-beginning \\\n" +
+        "  --formatter \"kafka.coordinator.group.GroupMetadataManager\\$OffsetsMessageFormatter\" | head\n" +
+        "\n" +
+        "# BỐN ĐIỀU CẦN LƯU Ý:\n" +
+        "# 1) RF phải >= 3 ở production. Cụm dựng thử thường để RF=1 rồi lên thật quên\n" +
+        "#    sửa -> mất broker đó là MỌI group mất offset, đọc lại từ đầu.\n" +
+        "#    offsets.topic.replication.factor=3   (chỉ có tác dụng lúc topic được TẠO)\n" +
+        "# 2) offsets.retention.ms (mặc định 7 ngày): group KHÔNG hoạt động quá lâu\n" +
+        "#    -> offset bị XOÁ -> quay lại thì auto.offset.reset quyết định số phận.\n" +
+        "#    Đây là nguyên nhân điển hình của \"sau kỳ nghỉ, consumer đọc lại từ đầu\".\n" +
+        "# 3) Partition lệch nặng: một group commit quá dày (commit mỗi message)\n" +
+        "#    làm nóng một partition -> giảm tần suất commit.\n" +
+        "# 4) ĐỪNG sửa tay topic này.\n" +
+        "\n" +
+        "kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list\n" +
+        "kafka-consumer-groups.sh --bootstrap-server localhost:9092 --delete --group cu-khong-dung",
+    },
+  ],
 },
 {
   cat: 'Giám sát',
@@ -175,6 +346,37 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ưu tiên theo mức độ nghiêm trọng",
+      code:
+        "# === BÁO ĐỘNG ĐỎ (gọi người dậy lúc nửa đêm) ===\n" +
+        "# UnderReplicatedPartitions > 0        replica đang tụt lại -> sắp mất dự phòng\n" +
+        "#   kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions\n" +
+        "# OfflinePartitionsCount > 0           partition KHÔNG CÓ leader -> ngừng phục vụ\n" +
+        "#   kafka.controller:type=KafkaController,name=OfflinePartitionsCount\n" +
+        "# ActiveControllerCount != 1           phải đúng 1 trên toàn cụm; 0 = không ai\n" +
+        "#   điều phối, 2 = split brain\n" +
+        "# UncleanLeaderElectionsPerSec > 0     đã có dữ liệu bị mất\n" +
+        "\n" +
+        "# === CẢNH BÁO (xem trong giờ làm việc) ===\n" +
+        "# consumer lag theo thời gian          đo bằng giây, không phải số message\n" +
+        "# IsrShrinksPerSec tăng                dấu hiệu sớm của nghẽn I/O hoặc mạng\n" +
+        "# RequestHandlerAvgIdlePercent < 30%   thread pool xử lý sắp bão hoà\n" +
+        "#   kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent\n" +
+        "# NetworkProcessorAvgIdlePercent < 30%\n" +
+        "# đĩa còn trống < 20%                  Kafka đầy đĩa là hỏng rất khó cứu\n" +
+        "\n" +
+        "# === HIỆU NĂNG ===\n" +
+        "# TotalTimeMs theo từng loại request (Produce, FetchConsumer, FetchFollower)\n" +
+        "#   -> tách được thành queue/local/remote/response time, chỉ ra nút thắt ở đâu\n" +
+        "# BytesInPerSec, BytesOutPerSec, MessagesInPerSec\n" +
+        "\n" +
+        "# Thu thập: JMX Exporter -> Prometheus -> Grafana (có dashboard sẵn),\n" +
+        "# hoặc Cruise Control / Confluent Control Center.",
+    },
+  ],
 },
 {
   cat: 'Hệ sinh thái',
@@ -204,6 +406,57 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "json",
+      title: "Distributed mode, converter và SMT",
+      code:
+        "{\n" +
+        "  \"name\": \"orders-to-s3\",\n" +
+        "  \"config\": {\n" +
+        "    \"connector.class\": \"io.confluent.connect.s3.S3SinkConnector\",\n" +
+        "    \"tasks.max\": \"4\",\n" +
+        "    \"topics\": \"orders\",\n" +
+        "    \"s3.bucket.name\": \"data-lake\",\n" +
+        "    \"format.class\": \"io.confluent.connect.s3.format.parquet.ParquetFormat\",\n" +
+        "    \"flush.size\": \"10000\",\n" +
+        "    \"key.converter\": \"org.apache.kafka.connect.storage.StringConverter\",\n" +
+        "    \"value.converter\": \"io.confluent.connect.avro.AvroConverter\",\n" +
+        "    \"value.converter.schema.registry.url\": \"http://schema-registry:8081\",\n" +
+        "    \"transforms\": \"maskPii,addTs\",\n" +
+        "    \"transforms.maskPii.type\": \"org.apache.kafka.connect.transforms.MaskField$Value\",\n" +
+        "    \"transforms.maskPii.fields\": \"email,phone\",\n" +
+        "    \"transforms.addTs.type\": \"org.apache.kafka.connect.transforms.InsertField$Value\",\n" +
+        "    \"transforms.addTs.timestamp.field\": \"ingested_at\",\n" +
+        "    \"errors.tolerance\": \"all\",\n" +
+        "    \"errors.deadletterqueue.topic.name\": \"connect-dlq\",\n" +
+        "    \"errors.deadletterqueue.context.headers.enable\": \"true\"\n" +
+        "  }\n" +
+        "}",
+    },
+    {
+      lang: "bash",
+      title: "Vận hành Connect ở chế độ distributed",
+      code:
+        "# SOURCE: hệ thống ngoài -> Kafka (Debezium CDC, JDBC, file)\n" +
+        "# SINK:   Kafka -> hệ thống ngoài (S3, Elasticsearch, JDBC, BigQuery)\n" +
+        "# CONVERTER: chuyển đổi dạng dữ liệu (Avro/JSON/String/Protobuf)\n" +
+        "# SMT: biến đổi NHẸ từng record (mask, đổi tên field, định tuyến) — không\n" +
+        "#      thay thế được xử lý luồng thật sự, đừng nhét logic nghiệp vụ vào đây\n" +
+        "\n" +
+        "curl -X POST -H \"Content-Type: application/json\" \\\n" +
+        "  --data @connector.json http://connect:8083/connectors\n" +
+        "\n" +
+        "curl http://connect:8083/connectors/orders-to-s3/status     # RUNNING / FAILED\n" +
+        "curl -X POST http://connect:8083/connectors/orders-to-s3/restart?includeTasks=true\n" +
+        "curl -X PUT  http://connect:8083/connectors/orders-to-s3/pause\n" +
+        "\n" +
+        "# Distributed mode giữ cấu hình/offset/trạng thái trong ba topic nội bộ\n" +
+        "# (connect-configs, connect-offsets, connect-status) -> worker chết thì\n" +
+        "# task tự chuyển sang worker khác. Luôn dùng distributed ở production,\n" +
+        "# kể cả khi chỉ chạy một worker.",
+    },
+  ],
 },
 {
   cat: 'Hệ sinh thái',
@@ -227,6 +480,43 @@ SS.addQuestions('kafka', [
       ['Windowing', 'tumbling / hopping / sliding / session — grace period cho dữ liệu trễ', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Luồng sự kiện vs bảng trạng thái",
+      code:
+        "StreamsBuilder b = new StreamsBuilder();\n" +
+        "\n" +
+        "// KSTREAM = luồng SỰ KIỆN. Mỗi record là một sự việc độc lập, cộng dồn.\n" +
+        "KStream<String, Click> clicks = b.stream(\"clicks\");\n" +
+        "\n" +
+        "// KTABLE = BẢNG TRẠNG THÁI. Mỗi record GHI ĐÈ giá trị cũ của cùng key\n" +
+        "// (chính là ngữ nghĩa của topic compacted).\n" +
+        "KTable<String, User> users = b.table(\"users\",\n" +
+        "        Materialized.as(\"users-store\"));      // state store cục bộ (RocksDB)\n" +
+        "\n" +
+        "// GLOBALKTABLE = bản sao ĐẦY ĐỦ trên MỌI instance -> join không cần cùng key,\n" +
+        "// nhưng tốn bộ nhớ/đĩa. Chỉ dùng cho dữ liệu tra cứu nhỏ.\n" +
+        "GlobalKTable<String, Country> countries = b.globalTable(\"countries\");\n" +
+        "\n" +
+        "// Join stream với table: làm giàu sự kiện bằng trạng thái hiện tại\n" +
+        "clicks.join(users, (click, user) -> new EnrichedClick(click, user))\n" +
+        "      .to(\"clicks-enriched\");\n" +
+        "\n" +
+        "// Aggregate có cửa sổ thời gian\n" +
+        "clicks.groupByKey()\n" +
+        "      .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(1)))\n" +
+        "      .count(Materialized.as(\"clicks-per-5min\"))\n" +
+        "      .toStream()\n" +
+        "      .to(\"click-counts\");\n" +
+        "// grace period: chờ thêm bao lâu cho dữ liệu ĐẾN MUỘN trước khi chốt cửa sổ.\n" +
+        "\n" +
+        "// STATE STORE + CHANGELOG: mọi state store được sao lưu tự động vào một\n" +
+        "// topic changelog (compacted). Instance chết -> instance khác đọc changelog\n" +
+        "// dựng lại state. Đây là lý do Streams chịu lỗi được mà không cần cụm riêng.\n" +
+        "// standby.replicas > 0 để có bản dự phòng nóng -> khôi phục nhanh hơn nhiều.",
+    },
+  ],
 },
 {
   cat: 'Hệ sinh thái',
@@ -249,6 +539,39 @@ SS.addQuestions('kafka', [
       ['Thứ tự nâng cấp', 'consumer TRƯỚC', 'producer TRƯỚC', 'tuỳ ý'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ai nâng cấp trước quyết định chế độ nào",
+      code:
+        "# BACKWARD (mặc định): consumer dùng schema MỚI đọc được dữ liệu CŨ.\n" +
+        "#   Được phép: XOÁ field, THÊM field CÓ default.\n" +
+        "#   -> Nâng cấp CONSUMER trước, rồi mới tới producer. Dùng nhiều nhất.\n" +
+        "\n" +
+        "# FORWARD: consumer dùng schema CŨ đọc được dữ liệu MỚI.\n" +
+        "#   Được phép: THÊM field, XOÁ field CÓ default.\n" +
+        "#   -> Nâng cấp PRODUCER trước. Hợp khi consumer nằm ngoài tầm kiểm soát.\n" +
+        "\n" +
+        "# FULL: thoả mãn cả hai chiều. An toàn nhất, gò bó nhất.\n" +
+        "# NONE: tắt kiểm tra — đừng dùng ở production.\n" +
+        "# *_TRANSITIVE: kiểm tra với MỌI phiên bản trước đó, không chỉ phiên bản liền kề.\n" +
+        "#   -> nên dùng khi consumer có thể tụt lại nhiều phiên bản.\n" +
+        "\n" +
+        "curl -X PUT -H \"Content-Type: application/json\" \\\n" +
+        "  --data \u0027{\"compatibility\": \"BACKWARD_TRANSITIVE\"}\u0027 \\\n" +
+        "  http://schema-registry:8081/config/orders-value\n" +
+        "\n" +
+        "# Kiểm tra TRƯỚC KHI deploy (nên đưa vào CI):\n" +
+        "curl -X POST -H \"Content-Type: application/vnd.schemas.v1+json\" \\\n" +
+        "  --data @new-schema.json \\\n" +
+        "  http://schema-registry:8081/compatibility/subjects/orders-value/versions/latest\n" +
+        "\n" +
+        "curl http://schema-registry:8081/subjects/orders-value/versions\n" +
+        "\n" +
+        "# Quy tắc vàng: field mới LUÔN có default -> tương thích cả hai chiều.\n" +
+        "#   {\"name\": \"discount\", \"type\": [\"null\", \"double\"], \"default\": null}",
+    },
+  ],
 },
 {
   cat: 'Bảo mật',
@@ -270,6 +593,54 @@ SS.addQuestions('kafka', [
       { name: 'ACL — authorization', tag: 'bạn được làm gì', note: 'Read/Write/Create/Describe trên topic/group/cluster; allow.everyone.if.no.acl.found=false' },
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Ba tầng: mã hoá, danh tính, quyền",
+      code:
+        "# 1) TLS — mã hoá đường truyền (và có thể xác thực hai chiều)\n" +
+        "listeners=SASL_SSL://:9093\n" +
+        "ssl.keystore.location=/etc/kafka/secrets/kafka.keystore.jks\n" +
+        "ssl.keystore.password=${KEYSTORE_PASSWORD}\n" +
+        "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.jks\n" +
+        "ssl.client.auth=required          # bắt buộc client cũng có chứng chỉ (mTLS)\n" +
+        "# LƯU Ý: bật TLS làm MẤT tối ưu zero-copy -> CPU broker tăng đáng kể.\n" +
+        "\n" +
+        "# 2) SASL — xác thực danh tính\n" +
+        "sasl.enabled.mechanisms=SCRAM-SHA-512      # tốt hơn PLAIN (không gửi mật khẩu thô)\n" +
+        "# Các cơ chế: PLAIN (chỉ dùng sau TLS), SCRAM-SHA-256/512, GSSAPI (Kerberos),\n" +
+        "#             OAUTHBEARER (OIDC — hợp với hệ thống hiện đại)\n" +
+        "security.inter.broker.protocol=SASL_SSL\n" +
+        "\n" +
+        "# 3) ACL — phân quyền\n" +
+        "authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer  # KRaft\n" +
+        "allow.everyone.if.no.acl.found=false      # mặc định TỪ CHỐI — quan trọng\n" +
+        "super.users=User:admin",
+    },
+    {
+      lang: "bash",
+      title: "Cấp quyền tối thiểu",
+      code:
+        "# Tạo user SCRAM\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --add-config \u0027SCRAM-SHA-512=[password=matkhau-manh]\u0027 \\\n" +
+        "  --entity-type users --entity-name order-service\n" +
+        "\n" +
+        "# Producer chỉ được GHI vào đúng một topic\n" +
+        "kafka-acls.sh --bootstrap-server localhost:9092 --add \\\n" +
+        "  --allow-principal User:order-service \\\n" +
+        "  --operation Write --operation Describe --topic orders\n" +
+        "\n" +
+        "# Consumer cần quyền trên CẢ topic LẪN group (rất hay quên vế group)\n" +
+        "kafka-acls.sh --bootstrap-server localhost:9092 --add \\\n" +
+        "  --allow-principal User:billing-service \\\n" +
+        "  --operation Read --operation Describe --topic orders\n" +
+        "kafka-acls.sh --bootstrap-server localhost:9092 --add \\\n" +
+        "  --allow-principal User:billing-service --operation Read --group billing\n" +
+        "\n" +
+        "kafka-acls.sh --bootstrap-server localhost:9092 --list --topic orders",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -294,6 +665,35 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'nguy — đặt alert theo xu hướng để tránh báo động giả khi spike ngắn' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đo bằng giây, không phải bằng số message",
+      code:
+        "# CLI — nhanh gọn khi cần xem ngay\n" +
+        "kafka-consumer-groups.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --describe --group order-processor\n" +
+        "\n" +
+        "# Burrow (LinkedIn) — đánh giá theo XU HƯỚNG, không theo ngưỡng cứng.\n" +
+        "# Nó phân loại OK / WARN / ERR / STOP / STALL dựa trên việc offset có\n" +
+        "# tiến lên hay không -> ít báo động giả hơn ngưỡng tĩnh.\n" +
+        "curl http://burrow:8000/v3/kafka/local/consumer/order-processor/status\n" +
+        "\n" +
+        "# kafka-lag-exporter / kafka_exporter — xuất Prometheus, và quan trọng là\n" +
+        "# tính được lag theo THỜI GIAN (ước lượng \"chậm bao nhiêu giây\").\n" +
+        "\n" +
+        "# VÌ SAO đo bằng giây: \"lag 1 triệu message\" vô nghĩa nếu không biết tốc độ\n" +
+        "# xử lý. 1 triệu message với 100k msg/s là 10 giây — hoàn toàn bình thường.\n" +
+        "# Cùng con số đó với 100 msg/s là gần 3 giờ — sự cố nghiêm trọng.\n" +
+        "\n" +
+        "# Cảnh báo nên đặt:\n" +
+        "#  - lag_seconds > SLA trong 5 phút liên tục      -> cảnh báo\n" +
+        "#  - lag TĂNG ĐỀU trong 15 phút                   -> consumer không theo kịp\n" +
+        "#  - offset ĐỨNG YÊN mà lag > 0                   -> consumer TREO/chết\n" +
+        "#    (đây là trường hợp nguy hiểm nhất và hay bị bỏ sót)\n" +
+        "#  - lag lệch giữa các partition                  -> lệch key hoặc một consumer hỏng",
+    },
+  ],
 },
 {
   cat: 'Thiết kế',
@@ -323,6 +723,40 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Tính từ throughput và retention",
+      code:
+        "# 1) DUNG LƯỢNG ĐĨA\n" +
+        "#    đĩa = throughput_ghi × retention × RF × (1 + dự phòng)\n" +
+        "#    Ví dụ: 50 MB/s × 7 ngày × 3 × 1.3\n" +
+        "#         = 50 × 86400 × 7 × 3 × 1.3 / 1024^3 ≈ 110 TB\n" +
+        "#    Chia cho số broker, và giữ mức dùng đĩa dưới 70%.\n" +
+        "\n" +
+        "# 2) SỐ PARTITION\n" +
+        "#    N = max(T_mục_tiêu / T_producer_đơn, T_mục_tiêu / T_consumer_đơn)\n" +
+        "#    Rồi nhân thêm 2-3 lần để dự phòng tăng trưởng — vì tăng partition\n" +
+        "#    sau này rất tốn kém (phá ánh xạ key).\n" +
+        "\n" +
+        "# 3) SỐ BROKER — lấy giá trị lớn nhất trong ba ràng buộc:\n" +
+        "#    - đĩa: tổng dung lượng / dung lượng mỗi broker\n" +
+        "#    - mạng: throughput × (RF + số consumer group) / băng thông NIC\n" +
+        "#            (đây thường là ràng buộc bị bỏ quên nhưng lại chặt nhất)\n" +
+        "#    - partition: tổng partition / ~4000 mỗi broker\n" +
+        "#    Tối thiểu 3 broker để RF=3 có ý nghĩa.\n" +
+        "\n" +
+        "# 4) HEAP: 6GB là đủ cho hầu hết broker. RAM còn lại để OS làm page cache\n" +
+        "#    (nên đủ chứa \"dữ liệu nóng\" — thường là vài giờ gần nhất).\n" +
+        "\n" +
+        "# Đo thật thay vì đoán:\n" +
+        "kafka-producer-perf-test.sh --topic bench --num-records 5000000 \\\n" +
+        "  --record-size 1024 --throughput -1 \\\n" +
+        "  --producer-props bootstrap.servers=localhost:9092 acks=all compression.type=lz4\n" +
+        "kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --topic bench --messages 5000000",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -347,6 +781,40 @@ SS.addQuestions('kafka', [
       ['MM2 làm gì', 'sao chép dữ liệu + config + ACL + offset translation', 'như bên trái'],
     ],
   },
+  demo: [
+    {
+      lang: "properties",
+      title: "Sao chép giữa hai cụm, và bài toán offset",
+      code:
+        "# MM2 chạy trên nền Kafka Connect, sao chép: dữ liệu topic, cấu hình topic,\n" +
+        "# ACL, và (quan trọng nhất) ÁNH XẠ OFFSET giữa hai cụm.\n" +
+        "clusters=primary,backup\n" +
+        "primary.bootstrap.servers=kafka-hcm:9092\n" +
+        "backup.bootstrap.servers=kafka-hn:9092\n" +
+        "\n" +
+        "primary->backup.enabled=true\n" +
+        "primary->backup.topics=orders|payments\n" +
+        "primary->backup.emit.heartbeats.enabled=true\n" +
+        "primary->backup.sync.group.offsets.enabled=true    # đồng bộ offset consumer group\n" +
+        "replication.factor=3\n" +
+        "refresh.topics.interval.seconds=60\n" +
+        "\n" +
+        "# ĐẶT TÊN: mặc định topic ở đích có TIỀN TỐ tên cụm nguồn (primary.orders)\n" +
+        "# -> chống vòng lặp khi sao chép hai chiều. Muốn giữ nguyên tên thì dùng\n" +
+        "# IdentityReplicationPolicy, nhưng phải tự lo chống vòng lặp.\n" +
+        "replication.policy.class=org.apache.kafka.connect.mirror.IdentityReplicationPolicy\n" +
+        "\n" +
+        "# BÀI TOÁN CỐT LÕI: offset ở hai cụm KHÔNG khớp nhau (thứ tự ghi khác,\n" +
+        "# retention khác). MM2 duy trì topic checkpoints để ánh xạ offset, dùng\n" +
+        "# RemoteClusterUtils.translateOffsets() khi failover.\n" +
+        "\n" +
+        "# HAI KIẾN TRÚC:\n" +
+        "#  - Active-Passive: chỉ ghi ở primary, backup dự phòng. Đơn giản, dễ đúng.\n" +
+        "#  - Active-Active: ghi cả hai nơi -> phải giải quyết xung đột dữ liệu ở\n" +
+        "#    tầng ứng dụng. Đừng chọn nếu chưa thật sự cần.\n" +
+        "# Cả hai đều là bất đồng bộ -> failover LUÔN có khả năng mất một ít dữ liệu (RPO > 0).",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -367,6 +835,39 @@ SS.addQuestions('kafka', [
       ['Phòng ngừa', 'replication (RF ≥ 3)', 'quota + retention + alert ở 75% disk'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Quy trình xử lý theo thứ tự",
+      code:
+        "# === BROKER CHẾT ===\n" +
+        "# 1) Kafka tự bầu leader mới từ ISR -> cụm vẫn phục vụ nếu RF >= 2.\n" +
+        "#    Việc đầu tiên là XÁC NHẬN mức độ ảnh hưởng, chưa vội sửa:\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --unavailable-partitions\n" +
+        "\n" +
+        "# 2) Khởi động lại được thì cứ khởi động — broker tự bắt kịp từ leader.\n" +
+        "#    Dữ liệu còn nguyên trên đĩa nên nhanh hơn nhiều so với thay mới.\n" +
+        "\n" +
+        "# 3) Chết hẳn (mất đĩa): dựng broker mới với CÙNG node.id (KRaft) và\n" +
+        "#    reassign partition sang nó. Nhớ đặt --throttle.\n" +
+        "\n" +
+        "# === ĐẦY ĐĨA (nguy hiểm hơn: broker không ghi được và có thể hỏng log) ===\n" +
+        "# 1) Cứu chỗ trống NGAY bằng cách giảm retention của topic to nhất:\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --entity-type topics --entity-name events --add-config retention.ms=3600000\n" +
+        "# Kafka sẽ xoá segment cũ trong vòng vài phút. Nhớ đặt lại sau khi qua sự cố.\n" +
+        "\n" +
+        "# 2) Tìm ai đang chiếm đĩa\n" +
+        "du -sh /var/lib/kafka/data/* | sort -h | tail -20\n" +
+        "kafka-log-dirs.sh --bootstrap-server localhost:9092 --describe --broker-list 1\n" +
+        "\n" +
+        "# 3) Chuyển bớt partition sang broker khác (--execute với throttle)\n" +
+        "\n" +
+        "# PHÒNG: cảnh báo ở mức 70% đĩa, đặt retention.bytes cho mọi topic,\n" +
+        "# và tách log.dirs sang đĩa riêng khỏi ổ hệ điều hành.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -390,6 +891,40 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'nâng version: bump inter.broker.protocol.version SAU khi mọi broker đã lên binary mới' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Trình tự và các chốt kiểm tra",
+      code:
+        "# NGUYÊN TẮC: mỗi lần MỘT broker, và chỉ sang broker tiếp theo khi\n" +
+        "# UnderReplicatedPartitions đã về 0.\n" +
+        "\n" +
+        "# 1) Trước khi bắt đầu: xác nhận cụm khoẻ\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions\n" +
+        "# Phải KHÔNG có dòng nào. Đang có replica tụt lại mà restart là tự chuốc sự cố.\n" +
+        "\n" +
+        "# 2) Chuyển leader ra khỏi broker sắp restart -> tránh gián đoạn cho client\n" +
+        "kafka-leader-election.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --election-type preferred --all-topic-partitions\n" +
+        "\n" +
+        "# 3) Tắt MỀM (controlled shutdown: broker tự chuyển leader trước khi thoát)\n" +
+        "#    controlled.shutdown.enable=true  (mặc định)\n" +
+        "systemctl stop kafka        # đợi thoát hẳn, đừng kill -9\n" +
+        "\n" +
+        "# 4) Nâng cấp, khởi động lại, rồi CHỜ bắt kịp hoàn toàn\n" +
+        "systemctl start kafka\n" +
+        "watch \u0027kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions | wc -l\u0027\n" +
+        "\n" +
+        "# 5) Lặp lại cho broker tiếp theo.\n" +
+        "\n" +
+        "# NÂNG CẤP PHIÊN BẢN — hai vòng, không được gộp:\n" +
+        "#   Vòng 1: cài binary mới, GIỮ NGUYÊN\n" +
+        "#           inter.broker.protocol.version=<phiên bản CŨ>\n" +
+        "#   Vòng 2: sau khi mọi broker đã chạy binary mới, mới nâng\n" +
+        "#           inter.broker.protocol.version=<phiên bản MỚI> rồi restart lại.\n" +
+        "# Làm vậy để còn ROLLBACK được ở vòng 1 — sau khi nâng protocol thì không lui được.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -415,6 +950,38 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Chống một client làm chết cả cụm",
+      code:
+        "# Không có quota, một client lỗi (vòng lặp gửi, consumer đọc lại từ đầu toàn bộ\n" +
+        "# lịch sử) có thể bão hoà mạng/đĩa và làm chậm MỌI client khác.\n" +
+        "\n" +
+        "# Giới hạn băng thông theo user\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --add-config \u0027producer_byte_rate=10485760,consumer_byte_rate=20971520\u0027 \\\n" +
+        "  --entity-type users --entity-name analytics-service\n" +
+        "# 10 MB/s ghi, 20 MB/s đọc\n" +
+        "\n" +
+        "# Giới hạn theo client.id\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --add-config \u0027producer_byte_rate=5242880\u0027 \\\n" +
+        "  --entity-type clients --entity-name batch-loader\n" +
+        "\n" +
+        "# Giới hạn CPU (phần trăm thời gian xử lý request trên broker) — chặn được cả\n" +
+        "# client gửi ít dữ liệu nhưng bắn quá nhiều request nhỏ\n" +
+        "--add-config \u0027request_percentage=50\u0027\n" +
+        "\n" +
+        "# Mặc định cho MỌI client chưa có quota riêng\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n" +
+        "  --add-config \u0027producer_byte_rate=52428800\u0027 --entity-type users --entity-default\n" +
+        "\n" +
+        "# CÁCH THỰC THI: broker không từ chối request mà TRÌ HOÃN phản hồi — client\n" +
+        "# tự chậm lại một cách tự nhiên, không cần sửa code. Theo dõi qua metric\n" +
+        "# produce-throttle-time-avg / fetch-throttle-time-avg ở phía client.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -437,6 +1004,55 @@ SS.addQuestions('kafka', [
       { to: 3, label: 'thủ công: kafka-leader-election.sh --election-type preferred' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Vì sao leadership lệch và cách cân bằng lại",
+      code:
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic orders\n" +
+        "# Partition: 0  Leader: 2  Replicas: 1,2,3   <- replica ĐẦU TIÊN là 1, nhưng leader là 2\n" +
+        "# Partition: 1  Leader: 2  Replicas: 2,3,1\n" +
+        "# Partition: 2  Leader: 2  Replicas: 3,1,2   <- broker 2 đang gánh MỌI leader\n" +
+        "\n" +
+        "# PREFERRED LEADER = replica ĐẦU TIÊN trong danh sách Replicas. Kafka phân bổ\n" +
+        "# danh sách này đều nhau lúc tạo topic, nên nếu preferred leader luôn được chọn\n" +
+        "# thì tải leader tự cân bằng.\n" +
+        "\n" +
+        "# Vì sao lệch: broker 1 restart -> leader chuyển sang 2. Broker 1 quay lại\n" +
+        "# nhưng KHÔNG tự đòi lại vai trò leader -> sau vài lần restart, leadership\n" +
+        "# dồn hết vào những broker khởi động sớm.\n" +
+        "# Hậu quả: chỉ broker đó chịu toàn bộ traffic đọc/ghi (mọi request đều qua leader),\n" +
+        "# trong khi các broker khác gần như rảnh.\n" +
+        "\n" +
+        "# Cân bằng lại thủ công:\n" +
+        "kafka-leader-election.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --election-type preferred --all-topic-partitions\n" +
+        "\n" +
+        "# Hoặc chỉ một số partition:\n" +
+        "kafka-leader-election.sh --bootstrap-server localhost:9092 \\\n" +
+        "  --election-type preferred --path-to-json-file partitions.json",
+    },
+    {
+      lang: "properties",
+      title: "Tự động cân bằng, và vì sao nhiều nơi tắt nó đi",
+      code:
+        "auto.leader.rebalance.enable=true       # mặc định true\n" +
+        "leader.imbalance.check.interval.seconds=300\n" +
+        "leader.imbalance.per.broker.percentage=10   # lệch quá 10% thì tự chuyển\n" +
+        "\n" +
+        "# Tự động rất tiện, nhưng có một cái bẫy: broker vừa khởi động lại được giao\n" +
+        "# leader NGAY khi vào ISR, trong khi page cache còn nguội và nó có thể chưa\n" +
+        "# hoàn toàn ổn định -> độ trễ tăng đột biến đúng lúc vừa qua sự cố.\n" +
+        "\n" +
+        "# Nhiều đội vận hành cụm lớn TẮT tự động và chạy tay sau khi đã xác nhận\n" +
+        "# cụm khoẻ (under-replicated = 0, broker đã chạy ổn định vài phút):\n" +
+        "#   auto.leader.rebalance.enable=false\n" +
+        "\n" +
+        "# Đây cũng là bước cuối bắt buộc sau khi reassign partition hoặc rolling restart —\n" +
+        "# reassign xong mà không cân bằng leader thì tải vẫn dồn về một chỗ.\n" +
+        "# election-type unclean chỉ dùng khi chấp nhận MẤT dữ liệu để cứu tính sẵn sàng.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -465,6 +1081,45 @@ SS.addQuestions('kafka', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bộ công cụ cần thuộc lòng",
+      code:
+        "# === TOPIC ===\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --list\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic orders\n" +
+        "kafka-topics.sh --bootstrap-server localhost:9092 --describe --under-replicated-partitions\n" +
+        "\n" +
+        "# === CONSUMER GROUP ===\n" +
+        "kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group g1\n" +
+        "# Đặt lại offset (group phải đang DỪNG). Luôn --dry-run trước:\n" +
+        "kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group g1 \\\n" +
+        "  --topic orders --reset-offsets --to-datetime 2026-09-01T00:00:00.000 --dry-run\n" +
+        "\n" +
+        "# === ĐỌC / GHI THỬ ===\n" +
+        "kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic orders \\\n" +
+        "  --from-beginning --property print.key=true --property print.headers=true --max-messages 10\n" +
+        "kafka-console-producer.sh --bootstrap-server localhost:9092 --topic orders \\\n" +
+        "  --property parse.key=true --property key.separator=:\n" +
+        "\n" +
+        "# === CẤU HÌNH ===\n" +
+        "kafka-configs.sh --bootstrap-server localhost:9092 --describe --entity-type topics --entity-name orders\n" +
+        "\n" +
+        "# === CHẨN ĐOÁN SÂU ===\n" +
+        "kafka-log-dirs.sh --bootstrap-server localhost:9092 --describe --broker-list 1\n" +
+        "kafka-run-class.sh kafka.tools.DumpLogSegments --files /var/lib/kafka/data/orders-0/000...log\n" +
+        "kafka-run-class.sh kafka.tools.GetOffsetShell --bootstrap-server localhost:9092 --topic orders --time -1\n" +
+        "kafka-transactions.sh --bootstrap-server localhost:9092 list\n" +
+        "\n" +
+        "# === ĐO HIỆU NĂNG ===\n" +
+        "kafka-producer-perf-test.sh --topic bench --num-records 1000000 --record-size 1024 \\\n" +
+        "  --throughput -1 --producer-props bootstrap.servers=localhost:9092\n" +
+        "\n" +
+        "# Thay thế hiện đại, dễ dùng hơn nhiều: kcat (kafkacat), kaf, redpanda console.\n" +
+        "kcat -b localhost:9092 -t orders -C -o -10 -e     # đọc 10 message cuối rồi thoát",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -487,5 +1142,63 @@ SS.addQuestions('kafka', [
       ['Chi phí', 'thấp hơn (nếu có năng lực)', 'cao hơn'],
     ],
   },
+  demo: [
+    {
+      lang: "yaml",
+      title: "Tự vận hành với Strimzi, và khi nào nên dùng managed",
+      code:
+        "apiVersion: kafka.strimzi.io/v1beta2\n" +
+        "kind: Kafka\n" +
+        "metadata:\n" +
+        "  name: production\n" +
+        "spec:\n" +
+        "  kafka:\n" +
+        "    replicas: 3\n" +
+        "    config:\n" +
+        "      default.replication.factor: 3\n" +
+        "      min.insync.replicas: 2\n" +
+        "      offsets.topic.replication.factor: 3\n" +
+        "      transaction.state.log.replication.factor: 3\n" +
+        "      transaction.state.log.min.isr: 2\n" +
+        "    storage:\n" +
+        "      type: jbod\n" +
+        "      volumes:\n" +
+        "        - id: 0\n" +
+        "          type: persistent-claim      # BẮT BUỘC dùng PV, không dùng emptyDir\n" +
+        "          size: 2Ti\n" +
+        "          class: fast-ssd\n" +
+        "          deleteClaim: false          # giữ dữ liệu khi pod bị xoá\n" +
+        "    rack:\n" +
+        "      topologyKey: topology.kubernetes.io/zone   # trải replica ra nhiều AZ\n" +
+        "    resources:\n" +
+        "      requests: { memory: 32Gi, cpu: \"4\" }\n" +
+        "      limits:   { memory: 32Gi, cpu: \"8\" }       # request = limit -> QoS Guaranteed\n" +
+        "    jvmOptions:\n" +
+        "      -Xms: 6g\n" +
+        "      -Xmx: 6g                        # heap NHỎ, phần RAM còn lại cho page cache",
+    },
+    {
+      lang: "bash",
+      title: "Tự vận hành hay dùng managed",
+      code:
+        "# TỰ VẬN HÀNH (Strimzi) hợp khi:\n" +
+        "#  - đã có đội vận hành K8s vững và người hiểu Kafka\n" +
+        "#  - cần kiểm soát phiên bản/cấu hình sâu, hoặc dữ liệu không được rời hạ tầng\n" +
+        "#  - lưu lượng đủ lớn để chi phí managed vượt chi phí người\n" +
+        "\n" +
+        "# MANAGED (MSK, Confluent Cloud, Aiven) hợp khi:\n" +
+        "#  - đội nhỏ, muốn tập trung vào sản phẩm\n" +
+        "#  - lưu lượng vừa phải\n" +
+        "#  - cần SLA có cam kết bằng hợp đồng\n" +
+        "\n" +
+        "# NHỮNG THỨ HAY SAI KHI CHẠY KAFKA TRÊN K8S:\n" +
+        "#  - dùng emptyDir hoặc storage class chậm -> mất dữ liệu / chậm khủng khiếp\n" +
+        "#  - đặt memory limit thấp -> không còn page cache -> hiệu năng sụp\n" +
+        "#  - không cấu hình rack -> ba replica cùng một AZ\n" +
+        "#  - terminationGracePeriodSeconds quá ngắn -> broker bị kill giữa chừng\n" +
+        "#    (Kafka cần thời gian cho controlled shutdown)\n" +
+        "#  - dùng Deployment thay vì StatefulSet -> danh tính broker không ổn định",
+    },
+  ],
 },
 ]);
