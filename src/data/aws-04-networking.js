@@ -13,6 +13,40 @@ SS.addQuestions('aws', [
     'Không có thuộc tính "public/private" cho subnet — chỉ có việc route table của nó có đường tới Internet Gateway hay không. Thiết kế mạng = thiết kế route table.',
   example:
     'VPC 3 AZ: mỗi AZ có 1 public subnet (ALB, NAT GW) và 1 private subnet (EC2 app, RDS). App ở private subnet gọi API bên ngoài → đi qua NAT GW; internet gọi vào → chỉ tới ALB ở public subnet, không chạm được EC2.',
+  demo: [
+    {
+      lang: "bash",
+      title: "Điều DUY NHẤT làm subnet thành \"public\"",
+      code:
+        "# VPC = mạng riêng ảo, định nghĩa bằng CIDR. Chọn dải đủ rộng và KHÔNG\n" +
+        "# trùng với mạng công ty/VPC khác (sau này peering sẽ vướng).\n" +
+        "aws ec2 create-vpc --cidr-block 10.0.0.0/16 --tag-specifications \\\n" +
+        "  \u0027ResourceType=vpc,Tags=[{Key=Name,Value=prod}]\u0027\n" +
+        "\n" +
+        "# Subnet nằm trong ĐÚNG MỘT AZ. Muốn chịu lỗi thì phải có subnet ở nhiều AZ.\n" +
+        "aws ec2 create-subnet --vpc-id vpc-123 --cidr-block 10.0.1.0/24 \\\n" +
+        "  --availability-zone ap-southeast-1a       # public\n" +
+        "aws ec2 create-subnet --vpc-id vpc-123 --cidr-block 10.0.11.0/24 \\\n" +
+        "  --availability-zone ap-southeast-1a       # private\n" +
+        "\n" +
+        "# ĐIỀU DUY NHẤT phân biệt public/private: ROUTE TABLE có đường ra\n" +
+        "# Internet Gateway hay không. Không có thuộc tính \"public\" nào cả.\n" +
+        "aws ec2 create-route --route-table-id rtb-public \\\n" +
+        "  --destination-cidr-block 0.0.0.0/0 --gateway-id igw-123      # -> PUBLIC\n" +
+        "\n" +
+        "aws ec2 create-route --route-table-id rtb-private \\\n" +
+        "  --destination-cidr-block 0.0.0.0/0 --nat-gateway-id nat-123  # -> PRIVATE\n" +
+        "\n" +
+        "# AWS tự tạo route local cho CIDR của VPC — không xoá được, và đó là lý do\n" +
+        "# mọi subnet trong VPC luôn thông nhau (trừ khi bị SG/NACL chặn).\n" +
+        "\n" +
+        "# Instance trong public subnet vẫn cần PUBLIC IP mới ra Internet được:\n" +
+        "aws ec2 modify-subnet-attribute --subnet-id subnet-123 --map-public-ip-on-launch\n" +
+        "\n" +
+        "# THIẾT KẾ CHUẨN: 3 tầng x nhiều AZ — public (ALB, NAT), private-app (EC2/ECS),\n" +
+        "# private-data (RDS, ElastiCache). Chừa dải trống để mở rộng sau.",
+    },
+  ],
 },
 {
   cat: 'VPC',
@@ -34,6 +68,37 @@ SS.addQuestions('aws', [
       ['Phí', 'không', 'phí giờ + phí GB xử lý; đặt mỗi AZ một cái'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Hai chiều đi khác nhau",
+      code:
+        "# INTERNET GATEWAY (IGW) — cổng HAI CHIỀU cho subnet public.\n" +
+        "#  - miễn phí, tự scale, không có điểm nghẽn\n" +
+        "#  - instance cần PUBLIC IP hoặc Elastic IP mới dùng được\n" +
+        "#  - cho phép Internet CHỦ ĐỘNG gọi VÀO (nếu SG cho phép)\n" +
+        "aws ec2 create-internet-gateway\n" +
+        "aws ec2 attach-internet-gateway --vpc-id vpc-123 --internet-gateway-id igw-123\n" +
+        "\n" +
+        "# NAT GATEWAY — chỉ MỘT CHIỀU ĐI RA cho subnet private.\n" +
+        "#  - instance private gọi ra Internet được (tải bản vá, gọi API bên ngoài)\n" +
+        "#  - Internet KHÔNG BAO GIỜ chủ động gọi vào được -> đây là điểm an toàn cốt lõi\n" +
+        "#  - NẰM TRONG subnet PUBLIC (nó cần IGW để ra ngoài)\n" +
+        "aws ec2 create-nat-gateway --subnet-id subnet-public-1a \\\n" +
+        "  --allocation-id eipalloc-123 --connectivity-type public\n" +
+        "\n" +
+        "# TIỀN — đây là một trong những khoản đắt bất ngờ nhất trên AWS:\n" +
+        "#   ~$0,045/giờ (~$32/tháng) MỖI NAT Gateway + ~$0,045 MỖI GB đi qua.\n" +
+        "#   Hệ thống đẩy vài TB/tháng qua NAT thì hoá đơn NAT vượt cả tiền EC2.\n" +
+        "\n" +
+        "# CÁCH GIẢM CHI PHÍ NAT:\n" +
+        "#  - VPC Endpoint cho S3/DynamoDB (Gateway Endpoint MIỄN PHÍ) -> lưu lượng\n" +
+        "#    tới S3 không đi qua NAT nữa. Đây là cách tiết kiệm lớn nhất và dễ nhất.\n" +
+        "#  - Interface Endpoint cho các dịch vụ AWS khác (có phí nhưng thường rẻ hơn NAT)\n" +
+        "#  - đặt NAT ở mỗi AZ để tránh phí liên vùng (đánh đổi: nhiều NAT hơn)\n" +
+        "#  - môi trường dev: dùng một NAT chung, hoặc NAT instance tự dựng (rẻ hơn nhiều)",
+    },
+  ],
 },
 {
   cat: 'VPC',
@@ -61,6 +126,36 @@ SS.addQuestions('aws', [
       ['Vai trò', 'hàng rào chính (dùng hằng ngày)', 'lớp phụ ở biên — chỉ khi cần deny tường minh'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Có trạng thái vs không trạng thái",
+      code:
+        "# SECURITY GROUP — tường lửa ở mức ENI (instance), CÓ TRẠNG THÁI.\n" +
+        "#  - chỉ có rule ALLOW, không có DENY\n" +
+        "#  - \"có trạng thái\" nghĩa là: cho phép vào thì chiều ra của CHÍNH kết nối đó\n" +
+        "#    tự động được phép (và ngược lại) -> không phải mở cổng ephemeral\n" +
+        "aws ec2 authorize-security-group-ingress --group-id sg-app \\\n" +
+        "  --protocol tcp --port 8080 --source-group sg-alb     # tham chiếu SG khác!\n" +
+        "# Tham chiếu SG thay vì CIDR là cách viết đúng: instance đổi IP không phải sửa rule.\n" +
+        "\n" +
+        "# NETWORK ACL — tường lửa ở mức SUBNET, KHÔNG có trạng thái.\n" +
+        "#  - có cả ALLOW lẫn DENY, đánh số thứ tự, khớp SỐ NHỎ NHẤT trước rồi dừng\n" +
+        "#  - phải mở CẢ HAI CHIỀU, và nhớ mở dải cổng ephemeral (1024-65535)\n" +
+        "#    cho chiều về — đây là lỗi hay gặp nhất khi dùng NACL\n" +
+        "aws ec2 create-network-acl-entry --network-acl-id acl-123 \\\n" +
+        "  --rule-number 100 --protocol tcp --port-range From=443,To=443 \\\n" +
+        "  --cidr-block 0.0.0.0/0 --rule-action allow --ingress\n" +
+        "aws ec2 create-network-acl-entry --network-acl-id acl-123 \\\n" +
+        "  --rule-number 100 --protocol tcp --port-range From=1024,To=65535 \\\n" +
+        "  --cidr-block 0.0.0.0/0 --rule-action allow --egress     # BẮT BUỘC cho chiều về\n" +
+        "\n" +
+        "# THỰC TẾ: dùng SECURITY GROUP làm công cụ chính. NACL chỉ dùng cho\n" +
+        "# một việc SG không làm được: CHẶN một dải IP cụ thể (vì SG không có DENY),\n" +
+        "# hoặc làm hàng rào bảo vệ ở mức subnet cho yêu cầu tuân thủ.\n" +
+        "# NACL mặc định cho phép mọi thứ -> nhiều hệ thống không đụng tới nó là hợp lý.",
+    },
+  ],
 },
 {
   cat: 'Kết nối',
@@ -82,6 +177,38 @@ SS.addQuestions('aws', [
       ['Dùng cho', 'vài VPC', 'nhiều VPC/account/on-prem, định tuyến tập trung'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đấu nối từng cặp vs hub trung tâm",
+      code:
+        "# VPC PEERING — kết nối 1-1, KHÔNG bắc cầu (A-B và B-C không cho A-C).\n" +
+        "#  + miễn phí phí giờ, chỉ trả phí truyền dữ liệu\n" +
+        "#  + độ trễ thấp nhất\n" +
+        "#  - n VPC cần n(n-1)/2 kết nối -> 10 VPC là 45 peering, không quản nổi\n" +
+        "#  - CIDR KHÔNG được chồng lấn\n" +
+        "aws ec2 create-vpc-peering-connection --vpc-id vpc-a --peer-vpc-id vpc-b\n" +
+        "aws ec2 accept-vpc-peering-connection --vpc-peering-connection-id pcx-123\n" +
+        "# Phải thêm ROUTE Ở CẢ HAI VPC — quên vế này là lỗi phổ biến nhất:\n" +
+        "aws ec2 create-route --route-table-id rtb-a \\\n" +
+        "  --destination-cidr-block 10.1.0.0/16 --vpc-peering-connection-id pcx-123\n" +
+        "\n" +
+        "# TRANSIT GATEWAY — hub trung tâm, mọi thứ đấu vào một chỗ.\n" +
+        "#  + BẮC CẦU được, quản lý tập trung, kết nối cả VPN/Direct Connect\n" +
+        "#  + route table riêng cho từng nhóm -> cách ly được (ví dụ prod không thấy dev)\n" +
+        "#  - ~$0,05/giờ mỗi attachment + phí xử lý dữ liệu -> đắt hơn peering rõ rệt\n" +
+        "aws ec2 create-transit-gateway --description \"hub\"\n" +
+        "aws ec2 create-transit-gateway-vpc-attachment \\\n" +
+        "  --transit-gateway-id tgw-123 --vpc-id vpc-a --subnet-ids subnet-1 subnet-2\n" +
+        "\n" +
+        "# CHỌN:\n" +
+        "#  - 2-3 VPC, kết nối đơn giản, muốn rẻ -> PEERING\n" +
+        "#  - từ ~4-5 VPC trở lên, hoặc cần nối on-premises, hoặc cần phân đoạn mạng\n" +
+        "#    -> TRANSIT GATEWAY\n" +
+        "# Cả hai đều KHÔNG cho phép CIDR chồng lấn -> quy hoạch dải IP từ đầu là việc\n" +
+        "# quan trọng nhất và ít được làm nhất.",
+    },
+  ],
 },
 {
   cat: 'Kết nối',
@@ -104,6 +231,39 @@ SS.addQuestions('aws', [
       ['Lợi ích chung', 'traffic AWS trong mạng AWS: bảo mật hơn, bỏ phí NAT', 'như trái'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đi tới dịch vụ AWS mà không qua Internet",
+      code:
+        "# GATEWAY ENDPOINT — CHỈ cho S3 và DynamoDB. MIỄN PHÍ HOÀN TOÀN.\n" +
+        "# Hoạt động bằng cách thêm route vào route table, không có ENI.\n" +
+        "aws ec2 create-vpc-endpoint --vpc-id vpc-123 \\\n" +
+        "  --service-name com.amazonaws.ap-southeast-1.s3 \\\n" +
+        "  --route-table-ids rtb-private-1 rtb-private-2\n" +
+        "# Đây là việc NÊN LÀM ĐẦU TIÊN với mọi VPC: lưu lượng tới S3 không còn đi\n" +
+        "# qua NAT Gateway -> tiết kiệm rất nhiều tiền và nhanh hơn.\n" +
+        "\n" +
+        "# INTERFACE ENDPOINT (PrivateLink) — cho hầu hết dịch vụ AWS còn lại.\n" +
+        "# Tạo ENI có IP riêng trong subnet của bạn + DNS riêng.\n" +
+        "aws ec2 create-vpc-endpoint --vpc-id vpc-123 --vpc-endpoint-type Interface \\\n" +
+        "  --service-name com.amazonaws.ap-southeast-1.secretsmanager \\\n" +
+        "  --subnet-ids subnet-1 subnet-2 --security-group-ids sg-endpoint \\\n" +
+        "  --private-dns-enabled\n" +
+        "# ~$0,01/giờ mỗi AZ + phí dữ liệu. Vẫn thường rẻ hơn đẩy qua NAT.\n" +
+        "\n" +
+        "# private-dns-enabled rất quan trọng: nó khiến tên miền chuẩn\n" +
+        "# (secretsmanager.ap-southeast-1.amazonaws.com) phân giải thành IP nội bộ\n" +
+        "# -> KHÔNG PHẢI SỬA CODE.\n" +
+        "\n" +
+        "# Endpoint policy giới hạn thêm được ai/cái gì đi qua endpoint:\n" +
+        "aws ec2 modify-vpc-endpoint --vpc-endpoint-id vpce-123 \\\n" +
+        "  --policy-document file://endpoint-policy.json\n" +
+        "\n" +
+        "# LỢI ÍCH ngoài chi phí: subnet private KHÔNG CẦN NAT vẫn gọi được dịch vụ AWS\n" +
+        "# -> kiến trúc hoàn toàn kín, đáp ứng yêu cầu tuân thủ.",
+    },
+  ],
 },
 {
   cat: 'DNS',
@@ -135,6 +295,35 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bảy chính sách, chọn theo mục tiêu",
+      code:
+        "# SIMPLE — một bản ghi, một hoặc nhiều giá trị. Không có health check.\n" +
+        "# WEIGHTED — chia lưu lượng theo tỉ lệ. Dùng cho canary/A-B testing.\n" +
+        "aws route53 change-resource-record-sets --hosted-zone-id Z123 --change-batch \u0027{\n" +
+        "  \"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\n" +
+        "    \"Name\":\"api.example.com\",\"Type\":\"A\",\"SetIdentifier\":\"green\",\"Weight\":10,\n" +
+        "    \"AliasTarget\":{\"HostedZoneId\":\"Z35\",\"DNSName\":\"green-alb...\",\"EvaluateTargetHealth\":true}}}]}\u0027\n" +
+        "\n" +
+        "# LATENCY-BASED — gửi tới region có ĐỘ TRỄ thấp nhất với người dùng.\n" +
+        "#   Đây là lựa chọn tốt nhất cho hệ thống đa region hướng hiệu năng.\n" +
+        "# GEOLOCATION — theo VỊ TRÍ người dùng. Dùng cho tuân thủ dữ liệu, nội dung\n" +
+        "#   theo ngôn ngữ, hoặc chặn theo quốc gia. Nhớ có bản ghi \"default\".\n" +
+        "# GEOPROXIMITY — theo khoảng cách địa lý, có \"bias\" để kéo giãn vùng phục vụ.\n" +
+        "# FAILOVER — primary/secondary, cần health check. Dùng cho DR active-passive.\n" +
+        "# MULTIVALUE ANSWER — trả nhiều IP kèm health check, client tự chọn.\n" +
+        "#   Giống round-robin nhưng có loại bỏ endpoint chết.\n" +
+        "\n" +
+        "# ALIAS vs CNAME — điểm rất hay bị hỏi:\n" +
+        "#  - Alias là bản ghi riêng của AWS, MIỄN PHÍ truy vấn, và dùng được ở\n" +
+        "#    ZONE APEX (example.com) — CNAME thì KHÔNG.\n" +
+        "#  - Alias trỏ tới tài nguyên AWS (ALB, CloudFront, S3 website, API Gateway)\n" +
+        "#    và tự cập nhật khi IP đổi.\n" +
+        "# -> Trỏ tới tài nguyên AWS thì luôn dùng ALIAS.",
+    },
+  ],
 },
 {
   cat: 'DNS',
@@ -160,6 +349,41 @@ SS.addQuestions('aws', [
       { to: 3, label: 'TTL thấp (60s) để client cập nhật nhanh' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba loại health check và cách kết hợp",
+      code:
+        "# 1) ENDPOINT — kiểm tra trực tiếp một IP/tên miền từ nhiều vị trí toàn cầu\n" +
+        "aws route53 create-health-check --caller-reference $(date +%s) \\\n" +
+        "  --health-check-config \u0027{\n" +
+        "    \"Type\":\"HTTPS\",\"FullyQualifiedDomainName\":\"api.example.com\",\n" +
+        "    \"Port\":443,\"ResourcePath\":\"/health\",\n" +
+        "    \"RequestInterval\":30,\"FailureThreshold\":3,\n" +
+        "    \"MeasureLatency\":true,\"EnableSNI\":true}\u0027\n" +
+        "# Kiểm tra từ 15+ vị trí; chỉ coi là DOWN khi HƠN 18% checker báo lỗi\n" +
+        "# -> chống báo động giả do một vùng mạng gặp sự cố.\n" +
+        "# RequestInterval=10 (fast) tốn tiền hơn nhưng phát hiện nhanh hơn.\n" +
+        "\n" +
+        "# 2) CALCULATED — kết hợp nhiều health check bằng logic AND/OR/NOT.\n" +
+        "#   Ví dụ: \"khoẻ\" nghĩa là CẢ web LẪN database đều khoẻ.\n" +
+        "#   --child-health-checks id1 id2 --health-threshold 2\n" +
+        "\n" +
+        "# 3) CLOUDWATCH ALARM — dựa trên metric thay vì HTTP.\n" +
+        "#   Rất hữu ích khi tình trạng khoẻ không đo được bằng một request HTTP\n" +
+        "#   (ví dụ độ sâu hàng đợi, tỉ lệ lỗi, replica lag).\n" +
+        "\n" +
+        "# GẮN VÀO BẢN GHI DNS: bản ghi có health check FAIL sẽ bị loại khỏi câu trả lời.\n" +
+        "#   \"HealthCheckId\": \"abc-123\"\n" +
+        "\n" +
+        "# LƯU Ý QUAN TRỌNG:\n" +
+        "#  - endpoint phải cho phép IP của health checker của Route 53 (SG/firewall)\n" +
+        "#  - health check gọi từ Internet -> KHÔNG kiểm tra được endpoint private\n" +
+        "#    (dùng CloudWatch alarm cho trường hợp đó)\n" +
+        "#  - DNS failover chịu ảnh hưởng của TTL: TTL 300 nghĩa là client có thể\n" +
+        "#    còn dùng bản ghi cũ tới 5 phút -> đặt TTL 60 cho bản ghi cần failover nhanh",
+    },
+  ],
 },
 {
   cat: 'CDN',
@@ -186,6 +410,45 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Cache key, TTL và cách khoá origin",
+      code:
+        "# TTL — quyết định bởi header của origin, bị chặn bởi cấu hình CloudFront:\n" +
+        "#   Cache-Control: max-age=31536000, immutable   -> tài sản có hash trong tên\n" +
+        "#   Cache-Control: no-cache                      -> HTML, luôn kiểm tra lại\n" +
+        "# MinTTL / DefaultTTL / MaxTTL của CloudFront ghi đè khoảng cho phép.\n" +
+        "\n" +
+        "# CACHE KEY — mặc định chỉ là URL. Thêm header/cookie/query vào cache key\n" +
+        "# làm GIẢM tỉ lệ hit -> chỉ thêm cái THỰC SỰ ảnh hưởng nội dung.\n" +
+        "aws cloudfront create-cache-policy --cache-policy-config \u0027{\n" +
+        "  \"Name\":\"app-policy\",\"DefaultTTL\":86400,\"MinTTL\":0,\"MaxTTL\":31536000,\n" +
+        "  \"ParametersInCacheKeyAndForwardedToOrigin\":{\n" +
+        "    \"EnableAcceptEncodingGzip\":true,\"EnableAcceptEncodingBrotli\":true,\n" +
+        "    \"HeadersConfig\":{\"HeaderBehavior\":\"whitelist\",\n" +
+        "      \"Headers\":{\"Quantity\":1,\"Items\":[\"Accept-Language\"]}},\n" +
+        "    \"CookiesConfig\":{\"CookieBehavior\":\"none\"},\n" +
+        "    \"QueryStringsConfig\":{\"QueryStringBehavior\":\"whitelist\",\n" +
+        "      \"QueryStrings\":{\"Quantity\":1,\"Items\":[\"v\"]}}}}\u0027\n" +
+        "# Dùng ORIGIN REQUEST POLICY cho header cần chuyển tiếp tới origin nhưng\n" +
+        "# KHÔNG cần nằm trong cache key (ví dụ Authorization).\n" +
+        "\n" +
+        "# INVALIDATION — tốn tiền sau 1.000 path/tháng và mất vài phút.\n" +
+        "aws cloudfront create-invalidation --distribution-id E123 --paths \"/index.html\" \"/api/*\"\n" +
+        "# CÁCH TỐT HƠN: đặt HASH vào tên file (app.a3f9c2.js) -> không bao giờ phải\n" +
+        "# invalidate, và deploy mới không làm mất cache của file cũ.\n" +
+        "\n" +
+        "# OAC (Origin Access Control) — thay thế OAI đã lỗi thời. Chỉ CloudFront\n" +
+        "# đọc được bucket S3, bucket đóng hoàn toàn với Internet.\n" +
+        "aws cloudfront create-origin-access-control --origin-access-control-config \u0027{\n" +
+        "  \"Name\":\"s3-oac\",\"OriginAccessControlOriginType\":\"s3\",\n" +
+        "  \"SigningBehavior\":\"always\",\"SigningProtocol\":\"sigv4\"}\u0027\n" +
+        "# Bucket policy chỉ cho phép service principal cloudfront.amazonaws.com\n" +
+        "# với điều kiện AWS:SourceArn = ARN của distribution.\n" +
+        "# OAC hỗ trợ SSE-KMS và cả PUT/DELETE — OAI thì không.",
+    },
+  ],
 },
 {
   cat: 'CDN',
@@ -211,6 +474,44 @@ SS.addQuestions('aws', [
       { to: 3, label: 'SPA: custom error response 403/404 → trả /index.html status 200' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Kiến trúc chuẩn cho SPA/trang tĩnh",
+      code:
+        "# 1) Bucket PRIVATE hoàn toàn — KHÔNG bật \"static website hosting\"\n" +
+        "# (chế độ đó bắt buộc public và chỉ chạy HTTP).\n" +
+        "aws s3api create-bucket --bucket my-site --region ap-southeast-1 \\\n" +
+        "  --create-bucket-configuration LocationConstraint=ap-southeast-1\n" +
+        "aws s3api put-public-access-block --bucket my-site \\\n" +
+        "  --public-access-block-configuration \\\n" +
+        "  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true\n" +
+        "\n" +
+        "# 2) Chứng chỉ ACM — BẮT BUỘC ở us-east-1 cho CloudFront\n" +
+        "aws acm request-certificate --domain-name example.com \\\n" +
+        "  --subject-alternative-names \"*.example.com\" \\\n" +
+        "  --validation-method DNS --region us-east-1\n" +
+        "\n" +
+        "# 3) Distribution với OAC, default root object, và xử lý lỗi cho SPA\n" +
+        "#    Với SPA (React/Vue router): map 403 và 404 -> /index.html mã 200\n" +
+        "aws cloudfront create-distribution --distribution-config \u0027{\n" +
+        "  \"CustomErrorResponses\":{\"Quantity\":2,\"Items\":[\n" +
+        "    {\"ErrorCode\":403,\"ResponsePagePath\":\"/index.html\",\"ResponseCode\":\"200\",\"ErrorCachingMinTTL\":0},\n" +
+        "    {\"ErrorCode\":404,\"ResponsePagePath\":\"/index.html\",\"ResponseCode\":\"200\",\"ErrorCachingMinTTL\":0}]}}\u0027\n" +
+        "\n" +
+        "# 4) Deploy: hai lệnh sync với cache header KHÁC NHAU — đây là mấu chốt\n" +
+        "aws s3 sync ./dist s3://my-site --delete \\\n" +
+        "  --exclude \"index.html\" --exclude \"*.html\" \\\n" +
+        "  --cache-control \"public,max-age=31536000,immutable\"    # tài sản có hash\n" +
+        "aws s3 sync ./dist s3://my-site \\\n" +
+        "  --exclude \"*\" --include \"*.html\" \\\n" +
+        "  --cache-control \"public,max-age=0,must-revalidate\"     # HTML luôn kiểm tra lại\n" +
+        "aws cloudfront create-invalidation --distribution-id E123 --paths \"/*\"\n" +
+        "\n" +
+        "# 5) Route 53 ALIAS trỏ tới distribution (dùng được ở zone apex).\n" +
+        "# Nhớ thêm security header bằng response headers policy (HSTS, CSP, X-Frame-Options).",
+    },
+  ],
 },
 {
   cat: 'API',
@@ -232,6 +533,36 @@ SS.addQuestions('aws', [
       ['Dùng cho', 'mặc định — hầu hết use case', 'tính năng doanh nghiệp', 'chat, notification realtime, streaming'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba loại, và vì sao HTTP API thường là lựa chọn đúng",
+      code:
+        "# HTTP API — mới hơn, RẺ HƠN ~70%, độ trễ thấp hơn. Thiếu một số tính năng cũ.\n" +
+        "#  Có: JWT authorizer sẵn, CORS, Lambda/HTTP proxy, VPC Link cho ALB/NLB\n" +
+        "#  Không có: request/response transformation, API key + usage plan,\n" +
+        "#            WAF trực tiếp, caching, xác thực schema request\n" +
+        "aws apigatewayv2 create-api --name orders --protocol-type HTTP \\\n" +
+        "  --target arn:aws:lambda:ap-southeast-1:123:function:orders\n" +
+        "\n" +
+        "# REST API — đầy đủ tính năng nhất, đắt hơn.\n" +
+        "#  Chọn khi cần: API key/usage plan cho đối tác, caching, WAF, request\n" +
+        "#  validation, biến đổi payload, hoặc private API trong VPC.\n" +
+        "aws apigateway create-rest-api --name orders --endpoint-configuration types=REGIONAL\n" +
+        "\n" +
+        "# WEBSOCKET API — kết nối hai chiều lâu dài. Chat, thông báo real-time,\n" +
+        "# cập nhật trực tiếp. Định tuyến theo route key trong message.\n" +
+        "aws apigatewayv2 create-api --name chat --protocol-type WEBSOCKET \\\n" +
+        "  --route-selection-expression \u0027$request.body.action\u0027\n" +
+        "# Gửi ngược về client bằng ConnectionId qua API @connections.\n" +
+        "\n" +
+        "# ENDPOINT TYPE (REST API): EDGE (qua CloudFront), REGIONAL (thường tốt hơn\n" +
+        "# nếu người dùng cùng region), PRIVATE (chỉ truy cập trong VPC qua endpoint).\n" +
+        "\n" +
+        "# CHỌN: mặc định HTTP API. Chỉ dùng REST API khi cần đúng một tính năng\n" +
+        "# mà HTTP API thiếu — và cân nhắc chuyển tính năng đó sang CloudFront/WAF.",
+    },
+  ],
 },
 {
   cat: 'API',
@@ -260,6 +591,43 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bảo vệ backend và kiểm soát ai gọi",
+      code:
+        "# THROTTLING ba tầng, tầng chặt nhất thắng:\n" +
+        "#  1) tài khoản: mặc định 10.000 req/s, burst 5.000 (xin tăng được)\n" +
+        "#  2) theo stage/method\n" +
+        "aws apigateway update-stage --rest-api-id abc --stage-name prod \\\n" +
+        "  --patch-operations \\\n" +
+        "    op=replace,path=/throttle/rateLimit,value=1000 \\\n" +
+        "    op=replace,path=/throttle/burstLimit,value=2000\n" +
+        "#  3) theo API key (usage plan)\n" +
+        "\n" +
+        "# USAGE PLAN + API KEY — cho đối tác bên ngoài, có hạn mức theo ngày/tháng\n" +
+        "aws apigateway create-usage-plan --name gold \\\n" +
+        "  --throttle rateLimit=100,burstLimit=200 \\\n" +
+        "  --quota limit=1000000,period=MONTH\n" +
+        "# LƯU Ý: API key KHÔNG phải cơ chế xác thực an toàn — nó chỉ để ĐỊNH DANH\n" +
+        "# và đo lường. Xác thực thật phải dùng một trong các cách dưới.\n" +
+        "\n" +
+        "# CÁC CÁCH XÁC THỰC:\n" +
+        "#  1) IAM (SigV4) — cho client trong AWS hoặc SDK. Kiểm soát qua IAM policy.\n" +
+        "#  2) Cognito User Pool — có sẵn đăng ký/đăng nhập/MFA/social login\n" +
+        "#  3) JWT authorizer (HTTP API) — verify token từ IdP bất kỳ (Auth0, Okta),\n" +
+        "#     không cần viết code\n" +
+        "#  4) Lambda authorizer — logic tuỳ ý, trả về IAM policy. Nhớ BẬT CACHE\n" +
+        "#     (authorizerResultTtlInSeconds) nếu không mỗi request gọi thêm một Lambda:\n" +
+        "aws apigateway create-authorizer --rest-api-id abc --name jwt-auth \\\n" +
+        "  --type TOKEN --authorizer-uri $LAMBDA_URI \\\n" +
+        "  --identity-source \u0027method.request.header.Authorization\u0027 \\\n" +
+        "  --authorizer-result-ttl-in-seconds 300\n" +
+        "\n" +
+        "# Luôn bật access log và metric chi tiết để còn điều tra được:\n" +
+        "#   op=replace,path=/accessLogSettings/destinationArn,value=$LOG_GROUP_ARN",
+    },
+  ],
 },
 {
   cat: 'API',
@@ -281,6 +649,37 @@ SS.addQuestions('aws', [
       ['Hơn khi', 'serverless, API key/quota, transform, WebSocket, throttle per-client', 'container/EC2 thường trực, throughput rất cao, latency cực thấp, sticky'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Hai bộ định tuyến, hai mô hình chi phí",
+      code:
+        "# API GATEWAY — cổng API có quản lý, tính tiền THEO REQUEST.\n" +
+        "#  + xác thực (Cognito/JWT/Lambda authorizer), throttling, usage plan, API key\n" +
+        "#  + tích hợp thẳng Lambda và cả dịch vụ AWS khác (không cần code trung gian)\n" +
+        "#  + versioning, stage, canary deployment, biến đổi request/response\n" +
+        "#  + WebSocket\n" +
+        "#  - đắt khi lưu lượng lớn: ~$3,50/triệu request (REST) — 1 tỉ request\n" +
+        "#    là $3.500/tháng chỉ riêng cổng\n" +
+        "#  - thêm độ trễ (~10-50ms), timeout tối đa 29 giây\n" +
+        "\n" +
+        "# ALB — load balancer, tính tiền theo GIỜ + LCU (không theo request).\n" +
+        "#  + rẻ hơn NHIỀU khi lưu lượng cao và ổn định\n" +
+        "#  + độ trễ thấp hơn, kết nối lâu dài, hỗ trợ gRPC và WebSocket thô\n" +
+        "#  + target là EC2/ECS/IP/Lambda\n" +
+        "#  - không có xác thực sẵn (trừ OIDC/Cognito cơ bản), không throttling,\n" +
+        "#    không API key, không biến đổi payload\n" +
+        "\n" +
+        "# CHỌN:\n" +
+        "#  - backend là Lambda, lưu lượng vừa, cần xác thực/quota -> API GATEWAY\n" +
+        "#  - backend là container/EC2, lưu lượng cao, HTTP thuần -> ALB\n" +
+        "#  - cần cả hai: CloudFront -> ALB cho traffic chính, API Gateway cho\n" +
+        "#    phần API công khai cần quota\n" +
+        "\n" +
+        "# Điểm hoà vốn thô: trên khoảng 20-50 triệu request/tháng thì ALB\n" +
+        "# thường bắt đầu rẻ hơn rõ rệt.",
+    },
+  ],
 },
 {
   cat: 'Kết nối',
@@ -304,6 +703,39 @@ SS.addQuestions('aws', [
       ['Thực tế', 'backup', 'kết nối chính; + VPN backup'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đường riêng vật lý vs đường hầm qua Internet",
+      code:
+        "# SITE-TO-SITE VPN — IPsec qua Internet công cộng.\n" +
+        "#  + dựng trong vài giờ, rẻ (~$0,05/giờ + phí dữ liệu)\n" +
+        "#  + mỗi kết nối có 2 tunnel để dự phòng\n" +
+        "#  - băng thông tối đa ~1,25 Gbps mỗi tunnel\n" +
+        "#  - độ trễ và jitter THEO INTERNET -> không đoán trước được\n" +
+        "aws ec2 create-customer-gateway --type ipsec.1 \\\n" +
+        "  --public-ip 203.0.113.10 --bgp-asn 65000\n" +
+        "aws ec2 create-vpn-connection --type ipsec.1 \\\n" +
+        "  --customer-gateway-id cgw-123 --vpn-gateway-id vgw-123 \\\n" +
+        "  --options TunnelOptions=\u0027[{},{}]\u0027\n" +
+        "\n" +
+        "# DIRECT CONNECT — đường cáp VẬT LÝ riêng tới AWS.\n" +
+        "#  + băng thông cam kết 50 Mbps - 100 Gbps, độ trễ ỔN ĐỊNH\n" +
+        "#  + phí truyền dữ liệu RẺ HƠN NHIỀU so với qua Internet -> với khối lượng\n" +
+        "#    lớn, riêng khoản này đã bù chi phí đường truyền\n" +
+        "#  - mất VÀI TUẦN tới VÀI THÁNG để lắp đặt, chi phí cố định cao\n" +
+        "#  - MỘT kết nối là một điểm lỗi -> cần hai kết nối ở hai vị trí khác nhau\n" +
+        "aws directconnect create-connection --location EqSG2 \\\n" +
+        "  --bandwidth 1Gbps --connection-name \"dx-primary\"\n" +
+        "\n" +
+        "# KIẾN TRÚC THỰC TẾ ĐƯỢC KHUYẾN NGHỊ:\n" +
+        "#   Direct Connect làm đường chính + VPN làm ĐƯỜNG DỰ PHÒNG (rẻ, và tự\n" +
+        "#   chuyển qua BGP khi DX chết). Đây là mô hình phổ biến nhất.\n" +
+        "# Nhiều VPC/nhiều site -> đấu tất cả vào Transit Gateway thay vì nối chằng chịt.\n" +
+        "# Lưu ý: DX mặc định KHÔNG mã hoá -> cần dữ liệu nhạy cảm thì chạy VPN\n" +
+        "# bên trong DX, hoặc dùng MACsec.",
+    },
+  ],
 },
 {
   cat: 'VPC',
@@ -334,6 +766,42 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Route 53 Resolver và địa chỉ .2",
+      code:
+        "# Mỗi VPC có một DNS resolver ở địa chỉ CIDR_VPC + 2 (VPC 10.0.0.0/16 -> 10.0.0.2),\n" +
+        "# cũng truy cập được qua 169.254.169.253.\n" +
+        "cat /etc/resolv.conf        # nameserver 10.0.0.2\n" +
+        "\n" +
+        "# HAI THUỘC TÍNH VPC phải bật (mặc định bật với VPC do console tạo):\n" +
+        "aws ec2 modify-vpc-attribute --vpc-id vpc-123 --enable-dns-support\n" +
+        "aws ec2 modify-vpc-attribute --vpc-id vpc-123 --enable-dns-hostnames\n" +
+        "# Thiếu enable-dns-support -> mọi phân giải tên trong VPC hỏng.\n" +
+        "# Thiếu enable-dns-hostnames -> Interface Endpoint với private DNS không hoạt động.\n" +
+        "\n" +
+        "# PRIVATE HOSTED ZONE — tên miền nội bộ chỉ phân giải được trong VPC\n" +
+        "aws route53 create-hosted-zone --name internal.example.com \\\n" +
+        "  --vpc VPCRegion=ap-southeast-1,VPCId=vpc-123 \\\n" +
+        "  --caller-reference $(date +%s) --hosted-zone-config PrivateZone=true\n" +
+        "\n" +
+        "# LAI GHÉP VỚI ON-PREMISES — hai chiều, hai loại endpoint:\n" +
+        "#  INBOUND  — cho on-premises phân giải tên trong AWS\n" +
+        "#  OUTBOUND — cho tài nguyên AWS phân giải tên của on-premises\n" +
+        "aws route53resolver create-resolver-endpoint --direction OUTBOUND \\\n" +
+        "  --security-group-ids sg-dns --ip-addresses SubnetId=subnet-1 SubnetId=subnet-2 \\\n" +
+        "  --name to-onprem\n" +
+        "aws route53resolver create-resolver-rule --domain-name corp.local \\\n" +
+        "  --rule-type FORWARD --resolver-endpoint-id rslvr-out-123 \\\n" +
+        "  --target-ips Ip=192.168.1.10,Port=53\n" +
+        "\n" +
+        "# GIỚI HẠN HAY GÂY SỰ CỐ: mỗi ENI chỉ được 1.024 gói DNS mỗi giây tới\n" +
+        "# resolver. Ứng dụng phân giải tên trong vòng lặp nóng sẽ bị drop im lặng\n" +
+        "# -> triệu chứng là timeout ngẫu nhiên. Bật DNS cache cục bộ (nscd/dnsmasq)\n" +
+        "# hoặc tăng TTL trong ứng dụng.",
+    },
+  ],
 },
 {
   cat: 'Chi phí',
@@ -361,6 +829,42 @@ SS.addQuestions('aws', [
       { label: 'Outbound ra internet', value: 0.09, note: 'giảm dần theo bậc; CloudFront rẻ hơn trực tiếp' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bảng chi phí ngầm và cách cắt giảm",
+      code:
+        "# QUY TẮC CƠ BẢN:\n" +
+        "#  - vào AWS (inbound): MIỄN PHÍ\n" +
+        "#  - trong CÙNG AZ, dùng private IP: MIỄN PHÍ\n" +
+        "#  - GIỮA CÁC AZ trong cùng region: ~$0,01/GB MỖI CHIỀU (tức $0,02 khứ hồi)\n" +
+        "#  - giữa các REGION: ~$0,02/GB trở lên\n" +
+        "#  - RA INTERNET: ~$0,09/GB (100GB đầu mỗi tháng miễn phí)\n" +
+        "#  - qua NAT Gateway: thêm ~$0,045/GB NGOÀI phí trên\n" +
+        "#  - qua Transit Gateway: thêm ~$0,02/GB mỗi attachment\n" +
+        "\n" +
+        "# NHỮNG CHỖ HAY BỊ BỎ SÓT:\n" +
+        "#  1) dùng PUBLIC IP hoặc Elastic IP để hai instance trong CÙNG VPC nói chuyện\n" +
+        "#     -> bị tính như đi qua Internet. Luôn dùng PRIVATE IP hoặc tên DNS nội bộ.\n" +
+        "#  2) RDS Multi-AZ nhân bản qua AZ -> AWS không tính, NHƯNG ứng dụng ở AZ này\n" +
+        "#     đọc DB ở AZ kia thì CÓ tính\n" +
+        "#  3) ALB rải request sang instance ở AZ khác -> cross-AZ charge\n" +
+        "#     (tắt cross-zone load balancing của NLB nếu chấp nhận được sự lệch tải)\n" +
+        "#  4) S3 ở region A, EC2 ở region B\n" +
+        "#  5) log/metric đẩy sang region khác\n" +
+        "\n" +
+        "# CÁCH CẮT GIẢM, theo mức hiệu quả:\n" +
+        "#  - CloudFront cho traffic ra Internet: rẻ hơn EC2/S3 trực tiếp, và MIỄN PHÍ\n" +
+        "#    từ origin AWS lên CloudFront\n" +
+        "#  - VPC Gateway Endpoint cho S3/DynamoDB (miễn phí, bỏ được NAT)\n" +
+        "#  - giữ traffic trong cùng AZ khi có thể (đọc từ replica cùng AZ)\n" +
+        "#  - nén dữ liệu trước khi truyền\n" +
+        "\n" +
+        "aws ce get-cost-and-usage --time-period Start=2026-08-01,End=2026-09-01 \\\n" +
+        "  --granularity MONTHLY --metrics UnblendedCost \\\n" +
+        "  --filter \u0027{\"Dimensions\":{\"Key\":\"USAGE_TYPE_GROUP\",\"Values\":[\"EC2: Data Transfer - Internet (Out)\"]}}\u0027",
+    },
+  ],
 },
 {
   cat: 'Bảo mật',
@@ -383,6 +887,43 @@ SS.addQuestions('aws', [
       ['Advanced / gắn vào', 'DDoS response team, cost protection, L7', 'ALB, CloudFront, API Gateway, AppSync'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Tầng 7 vs tầng 3/4",
+      code:
+        "# SHIELD STANDARD — MIỄN PHÍ, tự động cho mọi khách hàng. Chống DDoS tầng\n" +
+        "# 3/4 phổ biến (SYN flood, UDP reflection). Không phải làm gì cả.\n" +
+        "\n" +
+        "# SHIELD ADVANCED — $3.000/THÁNG. Đáng tiền khi:\n" +
+        "#  + có đội ứng phó DDoS của AWS (DRT) hỗ trợ 24/7\n" +
+        "#  + BẢO VỆ CHI PHÍ: được hoàn tiền phần scale phát sinh do bị tấn công\n" +
+        "#  + phát hiện tinh vi hơn, có báo cáo chi tiết\n" +
+        "#  + WAF miễn phí kèm theo\n" +
+        "\n" +
+        "# WAF — tầng 7 (HTTP). Chống SQL injection, XSS, bot, và giới hạn tốc độ.\n" +
+        "# Gắn được vào: CloudFront, ALB, API Gateway, AppSync, Cognito.\n" +
+        "aws wafv2 create-web-acl --name app-waf --scope REGIONAL \\\n" +
+        "  --default-action Allow={} \\\n" +
+        "  --visibility-config SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName=app \\\n" +
+        "  --rules \u0027[\n" +
+        "    {\"Name\":\"AWSManagedCommon\",\"Priority\":1,\n" +
+        "     \"Statement\":{\"ManagedRuleGroupStatement\":{\n" +
+        "       \"VendorName\":\"AWS\",\"Name\":\"AWSManagedRulesCommonRuleSet\"}},\n" +
+        "     \"OverrideAction\":{\"None\":{}},\n" +
+        "     \"VisibilityConfig\":{\"SampledRequestsEnabled\":true,\"CloudWatchMetricsEnabled\":true,\"MetricName\":\"common\"}},\n" +
+        "    {\"Name\":\"RateLimit\",\"Priority\":2,\n" +
+        "     \"Statement\":{\"RateBasedStatement\":{\"Limit\":2000,\"AggregateKeyType\":\"IP\"}},\n" +
+        "     \"Action\":{\"Block\":{}},\n" +
+        "     \"VisibilityConfig\":{\"SampledRequestsEnabled\":true,\"CloudWatchMetricsEnabled\":true,\"MetricName\":\"rate\"}}]\u0027\n" +
+        "\n" +
+        "# QUY TRÌNH TRIỂN KHAI AN TOÀN: bật rule ở chế độ COUNT trước, xem log\n" +
+        "# vài ngày để tìm false positive, rồi mới chuyển sang BLOCK.\n" +
+        "# Managed rule của AWS và của bên thứ ba (F5, Fortinet) tiết kiệm rất nhiều\n" +
+        "# công so với tự viết rule.\n" +
+        "# LƯU Ý: WAF cho CloudFront phải tạo ở scope CLOUDFRONT (us-east-1).",
+    },
+  ],
 },
 {
   cat: 'Kết nối',
@@ -405,6 +946,40 @@ SS.addQuestions('aws', [
       { to: 3, label: 'lý tưởng cho SaaS bán cho khách AWS' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đưa dịch vụ sang VPC khác mà không mở mạng",
+      code:
+        "# VẤN ĐỀ với peering/TGW: nối hai VPC là mở cả một vùng mạng, và CIDR không\n" +
+        "# được trùng. PrivateLink chỉ đưa MỘT DỊCH VỤ sang, một chiều, CIDR trùng\n" +
+        "# cũng không sao.\n" +
+        "\n" +
+        "# PHÍA NHÀ CUNG CẤP: đặt NLB trước dịch vụ rồi tạo endpoint service\n" +
+        "aws ec2 create-vpc-endpoint-service-configuration \\\n" +
+        "  --network-load-balancer-arns $NLB_ARN \\\n" +
+        "  --acceptance-required \\\n" +
+        "  --supported-ip-address-types ipv4\n" +
+        "# Cho phép tài khoản nào được kết nối:\n" +
+        "aws ec2 modify-vpc-endpoint-service-permissions \\\n" +
+        "  --service-id vpce-svc-123 \\\n" +
+        "  --add-allowed-principals arn:aws:iam::222222222222:root\n" +
+        "\n" +
+        "# PHÍA KHÁCH HÀNG: tạo interface endpoint trỏ tới service đó\n" +
+        "aws ec2 create-vpc-endpoint --vpc-id vpc-b --vpc-endpoint-type Interface \\\n" +
+        "  --service-name com.amazonaws.vpce.ap-southeast-1.vpce-svc-123 \\\n" +
+        "  --subnet-ids subnet-1 subnet-2 --security-group-ids sg-client\n" +
+        "\n" +
+        "# ĐẶC ĐIỂM:\n" +
+        "#  - lưu lượng đi trong mạng AWS, KHÔNG qua Internet\n" +
+        "#  - MỘT CHIỀU: khách hàng gọi được nhà cung cấp, ngược lại thì không\n" +
+        "#  - CIDR chồng lấn không thành vấn đề (dùng ENI có IP trong VPC khách hàng)\n" +
+        "#  - chỉ TCP; NLB nên nhà cung cấp không thấy IP nguồn thật (trừ khi bật\n" +
+        "#    proxy protocol v2)\n" +
+        "#  - đây chính là cách các SaaS trên AWS Marketplace (Datadog, Snowflake,\n" +
+        "#    MongoDB Atlas) cung cấp kết nối riêng",
+    },
+  ],
 },
 {
   cat: 'VPC',
@@ -427,6 +1002,41 @@ SS.addQuestions('aws', [
       ['Output', 'metadata luồng IP → CloudWatch/S3', 'chỉ đúng route table/SG/NACL đang chặn'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Thứ tự kiểm tra và các công cụ",
+      code:
+        "# CÔNG CỤ MẠNH NHẤT: Reachability Analyzer — mô phỏng đường đi và chỉ ra\n" +
+        "# CHÍNH XÁC thành phần nào chặn, KHÔNG cần gửi gói tin thật.\n" +
+        "aws ec2 create-network-insights-path --source i-source --destination i-dest \\\n" +
+        "  --protocol tcp --destination-port 443\n" +
+        "aws ec2 start-network-insights-analysis --network-insights-path-id nip-123\n" +
+        "aws ec2 describe-network-insights-analyses --network-insights-analysis-ids nia-123\n" +
+        "# Output nói rõ: \"blocked by security group sg-xxx rule ...\" — tiết kiệm hàng giờ.\n" +
+        "\n" +
+        "# VPC FLOW LOGS — xem gói tin có tới không và bị ACCEPT hay REJECT\n" +
+        "aws ec2 create-flow-logs --resource-type VPC --resource-ids vpc-123 \\\n" +
+        "  --traffic-type ALL --log-destination-type cloud-watch-logs \\\n" +
+        "  --log-group-name /vpc/flowlogs --deliver-logs-permission-arn $ROLE\n" +
+        "# Truy vấn trong Logs Insights:\n" +
+        "#   fields srcAddr, dstAddr, dstPort, action\n" +
+        "#   | filter action = \"REJECT\" and dstPort = 443\n" +
+        "#   | stats count(*) by srcAddr, dstAddr\n" +
+        "# Lưu ý: REJECT ở flow log của SG nghĩa là SG chặn; NACL chặn thì thấy ở\n" +
+        "# flow log của subnet.\n" +
+        "\n" +
+        "# DANH SÁCH KIỂM TRA THEO THỨ TỰ (từ hay sai nhất tới ít gặp):\n" +
+        "#  1) Security Group: đã mở đúng cổng, đúng nguồn chưa (nhớ SG là stateful)\n" +
+        "#  2) Route table: có đường tới đích không (peering/TGW/NAT/IGW)\n" +
+        "#  3) NACL: đã mở CẢ hai chiều, kể cả cổng ephemeral chưa\n" +
+        "#  4) Subnet có phải public không, instance có public IP không\n" +
+        "#  5) DNS phân giải đúng chưa (dig/nslookup)\n" +
+        "#  6) Firewall/iptables TRONG hệ điều hành\n" +
+        "#  7) Ứng dụng có LẮNG NGHE trên đúng interface không (0.0.0.0 hay 127.0.0.1)\n" +
+        "ss -tlnp                  # kiểm tra bước 7 — rất hay là nguyên nhân thật",
+    },
+  ],
 },
 {
   cat: 'CDN',
@@ -449,6 +1059,39 @@ SS.addQuestions('aws', [
       ['Dùng cho', 'content tĩnh/động cacheable', 'game, VoIP, API non-HTTP, IoT'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Tăng tốc mạng vs cache nội dung",
+      code:
+        "# CLOUDFRONT — CDN: CACHE nội dung ở edge, chỉ HTTP/HTTPS.\n" +
+        "#  + hit cache thì không chạm origin -> giảm tải và độ trễ mạnh\n" +
+        "#  + có WAF, Lambda@Edge/CloudFront Functions, nén, chứng chỉ miễn phí\n" +
+        "#  - chỉ hiệu quả với nội dung CACHE ĐƯỢC; API động thì lợi ích chủ yếu là\n" +
+        "#    kết nối TCP/TLS được kết thúc ở edge\n" +
+        "\n" +
+        "# GLOBAL ACCELERATOR — KHÔNG cache. Nó cấp 2 IP ANYCAST tĩnh, đưa lưu lượng\n" +
+        "# vào mạng lõi AWS ở edge gần nhất rồi đi tiếp bằng đường nội bộ.\n" +
+        "#  + hỗ trợ TCP VÀ UDP (CloudFront thì không) -> game, VoIP, IoT\n" +
+        "#  + IP TĨNH -> đối tác whitelist được, và không phụ thuộc TTL của DNS\n" +
+        "#  + failover giữa region trong VÀI GIÂY (không chờ DNS TTL)\n" +
+        "#  + cải thiện độ trễ và jitter cho traffic ĐỘNG, không cache được\n" +
+        "aws globalaccelerator create-accelerator --name app-ga --ip-address-type IPV4\n" +
+        "aws globalaccelerator create-endpoint-group \\\n" +
+        "  --listener-arn $LISTENER --endpoint-group-region ap-southeast-1 \\\n" +
+        "  --traffic-dial-percentage 100 \\\n" +
+        "  --endpoint-configurations EndpointId=$ALB_ARN,Weight=100\n" +
+        "\n" +
+        "# CHỌN:\n" +
+        "#  - website, tài sản tĩnh, API cache được  -> CLOUDFRONT\n" +
+        "#  - TCP/UDP không phải HTTP, cần IP tĩnh, cần failover đa region nhanh\n" +
+        "#    -> GLOBAL ACCELERATOR\n" +
+        "#  - dùng CẢ HAI cũng hợp lý: CloudFront cho nội dung tĩnh,\n" +
+        "#    Global Accelerator cho API động đa region.\n" +
+        "# GA tính $0,025/giờ mỗi accelerator + phí truyền -> không rẻ, chỉ dùng\n" +
+        "# khi thật sự cần một trong các đặc tính trên.",
+    },
+  ],
 },
 {
   cat: 'VPC',
@@ -470,5 +1113,40 @@ SS.addQuestions('aws', [
       ['Dùng khi', 'failover appliance (mang IP + SG)', 'whitelist đối tác, DNS trỏ cứng'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "IP công khai cố định và card mạng ảo",
+      code:
+        "# ELASTIC IP — địa chỉ IPv4 public TĨNH, thuộc về TÀI KHOẢN chứ không phải instance.\n" +
+        "aws ec2 allocate-address --domain vpc\n" +
+        "aws ec2 associate-address --instance-id i-1234 --allocation-id eipalloc-123\n" +
+        "# Instance stop/start -> public IP thường ĐỔI; Elastic IP thì KHÔNG.\n" +
+        "\n" +
+        "# TIỀN: từ 2/2024, MỌI IPv4 public đều tính phí (~$0,005/giờ ~ $3,6/tháng),\n" +
+        "# và EIP KHÔNG GẮN VÀO ĐÂU cũng bị tính. Đây là khoản lãng phí phổ biến:\n" +
+        "aws ec2 describe-addresses --query \u0027Addresses[?AssociationId==null].[PublicIp,AllocationId]\u0027\n" +
+        "# -> giải phóng ngay những cái không dùng\n" +
+        "# Giới hạn 5 EIP mỗi region (xin tăng được).\n" +
+        "\n" +
+        "# KHI NÀO THẬT SỰ CẦN EIP: NAT Gateway, đối tác cần whitelist IP, DNS trỏ\n" +
+        "# thẳng vào IP. Còn lại nên dùng ALB/NLB + DNS thay vì gán EIP cho instance.\n" +
+        "\n" +
+        "# ENI — card mạng ảo: có private IP, MAC, security group, có thể gắn EIP.\n" +
+        "# ENI TÁCH RỜI vòng đời với instance -> gắn sang instance khác được.\n" +
+        "aws ec2 create-network-interface --subnet-id subnet-123 \\\n" +
+        "  --groups sg-123 --description \"app eni\"\n" +
+        "aws ec2 attach-network-interface --network-interface-id eni-123 \\\n" +
+        "  --instance-id i-456 --device-index 1\n" +
+        "\n" +
+        "# ỨNG DỤNG THỰC TẾ của ENI phụ:\n" +
+        "#  - failover thủ công: instance chính chết -> gắn ENI (kèm IP và SG) sang\n" +
+        "#    instance dự phòng, mọi thứ trỏ tới IP đó không cần đổi gì\n" +
+        "#  - tách mạng quản trị khỏi mạng dữ liệu\n" +
+        "#  - license gắn với địa chỉ MAC\n" +
+        "# Số ENI và số IP mỗi ENI PHỤ THUỘC LOẠI INSTANCE — đây là giới hạn hay\n" +
+        "# gây bất ngờ khi chạy nhiều pod trên EKS (mỗi pod một IP từ ENI).",
+    },
+  ],
 },
 ]);

@@ -20,6 +20,32 @@ SS.addQuestions('aws', [
       ['Bổ sung', 'versioning + replication cross-region', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Cấu trúc phẳng, và ý nghĩa thật của 11 số 9",
+      code:
+        "# S3 KHÔNG có thư mục. \"Key\" là một chuỗi phẳng; dấu / chỉ là quy ước hiển thị.\n" +
+        "aws s3api put-object --bucket my-bucket \\\n" +
+        "  --key \"2026/09/04/orders.json\" --body orders.json\n" +
+        "# Key ở đây là NGUYÊN chuỗi \"2026/09/04/orders.json\", không phải 3 thư mục lồng nhau.\n" +
+        "\n" +
+        "aws s3api list-objects-v2 --bucket my-bucket --prefix \"2026/09/\" --delimiter \"/\"\n" +
+        "# --delimiter mô phỏng thư mục: trả về CommonPrefixes thay vì liệt kê hết\n" +
+        "\n" +
+        "# Tên bucket DUY NHẤT TOÀN CẦU (mọi khách hàng AWS chung một không gian tên),\n" +
+        "# nhưng dữ liệu nằm ở đúng một region.\n" +
+        "aws s3api create-bucket --bucket my-bucket --region ap-southeast-1 \\\n" +
+        "  --create-bucket-configuration LocationConstraint=ap-southeast-1\n" +
+        "\n" +
+        "# ĐỘ BỀN 99,999999999% (11 số 9): kỳ vọng mất 1 object trong 10 triệu object\n" +
+        "# sau 10.000 năm. Có được nhờ tự động nhân bản qua ít nhất 3 AZ.\n" +
+        "# ĐỘ BỀN KHÔNG PHẢI ĐỘ SẴN SÀNG: availability chỉ 99,99% (S3 Standard) —\n" +
+        "# S3 có thể tạm không truy cập được mà dữ liệu vẫn nguyên vẹn.\n" +
+        "# VÀ ĐỘ BỀN KHÔNG CHỐNG ĐƯỢC: bạn tự xoá nhầm, hoặc ransomware.\n" +
+        "# -> vẫn cần versioning + MFA delete + Object Lock cho dữ liệu quan trọng.",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -47,6 +73,65 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "json",
+      title: "Lifecycle: tự chuyển tầng và tự dọn",
+      code:
+        "{\n" +
+        "  \"Rules\": [\n" +
+        "    {\n" +
+        "      \"ID\": \"chuyen-tang-log\",\n" +
+        "      \"Filter\": { \"Prefix\": \"logs/\" },\n" +
+        "      \"Status\": \"Enabled\",\n" +
+        "      \"Transitions\": [\n" +
+        "        { \"Days\": 30,  \"StorageClass\": \"STANDARD_IA\" },\n" +
+        "        { \"Days\": 90,  \"StorageClass\": \"GLACIER_IR\" },\n" +
+        "        { \"Days\": 365, \"StorageClass\": \"DEEP_ARCHIVE\" }\n" +
+        "      ],\n" +
+        "      \"Expiration\": { \"Days\": 2555 }\n" +
+        "    },\n" +
+        "    {\n" +
+        "      \"ID\": \"don-multipart-do-dang\",\n" +
+        "      \"Filter\": {},\n" +
+        "      \"Status\": \"Enabled\",\n" +
+        "      \"AbortIncompleteMultipartUpload\": { \"DaysAfterInitiation\": 7 }\n" +
+        "    },\n" +
+        "    {\n" +
+        "      \"ID\": \"don-phien-ban-cu\",\n" +
+        "      \"Filter\": {},\n" +
+        "      \"Status\": \"Enabled\",\n" +
+        "      \"NoncurrentVersionExpiration\": { \"NoncurrentDays\": 90 }\n" +
+        "    }\n" +
+        "  ]\n" +
+        "}",
+    },
+    {
+      lang: "bash",
+      title: "Các tầng lưu trữ và bẫy chi phí",
+      code:
+        "# STANDARD          — truy cập thường xuyên, không phí truy xuất\n" +
+        "# INTELLIGENT-TIERING — AWS tự chuyển tầng theo thói quen truy cập.\n" +
+        "#   Phí giám sát nhỏ mỗi object, KHÔNG có phí truy xuất. Chọn cái này khi\n" +
+        "#   không đoán được mẫu truy cập -> gần như luôn là lựa chọn an toàn.\n" +
+        "# STANDARD-IA       — rẻ hơn ~45%, CÓ phí truy xuất, tối thiểu 30 ngày lưu trữ\n" +
+        "# ONE ZONE-IA       — rẻ hơn nữa nhưng chỉ 1 AZ -> chỉ cho dữ liệu tái tạo được\n" +
+        "# GLACIER IR        — truy xuất tức thì, rẻ hơn IA, tối thiểu 90 ngày\n" +
+        "# GLACIER FLEXIBLE  — lấy về mất vài phút tới vài giờ\n" +
+        "# DEEP ARCHIVE      — rẻ nhất (~$1/TB/tháng), lấy về mất 12-48 giờ, tối thiểu 180 ngày\n" +
+        "\n" +
+        "aws s3api put-bucket-lifecycle-configuration --bucket my-bucket \\\n" +
+        "  --lifecycle-configuration file://lifecycle.json\n" +
+        "\n" +
+        "# BẪY CHI PHÍ HAY GẶP:\n" +
+        "#  - chuyển object NHỎ xuống tầng lạnh: mỗi lần chuyển tốn phí request,\n" +
+        "#    và IA/Glacier tính TỐI THIỂU 128KB mỗi object -> file 5KB tốn như 128KB\n" +
+        "#  - xoá sớm hơn thời gian tối thiểu vẫn bị tính đủ\n" +
+        "#  - multipart upload dở dang KHÔNG hiện trong list nhưng VẪN TÍNH TIỀN\n" +
+        "#    -> luôn có rule AbortIncompleteMultipartUpload\n" +
+        "aws s3api list-multipart-uploads --bucket my-bucket",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -68,6 +153,34 @@ SS.addQuestions('aws', [
       ['Hệ quả', 'code cũ cần retry / sleep sau upload', 'viết xong đọc lại thấy ngay — bỏ hết hack'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Từ tháng 12/2020: strong read-after-write cho mọi thao tác",
+      code:
+        "# TRƯỚC 12/2020: ghi đè và xoá chỉ là eventual consistency -> đọc ngay sau khi\n" +
+        "# ghi có thể ra dữ liệu CŨ. Rất nhiều code cũ có vòng lặp retry vì lý do này.\n" +
+        "\n" +
+        "# HIỆN NAY: STRONG read-after-write cho PUT, DELETE và LIST — miễn phí,\n" +
+        "# không phải bật gì, không giảm hiệu năng.\n" +
+        "aws s3api put-object --bucket my-bucket --key data.json --body v2.json\n" +
+        "aws s3api get-object --bucket my-bucket --key data.json out.json\n" +
+        "# LUÔN trả về v2. Không cần sleep, không cần retry vì lý do nhất quán.\n" +
+        "\n" +
+        "# LIST cũng nhất quán: object vừa PUT chắc chắn xuất hiện trong list ngay.\n" +
+        "aws s3api list-objects-v2 --bucket my-bucket --prefix data\n" +
+        "\n" +
+        "# NHỮNG THỨ VẪN LÀ EVENTUAL (hay bị nhầm là đã strong):\n" +
+        "#  - Cross-Region Replication / Same-Region Replication: bản sao đến sau\n" +
+        "#  - thay đổi bucket policy, ACL, lifecycle configuration\n" +
+        "#  - S3 Event Notification: gửi ÍT NHẤT MỘT LẦN và có thể đến muộn/không đúng\n" +
+        "#    thứ tự -> consumer phải idempotent\n" +
+        "#  - dữ liệu đã cache ở CloudFront -> phải invalidate hoặc dùng version trong key\n" +
+        "\n" +
+        "# LƯU Ý VỀ VERSIONING: xoá object có versioning chỉ tạo DELETE MARKER.\n" +
+        "# Đọc trả 404 ngay (strong), nhưng dữ liệu vẫn còn ở phiên bản cũ.",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -94,6 +207,38 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba lớp, và lớp nào nên tin",
+      code:
+        "# 1) BLOCK PUBLIC ACCESS — chốt chặn cứng, BẬT TRƯỚC MỌI THỨ KHÁC.\n" +
+        "# Nó ghi đè cả bucket policy lẫn ACL -> dù ai đó lỡ viết policy public,\n" +
+        "# object vẫn không lộ ra.\n" +
+        "aws s3api put-public-access-block --bucket my-bucket \\\n" +
+        "  --public-access-block-configuration \\\n" +
+        "  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true\n" +
+        "# Nên bật ở CẤP TÀI KHOẢN để áp cho mọi bucket hiện tại và tương lai:\n" +
+        "aws s3control put-public-access-block --account-id 123456789012 \\\n" +
+        "  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true\n" +
+        "\n" +
+        "# 2) BUCKET POLICY — phân quyền chính. ACL đã lỗi thời (từ 4/2023 bucket mới\n" +
+        "# mặc định TẮT ACL, Object Ownership = BucketOwnerEnforced). Đừng dùng ACL nữa.\n" +
+        "aws s3api put-bucket-policy --bucket my-bucket --policy file://policy.json\n" +
+        "# Nên thêm điều kiện bắt buộc TLS:\n" +
+        "#   \"Condition\": {\"Bool\": {\"aws:SecureTransport\": \"false\"}}, \"Effect\": \"Deny\"\n" +
+        "\n" +
+        "# 3) PRESIGNED URL — cấp quyền TẠM THỜI cho người không có tài khoản AWS.\n" +
+        "# URL mang chữ ký của NGƯỜI TẠO -> nó chỉ mạnh bằng quyền của người đó.\n" +
+        "aws s3 presign s3://my-bucket/report.pdf --expires-in 3600\n" +
+        "# Upload trực tiếp từ trình duyệt (không đi qua server của bạn):\n" +
+        "#   s3.generate_presigned_post(Bucket, Key, Conditions=[[\"content-length-range\",0,10485760]])\n" +
+        "# Điều kiện content-length-range rất quan trọng, nếu không ai đó upload 5TB.\n" +
+        "\n" +
+        "# Bật log truy cập để còn điều tra được:\n" +
+        "aws s3api put-bucket-logging --bucket my-bucket --bucket-logging-status file://logging.json",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -116,6 +261,39 @@ SS.addQuestions('aws', [
       { to: 4, label: 'MFA Delete: cần mã MFA để xoá vĩnh viễn. Object Lock: khoá không cho xoá/sửa — chống ransomware + insider' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba tầng bảo vệ, mạnh dần",
+      code:
+        "# 1) VERSIONING — mỗi lần ghi đè tạo phiên bản mới, xoá chỉ tạo DELETE MARKER\n" +
+        "aws s3api put-bucket-versioning --bucket my-bucket \\\n" +
+        "  --versioning-configuration Status=Enabled\n" +
+        "# BẬT RỒI KHÔNG TẮT ĐƯỢC, chỉ Suspended (phiên bản cũ vẫn còn).\n" +
+        "\n" +
+        "aws s3api list-object-versions --bucket my-bucket --prefix data.json\n" +
+        "# Khôi phục = xoá delete marker:\n" +
+        "aws s3api delete-object --bucket my-bucket --key data.json --version-id $MARKER_ID\n" +
+        "\n" +
+        "# LƯU Ý CHI PHÍ: mọi phiên bản đều TÍNH TIỀN. Không có lifecycle dọn\n" +
+        "# NoncurrentVersion thì bucket phình vô hạn — đây là nguyên nhân rất phổ biến\n" +
+        "# của hoá đơn S3 tăng bất thường.\n" +
+        "\n" +
+        "# 2) MFA DELETE — xoá vĩnh viễn phải có mã MFA. Chỉ ROOT bật được, và\n" +
+        "# chỉ bằng CLI (console không làm được):\n" +
+        "aws s3api put-bucket-versioning --bucket my-bucket \\\n" +
+        "  --versioning-configuration Status=Enabled,MFADelete=Enabled \\\n" +
+        "  --mfa \"arn:aws:iam::123:mfa/root-account-mfa-device 123456\"\n" +
+        "\n" +
+        "# 3) OBJECT LOCK (WORM) — mạnh nhất, chống được cả ransomware và người trong nội bộ.\n" +
+        "# CHỈ bật được LÚC TẠO BUCKET, không thêm sau được.\n" +
+        "aws s3api put-object-retention --bucket my-bucket --key data.json \\\n" +
+        "  --retention \u0027{\"Mode\":\"COMPLIANCE\",\"RetainUntilDate\":\"2027-01-01T00:00:00Z\"}\u0027\n" +
+        "# GOVERNANCE — người có quyền đặc biệt vẫn gỡ được (dùng cho nội bộ)\n" +
+        "# COMPLIANCE — KHÔNG AI gỡ được, kể cả root, kể cả AWS. Chắc chắn nhưng\n" +
+        "#              nhầm lẫn là phải trả tiền lưu trữ tới hết hạn. Cân nhắc kỹ.",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -139,6 +317,41 @@ SS.addQuestions('aws', [
       ['Dùng khi', 'chỉ cần mã hoá at-rest', 'cần tách quyền (GetObject nhưng thiếu kms:Decrypt)', 'yêu cầu đặc biệt', 'tuân thủ khắt khe'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ai giữ khoá, và cái giá của từng lựa chọn",
+      code:
+        "# Từ 1/2023, S3 mã hoá MẶC ĐỊNH bằng SSE-S3 cho mọi object mới. Không có\n" +
+        "# object không mã hoá nữa.\n" +
+        "\n" +
+        "# SSE-S3 (AES-256) — AWS quản lý khoá hoàn toàn. Miễn phí, không phải làm gì.\n" +
+        "aws s3api put-object --bucket my-bucket --key f.txt --body f.txt \\\n" +
+        "  --server-side-encryption AES256\n" +
+        "\n" +
+        "# SSE-KMS — dùng KMS key của bạn.\n" +
+        "#  + kiểm soát policy khoá, có log CloudTrail mỗi lần dùng khoá, xoay vòng được\n" +
+        "#  + chia sẻ chéo tài khoản có kiểm soát\n" +
+        "#  - MỖI lần đọc/ghi là một API call KMS -> tốn tiền và có thể chạm quota\n" +
+        "aws s3api put-object --bucket my-bucket --key f.txt --body f.txt \\\n" +
+        "  --server-side-encryption aws:kms --ssekms-key-id alias/app-key\n" +
+        "\n" +
+        "# S3 BUCKET KEYS — giảm tới 99% số lần gọi KMS bằng cách dùng một khoá trung\n" +
+        "# gian ở cấp bucket. Gần như luôn nên bật khi dùng SSE-KMS:\n" +
+        "aws s3api put-bucket-encryption --bucket my-bucket \\\n" +
+        "  --server-side-encryption-configuration \u0027{\"Rules\":[{\n" +
+        "    \"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"aws:kms\",\n" +
+        "      \"KMSMasterKeyID\":\"alias/app-key\"},\n" +
+        "    \"BucketKeyEnabled\":true}]}\u0027\n" +
+        "\n" +
+        "# SSE-C — bạn gửi khoá theo từng request, AWS không lưu khoá.\n" +
+        "#   Mất khoá là mất dữ liệu vĩnh viễn. Hiếm dùng.\n" +
+        "# DSSE-KMS — mã hoá HAI LỚP, cho yêu cầu tuân thủ đặc biệt. Đắt gấp đôi.\n" +
+        "\n" +
+        "# Ép mọi ghi phải mã hoá bằng đúng khoá của mình (bucket policy):\n" +
+        "#   \"Condition\": {\"StringNotEquals\": {\"s3:x-amz-server-side-encryption\": \"aws:kms\"}}",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -163,6 +376,39 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba đòn bẩy hiệu năng",
+      code:
+        "# 1) PREFIX — S3 tự scale theo prefix: 3.500 PUT/s và 5.500 GET/s MỖI PREFIX.\n" +
+        "# Cần nhiều hơn -> trải key ra nhiều prefix:\n" +
+        "#   logs/2026/09/04/...        <- mọi ghi dồn vào một prefix, dễ bị throttle\n" +
+        "#   logs/a3f/2026/09/04/...    <- thêm hash ở đầu -> trải đều\n" +
+        "# (Từ 2018 S3 tự chia partition theo prefix nên không cần hash ngẫu nhiên\n" +
+        "#  như trước, nhưng khi ghi bùng nổ đột ngột thì vẫn hữu ích.)\n" +
+        "\n" +
+        "# 2) MULTIPART UPLOAD — bắt buộc với file > 5GB, nên dùng từ ~100MB.\n" +
+        "# Tải song song nhiều phần, retry được từng phần riêng.\n" +
+        "aws configure set default.s3.multipart_threshold 64MB\n" +
+        "aws configure set default.s3.multipart_chunksize 16MB\n" +
+        "aws configure set default.s3.max_concurrent_requests 20\n" +
+        "aws s3 cp bigfile.tar.gz s3://my-bucket/    # CLI tự dùng multipart\n" +
+        "\n" +
+        "# Dọn phần dở dang (chúng vẫn tính tiền dù không hiện trong list):\n" +
+        "aws s3api list-multipart-uploads --bucket my-bucket\n" +
+        "\n" +
+        "# 3) TRANSFER ACCELERATION — đi qua edge location của CloudFront rồi vào S3\n" +
+        "# qua mạng nội bộ AWS. Chỉ đáng tiền khi upload TỪ XA (khác châu lục).\n" +
+        "aws s3api put-bucket-accelerate-configuration --bucket my-bucket \\\n" +
+        "  --accelerate-configuration Status=Enabled\n" +
+        "aws s3 cp f.zip s3://my-bucket/ --endpoint-url https://my-bucket.s3-accelerate.amazonaws.com\n" +
+        "\n" +
+        "# Đọc nhiều lần cùng một object -> đặt CloudFront phía trước: rẻ hơn và nhanh hơn.\n" +
+        "# Đọc một PHẦN file lớn -> dùng Range request thay vì tải cả file:\n" +
+        "aws s3api get-object --bucket my-bucket --key big.csv --range \"bytes=0-1048575\" head.csv",
+    },
+  ],
 },
 {
   cat: 'S3',
@@ -185,6 +431,56 @@ SS.addQuestions('aws', [
       { to: 2, label: 'delivery at-least-once (có thể trùng), thứ tự không đảm bảo → consumer idempotent' },
     ],
   },
+  demo: [
+    {
+      lang: "json",
+      title: "Kích hoạt xử lý khi object thay đổi",
+      code:
+        "{\n" +
+        "  \"Comment\": \"Gửi sự kiện tới Lambda/SQS/SNS/EventBridge khi có object mới\",\n" +
+        "  \"LambdaFunctionConfigurations\": [{\n" +
+        "    \"LambdaFunctionArn\": \"arn:aws:lambda:ap-southeast-1:123:function:process-upload\",\n" +
+        "    \"Events\": [\"s3:ObjectCreated:*\"],\n" +
+        "    \"Filter\": {\n" +
+        "      \"Key\": { \"FilterRules\": [\n" +
+        "        { \"Name\": \"prefix\", \"Value\": \"uploads/\" },\n" +
+        "        { \"Name\": \"suffix\", \"Value\": \".jpg\" }\n" +
+        "      ]}\n" +
+        "    }\n" +
+        "  }],\n" +
+        "  \"QueueConfigurations\": [{\n" +
+        "    \"QueueArn\": \"arn:aws:sqs:ap-southeast-1:123:archive-queue\",\n" +
+        "    \"Events\": [\"s3:ObjectRemoved:*\"]\n" +
+        "  }]\n" +
+        "}",
+    },
+    {
+      lang: "bash",
+      title: "Ba đích đến và những đảm bảo cần biết",
+      code:
+        "aws s3api put-bucket-notification-configuration \\\n" +
+        "  --bucket my-bucket --notification-configuration file://notification.json\n" +
+        "\n" +
+        "# ĐÍCH ĐẾN:\n" +
+        "#  Lambda — xử lý ngay, đơn giản nhất. Nhưng lỗi thì phải tự lo retry/DLQ.\n" +
+        "#  SQS    — có buffer, chịu được tải đột biến, retry sẵn có. ĐÁNG TIN NHẤT\n" +
+        "#           cho khối lượng lớn -> mặc định nên chọn.\n" +
+        "#  SNS    — fanout tới nhiều bên.\n" +
+        "#  EventBridge — lọc mạnh hơn nhiều, gửi được tới 20+ đích, có archive/replay.\n" +
+        "#           Phải bật riêng:\n" +
+        "aws s3api put-bucket-notification-configuration --bucket my-bucket \\\n" +
+        "  --notification-configuration \u0027{\"EventBridgeConfiguration\": {}}\u0027\n" +
+        "\n" +
+        "# NHỮNG ĐẢM BẢO PHẢI BIẾT:\n" +
+        "#  - AT LEAST ONCE: có thể nhận TRÙNG -> handler bắt buộc idempotent\n" +
+        "#  - KHÔNG ĐẢM BẢO THỨ TỰ: hai sự kiện của cùng một key có thể tới ngược nhau\n" +
+        "#  - thường trong vài giây, nhưng đôi khi tới muộn hơn nhiều\n" +
+        "#  - GIỚI HẠN: mỗi tổ hợp prefix/suffix chỉ có MỘT đích -> chồng chéo cấu hình\n" +
+        "#    sẽ báo lỗi. Cần fanout thì đi qua SNS hoặc EventBridge.\n" +
+        "#  - VÒNG LẶP CHẾT NGƯỜI: Lambda ghi kết quả vào CHÍNH bucket đó -> tự kích\n" +
+        "#    hoạt lại chính nó. Luôn ghi sang bucket/prefix khác.",
+    },
+  ],
 },
 {
   cat: 'RDS',
@@ -207,6 +503,37 @@ SS.addQuestions('aws', [
       ['Bài toán', 'chống downtime', 'chống nghẽn đọc'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Một cái để sống sót, một cái để mở rộng đọc",
+      code:
+        "# MULTI-AZ — bản dự phòng ĐỒNG BỘ ở AZ khác. Mục tiêu: TÍNH SẴN SÀNG.\n" +
+        "#  - KHÔNG phục vụ đọc (standby \"ẩn\", không có endpoint riêng)\n" +
+        "#  - failover tự động 60-120 giây, endpoint DNS giữ nguyên -> ứng dụng không đổi\n" +
+        "#  - nhân đôi chi phí\n" +
+        "aws rds modify-db-instance --db-instance-identifier prod \\\n" +
+        "  --multi-az --apply-immediately\n" +
+        "\n" +
+        "# READ REPLICA — bản sao BẤT ĐỒNG BỘ, CÓ endpoint riêng. Mục tiêu: MỞ RỘNG ĐỌC.\n" +
+        "#  - phục vụ đọc, nhưng có ĐỘ TRỄ nhân bản -> có thể đọc ra dữ liệu cũ\n" +
+        "#  - KHÔNG tự failover; phải promote THỦ CÔNG (và mất kết nối replication)\n" +
+        "#  - tạo được ở region khác -> dùng cho DR và phục vụ người dùng ở xa\n" +
+        "aws rds create-db-instance-read-replica \\\n" +
+        "  --db-instance-identifier prod-replica-1 --source-db-instance-identifier prod\n" +
+        "aws cloudwatch get-metric-statistics --namespace AWS/RDS \\\n" +
+        "  --metric-name ReplicaLag --dimensions Name=DBInstanceIdentifier,Value=prod-replica-1 \\\n" +
+        "  --start-time 2026-09-04T00:00:00Z --end-time 2026-09-04T01:00:00Z \\\n" +
+        "  --period 300 --statistics Maximum\n" +
+        "\n" +
+        "# Multi-AZ DB CLUSTER (khác Multi-AZ instance): 2 standby CÓ THỂ ĐỌC,\n" +
+        "# failover dưới 35 giây. Đắt hơn nhưng tốt hơn ở cả hai mặt.\n" +
+        "\n" +
+        "# THỰC TẾ: production cần CẢ HAI. Multi-AZ cho tính sẵn sàng,\n" +
+        "# read replica cho tải đọc. Và ứng dụng phải tách được luồng đọc/ghi\n" +
+        "# (Spring: @Transactional(readOnly = true) + routing datasource).",
+    },
+  ],
 },
 {
   cat: 'RDS',
@@ -229,6 +556,40 @@ SS.addQuestions('aws', [
       ['Khi xoá instance', 'bị xoá (trừ final snapshot)', 'còn lại'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba cơ chế và điểm khác biệt về vòng đời",
+      code:
+        "# AUTOMATED BACKUP — sao lưu hàng ngày + lưu transaction log liên tục.\n" +
+        "# Đây là thứ cho phép PITR. Giữ 0-35 ngày (0 = TẮT, đừng bao giờ để 0 ở prod).\n" +
+        "aws rds modify-db-instance --db-instance-identifier prod \\\n" +
+        "  --backup-retention-period 7 --preferred-backup-window \"17:00-18:00\" \\\n" +
+        "  --apply-immediately\n" +
+        "# QUAN TRỌNG: XOÁ DB INSTANCE là XOÁ luôn automated backup.\n" +
+        "\n" +
+        "# MANUAL SNAPSHOT — bạn tự tạo, SỐNG MÃI cho tới khi bạn xoá.\n" +
+        "# Luôn tạo snapshot thủ công trước khi làm việc nguy hiểm và trước khi xoá DB.\n" +
+        "aws rds create-db-snapshot --db-instance-identifier prod \\\n" +
+        "  --db-snapshot-identifier prod-truoc-migrate-2026-09-04\n" +
+        "aws rds copy-db-snapshot --source-db-snapshot-identifier $SNAP \\\n" +
+        "  --target-db-snapshot-identifier dr-copy --source-region ap-southeast-1 \\\n" +
+        "  --region ap-northeast-1        # sao chép sang region khác cho DR\n" +
+        "\n" +
+        "# PITR — khôi phục về BẤT KỲ GIÂY NÀO trong khoảng retention (thường trễ 5 phút).\n" +
+        "# Cứu tinh khi lỡ chạy DELETE thiếu WHERE.\n" +
+        "aws rds restore-db-instance-to-point-in-time \\\n" +
+        "  --source-db-instance-identifier prod \\\n" +
+        "  --target-db-instance-identifier prod-restored \\\n" +
+        "  --restore-time 2026-09-04T10:15:00Z\n" +
+        "\n" +
+        "# LƯU Ý QUYẾT ĐỊNH: khôi phục LUÔN tạo instance MỚI (endpoint mới),\n" +
+        "# không ghi đè lên instance cũ. Quy trình thật là: khôi phục ra instance mới,\n" +
+        "# kiểm tra dữ liệu, rồi đổi endpoint ứng dụng.\n" +
+        "# Và: đã sao lưu thì phải DIỄN TẬP khôi phục. Backup chưa từng thử khôi phục\n" +
+        "# không phải là backup.",
+    },
+  ],
 },
 {
   cat: 'Aurora',
@@ -251,6 +612,38 @@ SS.addQuestions('aws', [
       ['Failover', 'khôi phục dữ liệu', '~30s — replica đã sẵn trên cùng storage'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Tách compute khỏi storage",
+      code:
+        "# RDS truyền thống: một instance + một EBS volume. Replica = sao chép\n" +
+        "# transaction log rồi PHÁT LẠI trên instance khác -> tốn CPU, có độ trễ.\n" +
+        "\n" +
+        "# AURORA: tầng lưu trữ PHÂN TÁN dùng chung, tự nhân 6 BẢN qua 3 AZ.\n" +
+        "#  - instance KHÔNG ghi data page, chỉ ghi REDO LOG xuống tầng lưu trữ\n" +
+        "#    -> giảm mạnh lưu lượng I/O -> nhanh hơn MySQL/PostgreSQL thường 3-5 lần\n" +
+        "#  - MỌI replica đọc CÙNG một tầng lưu trữ -> không phải phát lại log\n" +
+        "#    -> độ trễ nhân bản thường dưới 100ms, và tối đa 15 replica\n" +
+        "#  - storage TỰ ĐỘNG lớn dần tới 128TB, không cần cấp phát trước\n" +
+        "#  - chịu được mất 2 bản sao vẫn GHI được, mất 3 bản vẫn ĐỌC được\n" +
+        "aws rds create-db-cluster --db-cluster-identifier prod \\\n" +
+        "  --engine aurora-postgresql --engine-version 15.4 \\\n" +
+        "  --master-username admin --manage-master-user-password\n" +
+        "\n" +
+        "# HAI ENDPOINT phải dùng đúng:\n" +
+        "#   prod.cluster-xxx.rds.amazonaws.com        -> WRITER (tự trỏ sang node mới khi failover)\n" +
+        "#   prod.cluster-ro-xxx.rds.amazonaws.com     -> READER (tự cân bằng tải giữa các replica)\n" +
+        "aws rds create-db-instance --db-cluster-identifier prod \\\n" +
+        "  --db-instance-identifier prod-reader-1 --db-instance-class db.r6g.large \\\n" +
+        "  --engine aurora-postgresql --promotion-tier 1     # thứ tự ưu tiên khi failover\n" +
+        "\n" +
+        "# Failover thường dưới 30 giây (RDS Multi-AZ là 60-120s).\n" +
+        "# Tính năng riêng: Backtrack (tua ngược cụm về quá khứ mà không cần restore),\n" +
+        "# Global Database (nhân bản chéo region, độ trễ dưới 1 giây), cloning gần như tức thì.\n" +
+        "# ĐÁNH ĐỔI: đắt hơn RDS, và bị khoá vào AWS.",
+    },
+  ],
 },
 {
   cat: 'Aurora',
@@ -272,6 +665,36 @@ SS.addQuestions('aws', [
       ['Ví dụ', 'dev/test, multi-tenant, ứng dụng mới, SaaS B2B giờ hành chính', 'hệ thống tải phẳng'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Co giãn theo ACU, và khác biệt với v1",
+      code:
+        "# Serverless v2 co giãn liên tục theo ACU (Aurora Capacity Unit ~ 2GB RAM\n" +
+        "# và CPU/mạng tương ứng), tăng giảm trong VÀI GIÂY mà KHÔNG ngắt kết nối.\n" +
+        "aws rds create-db-cluster --db-cluster-identifier app \\\n" +
+        "  --engine aurora-postgresql --engine-version 15.4 \\\n" +
+        "  --serverless-v2-scaling-configuration MinCapacity=0.5,MaxCapacity=16\n" +
+        "aws rds create-db-instance --db-cluster-identifier app \\\n" +
+        "  --db-instance-identifier app-1 --db-instance-class db.serverless \\\n" +
+        "  --engine aurora-postgresql\n" +
+        "\n" +
+        "# KHÁC v1 (v1 gần như không nên dùng nữa):\n" +
+        "#  v1 — scale bằng cách CHUYỂN sang instance khác -> NGẮT kết nối, cần\n" +
+        "#       \"điểm scale an toàn\"; về 0 được (dừng hẳn khi không dùng)\n" +
+        "#  v2 — scale TẠI CHỖ, không ngắt; tối thiểu 0,5 ACU nên KHÔNG về 0\n" +
+        "#       (nghĩa là vẫn tốn tiền tối thiểu ~$43/tháng nếu chạy liên tục)\n" +
+        "#       Aurora Serverless v2 \"scale to zero\" đã có từ 2024 cho một số cấu hình.\n" +
+        "\n" +
+        "# DÙNG KHI:\n" +
+        "#  - tải KHÔNG ĐỀU và khó đoán (dev/test, ứng dụng nội bộ theo giờ hành chính)\n" +
+        "#  - nhiều database nhỏ dùng chung một cụm\n" +
+        "#  - đỉnh tải hiếm nhưng cao -> không phải trả tiền cho đỉnh 24/7\n" +
+        "\n" +
+        "# KHÔNG NÊN KHI: tải ỔN ĐỊNH và dự đoán được -> instance thường + Reserved\n" +
+        "# rẻ hơn đáng kể. Serverless v2 tính theo ACU-giờ, đắt hơn ~30% ở cùng năng lực.",
+    },
+  ],
 },
 {
   cat: 'DynamoDB',
@@ -297,6 +720,38 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Khoá quyết định mọi thứ về hiệu năng",
+      code:
+        "# PARTITION KEY (hash key) — quyết định item nằm ở partition vật lý nào.\n" +
+        "# SORT KEY (range key) — sắp xếp trong cùng partition, cho phép truy vấn theo dải.\n" +
+        "aws dynamodb create-table --table-name Orders \\\n" +
+        "  --attribute-definitions AttributeName=customerId,AttributeType=S \\\n" +
+        "                          AttributeName=orderDate,AttributeType=S \\\n" +
+        "  --key-schema AttributeName=customerId,KeyType=HASH \\\n" +
+        "               AttributeName=orderDate,KeyType=RANGE \\\n" +
+        "  --billing-mode PAY_PER_REQUEST\n" +
+        "\n" +
+        "# Query chỉ hoạt động khi biết PARTITION KEY. Đây là ràng buộc lớn nhất\n" +
+        "# và phải thiết kế bảng theo MẪU TRUY VẤN, không theo chuẩn hoá như SQL.\n" +
+        "aws dynamodb query --table-name Orders \\\n" +
+        "  --key-condition-expression \"customerId = :c AND orderDate BETWEEN :a AND :b\" \\\n" +
+        "  --expression-attribute-values \u0027{\":c\":{\"S\":\"C-1\"},\":a\":{\"S\":\"2026-01\"},\":b\":{\"S\":\"2026-09\"}}\u0027\n" +
+        "\n" +
+        "# GIỚI HẠN QUAN TRỌNG:\n" +
+        "#  - item tối đa 400KB (kể cả tên thuộc tính) -> dữ liệu lớn để ở S3, lưu con trỏ\n" +
+        "#  - partition key tối đa 2048 byte, sort key 1024 byte\n" +
+        "#  - mỗi partition chịu 3.000 RCU / 1.000 WCU\n" +
+        "#  - Query trả tối đa 1MB mỗi lần -> phải phân trang bằng LastEvaluatedKey\n" +
+        "\n" +
+        "# HOT PARTITION là vấn đề số một: chọn partition key có lực lượng THẤP\n" +
+        "# (ví dụ status = \"ACTIVE\") -> mọi truy cập dồn vào một partition -> throttle\n" +
+        "# dù bảng còn thừa capacity. Chọn key phân tán đều (userId, orderId).\n" +
+        "# Adaptive capacity giúp giảm nhẹ nhưng không cứu được thiết kế key sai.",
+    },
+  ],
 },
 {
   cat: 'DynamoDB',
@@ -319,6 +774,44 @@ SS.addQuestions('aws', [
       ['Dùng cho', 'tải phẳng, đoán được', 'tải mới / thất thường / chưa rõ'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Cách tính đơn vị và cách chọn chế độ",
+      code:
+        "# ĐƠN VỊ:\n" +
+        "#  1 RCU = 1 lần đọc NHẤT QUÁN MẠNH item 4KB/giây\n" +
+        "#        = 2 lần đọc eventually consistent (rẻ một nửa)\n" +
+        "#  1 WCU = 1 lần ghi item 1KB/giây\n" +
+        "# Item 10KB: đọc mạnh tốn 3 RCU (làm tròn lên 12KB), ghi tốn 10 WCU.\n" +
+        "# Transaction tốn GẤP ĐÔI.\n" +
+        "\n" +
+        "# PROVISIONED — cấp trước, rẻ hơn tới ~7 lần nếu dự đoán đúng\n" +
+        "aws dynamodb update-table --table-name Orders \\\n" +
+        "  --billing-mode PROVISIONED \\\n" +
+        "  --provisioned-throughput ReadCapacityUnits=100,WriteCapacityUnits=50\n" +
+        "# Kèm auto scaling để không bị throttle lúc cao điểm:\n" +
+        "aws application-autoscaling register-scalable-target \\\n" +
+        "  --service-namespace dynamodb --resource-id \"table/Orders\" \\\n" +
+        "  --scalable-dimension \"dynamodb:table:ReadCapacityUnits\" \\\n" +
+        "  --min-capacity 50 --max-capacity 1000\n" +
+        "\n" +
+        "# ON-DEMAND — trả theo request thật, tự scale tức thì, KHÔNG BAO GIỜ throttle\n" +
+        "# vì thiếu capacity. Đắt hơn ~7 lần ở cùng lưu lượng ổn định.\n" +
+        "aws dynamodb update-table --table-name Orders --billing-mode PAY_PER_REQUEST\n" +
+        "\n" +
+        "# CHỌN:\n" +
+        "#  - mới, chưa biết tải, hoặc tải rất bất thường -> ON-DEMAND\n" +
+        "#  - tải ổn định, đã đo được -> PROVISIONED + auto scaling (rẻ hơn nhiều)\n" +
+        "#  - đổi qua lại được, nhưng chỉ MỖI 24 GIỜ MỘT LẦN\n" +
+        "\n" +
+        "# Theo dõi throttle — đây là metric quan trọng nhất của DynamoDB:\n" +
+        "aws cloudwatch get-metric-statistics --namespace AWS/DynamoDB \\\n" +
+        "  --metric-name ThrottledRequests --dimensions Name=TableName,Value=Orders \\\n" +
+        "  --start-time 2026-09-04T00:00:00Z --end-time 2026-09-04T12:00:00Z \\\n" +
+        "  --period 300 --statistics Sum",
+    },
+  ],
 },
 {
   cat: 'DynamoDB',
@@ -340,6 +833,39 @@ SS.addQuestions('aws', [
       ['Consistency', 'strong được', 'chỉ eventually consistent'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Hai loại index, khác nhau ở gần như mọi điểm",
+      code:
+        "# GSI (Global Secondary Index) — partition key KHÁC bảng gốc.\n" +
+        "#  + tạo/xoá BẤT CỨ LÚC NÀO, tối đa 20 GSI mỗi bảng\n" +
+        "#  + có capacity RIÊNG (throttle GSI không ảnh hưởng bảng chính, và ngược lại)\n" +
+        "#  - chỉ EVENTUALLY CONSISTENT — không đọc mạnh được, không có ngoại lệ\n" +
+        "aws dynamodb update-table --table-name Orders \\\n" +
+        "  --attribute-definitions AttributeName=status,AttributeType=S \\\n" +
+        "  --global-secondary-index-updates \u0027[{\"Create\":{\n" +
+        "      \"IndexName\":\"StatusIndex\",\n" +
+        "      \"KeySchema\":[{\"AttributeName\":\"status\",\"KeyType\":\"HASH\"}],\n" +
+        "      \"Projection\":{\"ProjectionType\":\"INCLUDE\",\"NonKeyAttributes\":[\"total\",\"customerId\"]}}}]\u0027\n" +
+        "\n" +
+        "# LSI (Local Secondary Index) — CÙNG partition key, khác sort key.\n" +
+        "#  + hỗ trợ đọc NHẤT QUÁN MẠNH\n" +
+        "#  - CHỈ TẠO ĐƯỢC LÚC TẠO BẢNG, không thêm/xoá sau -> ràng buộc rất nặng\n" +
+        "#  - tối đa 5 LSI, và giới hạn 10GB cho mỗi partition key (kể cả bảng + LSI)\n" +
+        "#  - dùng chung capacity với bảng chính\n" +
+        "\n" +
+        "# PROJECTION quyết định chi phí:\n" +
+        "#  KEYS_ONLY — nhỏ nhất, nhưng phải đọc lại bảng chính để lấy thuộc tính khác\n" +
+        "#  INCLUDE   — chọn đúng thuộc tính cần -> thường là lựa chọn tốt nhất\n" +
+        "#  ALL       — tiện nhất, nhưng nhân đôi dung lượng và chi phí ghi\n" +
+        "\n" +
+        "# THỰC TẾ: gần như luôn dùng GSI. LSI hiếm khi đáng với ràng buộc\n" +
+        "# \"chỉ tạo lúc tạo bảng\" và giới hạn 10GB.\n" +
+        "# LƯU Ý CHI PHÍ GHI: mỗi lần ghi vào bảng làm cập nhật MỌI GSI liên quan\n" +
+        "# -> 5 GSI nghĩa là chi phí ghi gấp khoảng 6 lần.",
+    },
+  ],
 },
 {
   cat: 'DynamoDB',
@@ -362,6 +888,39 @@ SS.addQuestions('aws', [
       { to: 3, label: 'phải biết TRƯỚC mọi access pattern; migration phức tạp — nhiều team dùng "few-table" thực dụng hơn' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Gộp nhiều loại thực thể vào một bảng",
+      code:
+        "# Ý tưởng: DynamoDB không có JOIN. Muốn lấy dữ liệu liên quan trong MỘT\n" +
+        "# truy vấn thì phải để chúng CÙNG partition -> gộp nhiều loại thực thể\n" +
+        "# vào một bảng với khoá được thiết kế theo mẫu truy vấn.\n" +
+        "\n" +
+        "# PK = \"CUSTOMER#C1\"    SK = \"PROFILE\"           -> hồ sơ khách hàng\n" +
+        "# PK = \"CUSTOMER#C1\"    SK = \"ORDER#2026-09-01\"  -> đơn hàng của khách đó\n" +
+        "# PK = \"CUSTOMER#C1\"    SK = \"ADDRESS#HOME\"      -> địa chỉ\n" +
+        "# Một Query lấy được TẤT CẢ:\n" +
+        "aws dynamodb query --table-name AppTable \\\n" +
+        "  --key-condition-expression \"PK = :pk\" \\\n" +
+        "  --expression-attribute-values \u0027{\":pk\":{\"S\":\"CUSTOMER#C1\"}}\u0027\n" +
+        "\n" +
+        "# Lấy riêng đơn hàng: thêm điều kiện begins_with trên sort key\n" +
+        "  --key-condition-expression \"PK = :pk AND begins_with(SK, :sk)\" \\\n" +
+        "  --expression-attribute-values \u0027{\":pk\":{\"S\":\"CUSTOMER#C1\"},\":sk\":{\"S\":\"ORDER#\"}}\u0027\n" +
+        "\n" +
+        "# GSI OVERLOADING: một GSI phục vụ nhiều mẫu truy vấn khác nhau bằng cách\n" +
+        "# dùng thuộc tính chung GSI1PK/GSI1SK với ý nghĩa khác nhau theo loại item.\n" +
+        "\n" +
+        "# ƯU: ít truy vấn hơn, độ trễ thấp hơn, rẻ hơn, một bảng dễ vận hành.\n" +
+        "# NHƯỢC (thật sự nặng): phải BIẾT TRƯỚC mọi mẫu truy vấn; thêm mẫu mới sau này\n" +
+        "# rất tốn công; dữ liệu khó đọc bằng mắt; đường học dốc.\n" +
+        "\n" +
+        "# THỰC DỤNG: single-table đúng khi mẫu truy vấn ổn định và cần độ trễ thấp\n" +
+        "# ở quy mô lớn. Ứng dụng còn đang thay đổi nhanh -> nhiều bảng đơn giản\n" +
+        "# vẫn tốt hơn, và AWS cũng không còn khuyến nghị single-table cho mọi trường hợp.",
+    },
+  ],
 },
 {
   cat: 'DynamoDB',
@@ -386,6 +945,40 @@ SS.addQuestions('aws', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Nhật ký thay đổi và tự động xoá",
+      code:
+        "# STREAMS — nhật ký thay đổi có thứ tự, giữ 24 giờ. Đây là cách làm CDC,\n" +
+        "# event sourcing, và giữ đồng bộ với hệ thống khác.\n" +
+        "aws dynamodb update-table --table-name Orders \\\n" +
+        "  --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES\n" +
+        "# StreamViewType:\n" +
+        "#   KEYS_ONLY | NEW_IMAGE | OLD_IMAGE | NEW_AND_OLD_IMAGES\n" +
+        "#   NEW_AND_OLD_IMAGES cho phép so sánh trước/sau -> cần cho audit trail\n" +
+        "\n" +
+        "aws lambda create-event-source-mapping \\\n" +
+        "  --function-name process-changes \\\n" +
+        "  --event-source-arn $STREAM_ARN \\\n" +
+        "  --starting-position LATEST --batch-size 100 \\\n" +
+        "  --maximum-retry-attempts 3 \\\n" +
+        "  --destination-config \u0027{\"OnFailure\":{\"Destination\":\"\u0027$DLQ_ARN\u0027\"}}\u0027\n" +
+        "# Thứ tự được đảm bảo TRONG một partition key. Lambda xử lý theo shard.\n" +
+        "\n" +
+        "# TTL — tự xoá item hết hạn, MIỄN PHÍ (không tốn WCU)\n" +
+        "aws dynamodb update-time-to-live --table-name Sessions \\\n" +
+        "  --time-to-live-specification \"Enabled=true,AttributeName=expiresAt\"\n" +
+        "# Thuộc tính phải là số NGUYÊN, đơn vị GIÂY epoch (không phải mili giây —\n" +
+        "# đây là lỗi hay gặp nhất, item sẽ không bao giờ bị xoá hoặc bị xoá ngay).\n" +
+        "\n" +
+        "# LƯU Ý: TTL xoá TRONG VÒNG 48 GIỜ sau khi hết hạn, KHÔNG phải ngay lập tức.\n" +
+        "# -> truy vấn vẫn có thể trả về item đã hết hạn -> phải LỌC ở tầng ứng dụng:\n" +
+        "#    FilterExpression: \"expiresAt > :now\"\n" +
+        "# Item bị TTL xoá cũng xuất hiện trong Stream (userIdentity = dynamodb.amazonaws.com)\n" +
+        "# -> dùng để lưu trữ dữ liệu cũ sang S3 trước khi mất.",
+    },
+  ],
 },
 {
   cat: 'DynamoDB',
@@ -408,6 +1001,41 @@ SS.addQuestions('aws', [
       ['Dùng khi', 'nhanh, rẻ', 'vừa-ghi-vừa-đọc cùng item', 'nguyên tử đa item (chuyển tiền, tính duy nhất)'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ba chế độ đọc và transaction",
+      code:
+        "# EVENTUALLY CONSISTENT (mặc định) — có thể đọc ra dữ liệu CŨ (thường\n" +
+        "# chỉ trong vòng dưới một giây). RẺ MỘT NỬA.\n" +
+        "aws dynamodb get-item --table-name Orders \\\n" +
+        "  --key \u0027{\"customerId\":{\"S\":\"C-1\"},\"orderDate\":{\"S\":\"2026-09-01\"}}\u0027\n" +
+        "\n" +
+        "# STRONGLY CONSISTENT — luôn thấy bản ghi mới nhất. Tốn gấp đôi RCU,\n" +
+        "# độ trễ cao hơn một chút, và KHÔNG dùng được trên GSI.\n" +
+        "aws dynamodb get-item --table-name Orders --consistent-read \\\n" +
+        "  --key \u0027{\"customerId\":{\"S\":\"C-1\"},\"orderDate\":{\"S\":\"2026-09-01\"}}\u0027\n" +
+        "\n" +
+        "# TRANSACTION — tối đa 100 item, nguyên tử, tốn GẤP ĐÔI capacity\n" +
+        "aws dynamodb transact-write-items --transact-items \u0027[\n" +
+        "  {\"Update\":{\"TableName\":\"Accounts\",\"Key\":{\"id\":{\"S\":\"A\"}},\n" +
+        "    \"UpdateExpression\":\"SET balance = balance - :amt\",\n" +
+        "    \"ConditionExpression\":\"balance >= :amt\",\n" +
+        "    \"ExpressionAttributeValues\":{\":amt\":{\"N\":\"100\"}}}},\n" +
+        "  {\"Update\":{\"TableName\":\"Accounts\",\"Key\":{\"id\":{\"S\":\"B\"}},\n" +
+        "    \"UpdateExpression\":\"SET balance = balance + :amt\",\n" +
+        "    \"ExpressionAttributeValues\":{\":amt\":{\"N\":\"100\"}}}}]\u0027\n" +
+        "\n" +
+        "# CONDITIONAL WRITE — khoá lạc quan, rẻ hơn transaction rất nhiều.\n" +
+        "# Dùng cái này trước khi nghĩ tới transaction:\n" +
+        "aws dynamodb put-item --table-name Orders --item file://item.json \\\n" +
+        "  --condition-expression \"attribute_not_exists(customerId)\"    # chỉ tạo mới\n" +
+        "\n" +
+        "# CHỌN: đọc mạnh chỉ khi nghiệp vụ THỰC SỰ cần (số dư, tồn kho).\n" +
+        "# Phần lớn trường hợp (danh sách, hồ sơ, lịch sử) eventually consistent là đủ\n" +
+        "# và tiết kiệm một nửa chi phí đọc.",
+    },
+  ],
 },
 {
   cat: 'Cache',
@@ -429,6 +1057,42 @@ SS.addQuestions('aws', [
       ['Dùng cho', 'cache thuần, đơn giản, nhiều core', 'leaderboard, rate limit, session, pub/sub — gần như luôn chọn Redis'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Gần như luôn là Redis",
+      code:
+        "# MEMCACHED — chỉ key-value dạng chuỗi, đa luồng, KHÔNG bền, KHÔNG replication.\n" +
+        "#  Ưu điểm duy nhất còn lại: đa luồng nên tận dụng nhiều core tốt hơn cho\n" +
+        "#  workload cache thuần rất đơn giản, và scale ngang bằng sharding client-side.\n" +
+        "aws elasticache create-cache-cluster --cache-cluster-id mc \\\n" +
+        "  --engine memcached --cache-node-type cache.t4g.medium --num-cache-nodes 3\n" +
+        "\n" +
+        "# REDIS — cấu trúc dữ liệu phong phú (list, set, sorted set, hash, stream),\n" +
+        "# persistence, replication, Multi-AZ với tự failover, pub/sub, Lua, transaction.\n" +
+        "aws elasticache create-replication-group \\\n" +
+        "  --replication-group-id prod --replication-group-description \"prod cache\" \\\n" +
+        "  --engine redis --cache-node-type cache.r7g.large \\\n" +
+        "  --num-node-groups 3 --replicas-per-node-group 2 \\\n" +
+        "  --automatic-failover-enabled --multi-az-enabled \\\n" +
+        "  --transit-encryption-enabled --at-rest-encryption-enabled\n" +
+        "\n" +
+        "# CHỌN REDIS khi cần bất cứ thứ gì sau đây (tức là gần như luôn):\n" +
+        "#  - leaderboard/xếp hạng (sorted set), hàng đợi, rate limiting\n" +
+        "#  - session store cần sống sót qua restart\n" +
+        "#  - pub/sub, khoá phân tán\n" +
+        "#  - tính sẵn sàng cao và failover tự động\n" +
+        "\n" +
+        "# CHẾ ĐỘ REDIS:\n" +
+        "#  cluster mode DISABLED — một shard, tối đa 5 replica. Đơn giản, đủ cho\n" +
+        "#    hầu hết trường hợp, và hỗ trợ mọi lệnh multi-key.\n" +
+        "#  cluster mode ENABLED  — nhiều shard, dữ liệu chia theo hash slot.\n" +
+        "#    Cần cho tập dữ liệu lớn, nhưng lệnh multi-key chỉ chạy trong cùng slot.\n" +
+        "\n" +
+        "# ElastiCache Serverless (2023) tự co giãn, tính theo dung lượng dùng thật —\n" +
+        "# đáng cân nhắc khi tải không đều.",
+    },
+  ],
 },
 {
   cat: 'Storage',
@@ -451,5 +1115,40 @@ SS.addQuestions('aws', [
       ['Dùng cho', 'OS, DB tự quản', 'shared content, home dir, CI workspace', 'backup, media, data lake, log', 'khối lượng công việc đặc thù'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bốn kiểu lưu trữ cho bốn nhu cầu khác nhau",
+      code:
+        "# EBS — khối, gắn vào MỘT instance (trừ io2 Multi-Attach), trong MỘT AZ.\n" +
+        "#   Dùng cho: ổ hệ điều hành, database tự quản, bất cứ thứ gì cần filesystem\n" +
+        "#   với độ trễ thấp và IOPS ổn định.\n" +
+        "aws ec2 create-volume --volume-type gp3 --size 100 --availability-zone ap-southeast-1a\n" +
+        "\n" +
+        "# EFS — NFS, NHIỀU instance gắn CÙNG LÚC, tự động trải nhiều AZ, tự lớn dần.\n" +
+        "#   Dùng cho: thư mục dùng chung giữa nhiều server, CMS, home directory,\n" +
+        "#   container cần chia sẻ dữ liệu.\n" +
+        "#   Đắt hơn EBS đáng kể và độ trễ cao hơn -> ĐỪNG đặt database lên EFS.\n" +
+        "aws efs create-file-system --performance-mode generalPurpose \\\n" +
+        "  --throughput-mode elastic --encrypted\n" +
+        "# Lifecycle chuyển file ít dùng sang tầng IA -> giảm chi phí rất nhiều:\n" +
+        "aws efs put-lifecycle-configuration --file-system-id fs-123 \\\n" +
+        "  --lifecycle-policies \u0027[{\"TransitionToIA\":\"AFTER_30_DAYS\"}]\u0027\n" +
+        "\n" +
+        "# S3 — object, truy cập qua API (không phải filesystem), rẻ nhất, không giới hạn.\n" +
+        "#   Dùng cho: file người dùng tải lên, backup, data lake, tài sản tĩnh, log.\n" +
+        "#   KHÔNG dùng cho: thứ cần ghi ngẫu nhiên tại chỗ, hoặc cần POSIX semantics.\n" +
+        "\n" +
+        "# FSx — filesystem chuyên dụng có quản lý:\n" +
+        "#   FSx for Windows  — SMB, Active Directory (ứng dụng Windows cũ)\n" +
+        "#   FSx for Lustre   — HPC, machine learning, liên kết trực tiếp với S3\n" +
+        "#   FSx for NetApp ONTAP / OpenZFS — tính năng doanh nghiệp (snapshot, dedup)\n" +
+        "\n" +
+        "# CÂU HỎI CHỌN NHANH:\n" +
+        "#  Cần nhiều máy ghi cùng lúc?           -> EFS (Linux) / FSx (Windows)\n" +
+        "#  Chỉ một máy, cần nhanh và rẻ?          -> EBS\n" +
+        "#  Không cần filesystem, truy cập qua API? -> S3 (rẻ nhất, luôn ưu tiên nếu được)",
+    },
+  ],
 },
 ]);
