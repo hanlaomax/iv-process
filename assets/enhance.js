@@ -8,6 +8,35 @@
     toggle: function (id) { var v = this.read(); if (v[id]) delete v[id]; else v[id] = 1; this.write(v); return !!v[id]; },
   };
 
+  /* ---- Sao chép khối code minh hoạ (uỷ quyền: khớp cả code do trình luyện tập chèn động) ---- */
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('.demo-copy') : null;
+    if (!btn) return;
+    var box = btn.closest('.demo');
+    var code = box && box.querySelector('.demo-pre code');
+    if (!code) return;
+    var text = code.textContent;
+    var done = function (ok) {
+      btn.textContent = ok ? '✓ Đã chép' : 'Lỗi';
+      btn.classList.toggle('is-done', ok);
+      setTimeout(function () { btn.textContent = 'Sao chép'; btn.classList.remove('is-done'); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+      done(ok);
+    }
+  });
+
   /* ---- Theme toggle ---- */
   (function themeToggle() {
     var nav = document.querySelector('.site-header-inner');

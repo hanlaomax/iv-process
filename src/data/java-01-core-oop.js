@@ -20,6 +20,40 @@ SS.addQuestions('java', [
       { name: 'JVM', tag: 'thực thi bytecode', note: 'nạp/verify class, JIT, quản lý bộ nhớ + GC. Là spec: HotSpot, OpenJ9' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ranh giới JDK / JRE / JVM nhìn thấy được trên máy",
+      code:
+        "# javac chỉ có trong JDK — JRE không biên dịch được\n" +
+        "javac -version      # javac 17.0.10   -> đang dùng JDK\n" +
+        "java -version       # openjdk 17.0.10 -> phần runtime (JRE) nằm trong JDK\n" +
+        "\n" +
+        "# Biên dịch: .java -> .class (bytecode, độc lập OS/CPU)\n" +
+        "javac App.java\n" +
+        "javap -c App.class  # xem bytecode: đây mới là thứ JVM thực sự thực thi\n" +
+        "\n" +
+        "# jlink cắt runtime tối giản: chỉ lấy đúng module ứng dụng cần\n" +
+        "jlink --add-modules java.base,java.logging \\\n" +
+        "      --strip-debug --no-man-pages --compress=2 \\\n" +
+        "      --output /opt/jre-min\n" +
+        "/opt/jre-min/bin/java -version   # ~40MB thay vì ~180MB cả JDK",
+    },
+    {
+      lang: "dockerfile",
+      title: "Dockerfile multi-stage: build bằng JDK, chạy bằng runtime",
+      code:
+        "# Stage 1 cần JDK vì phải chạy javac/maven\n" +
+        "FROM eclipse-temurin:17-jdk AS build\n" +
+        "COPY . /src\n" +
+        "RUN cd /src && ./mvnw -q package\n" +
+        "\n" +
+        "# Stage 2 chỉ cần runtime -> image nhỏ hơn, ít CVE hơn\n" +
+        "FROM eclipse-temurin:17-jre\n" +
+        "COPY --from=build /src/target/app.jar /app.jar\n" +
+        "ENTRYPOINT [\"java\", \"-jar\", \"/app.jar\"]",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -46,6 +80,56 @@ SS.addQuestions('java', [
       ['Cặp bắt buộc', '—', 'đi cùng hashCode()'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "equals/hashCode đúng hợp đồng — và hậu quả khi làm sai",
+      code:
+        "public final class Money {\n" +
+        "    private final String currency;\n" +
+        "    private final long amount;\n" +
+        "\n" +
+        "    public Money(String currency, long amount) {\n" +
+        "        this.currency = currency;\n" +
+        "        this.amount = amount;\n" +
+        "    }\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public boolean equals(Object o) {\n" +
+        "        if (this == o) return true;                 // tối ưu: cùng tham chiếu\n" +
+        "        if (!(o instanceof Money)) return false;    // instanceof đã loại null sẵn\n" +
+        "        Money m = (Money) o;\n" +
+        "        return amount == m.amount && currency.equals(m.currency);\n" +
+        "    }\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public int hashCode() {\n" +
+        "        // BẮT BUỘC dùng đúng bộ field đã dùng trong equals()\n" +
+        "        return Objects.hash(currency, amount);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// Vì sao phải override cả hai:\n" +
+        "Set<Money> set = new HashSet<>();\n" +
+        "set.add(new Money(\"VND\", 1000));\n" +
+        "// Nếu chỉ override equals mà quên hashCode -> hai object \"bằng nhau\"\n" +
+        "// rơi vào 2 bucket khác nhau -> contains() trả false dù equals() true\n" +
+        "System.out.println(set.contains(new Money(\"VND\", 1000))); // true khi có đủ cả hai",
+    },
+    {
+      lang: "java",
+      title: "Cạm bẫy: dùng object mutable làm key",
+      code:
+        "Set<List<String>> set = new HashSet<>();\n" +
+        "List<String> key = new ArrayList<>(List.of(\"a\"));\n" +
+        "set.add(key);\n" +
+        "\n" +
+        "key.add(\"b\");                            // đổi state -> hashCode đổi theo\n" +
+        "System.out.println(set.contains(key));   // false! object \"mất tích\" trong Set\n" +
+        "// Quy tắc: key của Map/Set phải immutable, hoặc ít nhất không đổi\n" +
+        "// các field đang tham gia equals()/hashCode().",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -69,6 +153,51 @@ SS.addQuestions('java', [
       ['Dùng khi', 'giá trị cố định, key map', '1 thread ghép chuỗi', 'nhiều thread ghi 1 buffer (hiếm)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "String pool, intern và ba cách nối chuỗi",
+      code:
+        "String a = \"hello\";                  // literal -> vào String pool\n" +
+        "String b = \"hello\";                  // dùng lại đúng object trong pool\n" +
+        "System.out.println(a == b);          // true\n" +
+        "\n" +
+        "String c = new String(\"hello\");      // ép tạo object mới trên heap\n" +
+        "System.out.println(a == c);          // false — khác tham chiếu\n" +
+        "System.out.println(a == c.intern()); // true  — intern() đưa về object trong pool\n" +
+        "System.out.println(a.equals(c));     // true  — nội dung luôn so bằng equals\n" +
+        "\n" +
+        "// Nối chuỗi trong vòng lặp: mỗi lần + tạo object mới -> O(n^2) rác\n" +
+        "String s = \"\";\n" +
+        "for (int i = 0; i < 10_000; i++) s += i;            // RẤT chậm, đừng làm\n" +
+        "\n" +
+        "// StringBuilder: không đồng bộ, nhanh — mặc định nên dùng\n" +
+        "StringBuilder sb = new StringBuilder(10_000);       // cấp sẵn capacity, tránh resize\n" +
+        "for (int i = 0; i < 10_000; i++) sb.append(i);\n" +
+        "String fast = sb.toString();\n" +
+        "\n" +
+        "// StringBuffer: mọi method synchronized -> chỉ dùng khi thật sự chia sẻ giữa thread\n" +
+        "StringBuffer safe = new StringBuffer();",
+    },
+    {
+      lang: "java",
+      title: "Immutable là điều kiện cần để cache hashCode",
+      code:
+        "// String cache được hashCode CHÍNH VÌ nội dung không bao giờ đổi\n" +
+        "public final class String {\n" +
+        "    private final byte[] value;\n" +
+        "    private int hash;                  // cache: tính một lần, dùng mãi\n" +
+        "\n" +
+        "    public int hashCode() {\n" +
+        "        int h = hash;\n" +
+        "        if (h == 0 && value.length > 0) hash = h = computeHash();\n" +
+        "        return h;\n" +
+        "    }\n" +
+        "}\n" +
+        "// Hệ quả thực tế: String làm key HashMap rất rẻ, và chia sẻ giữa nhiều\n" +
+        "// thread không cần đồng bộ vì không ai sửa được nó.",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -91,6 +220,39 @@ SS.addQuestions('java', [
       ['Khuyến nghị', 'dùng nhiều', 'thay bằng try-with-resources', 'deprecated (Java 9) — tránh'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba thứ tên giống nhau, không liên quan gì nhau",
+      code:
+        "// 1) final — ràng buộc lúc biên dịch\n" +
+        "final class Config {}                  // không cho kế thừa\n" +
+        "\n" +
+        "class Service {\n" +
+        "    private final List<String> hosts = new ArrayList<>();  // không gán lại được...\n" +
+        "    void demo() {\n" +
+        "        hosts.add(\"a\");                // ...NHƯNG nội dung vẫn sửa được!\n" +
+        "        // hosts = new ArrayList<>();  // lỗi biên dịch\n" +
+        "    }\n" +
+        "    final void step() {}               // không cho override\n" +
+        "}\n" +
+        "\n" +
+        "// 2) finally — luôn chạy, kể cả khi có exception hoặc return\n" +
+        "int f() {\n" +
+        "    try {\n" +
+        "        return 1;\n" +
+        "    } finally {\n" +
+        "        System.out.println(\"luôn chạy trước khi thoát method\");\n" +
+        "        // return 2;  // ĐỪNG: return trong finally nuốt mất exception đang bay\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 3) finalize() — deprecated từ Java 9, bỏ hẳn từ Java 18.\n" +
+        "// Không xác định thời điểm chạy, có thể không bao giờ chạy.\n" +
+        "// Thay thế: try-with-resources (AutoCloseable) hoặc java.lang.ref.Cleaner\n" +
+        "static final Cleaner CLEANER = Cleaner.create();",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -113,6 +275,36 @@ SS.addQuestions('java', [
       ['Cơ chế', 'static dispatch', 'dynamic dispatch (virtual method table)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Static dispatch theo kiểu khai báo, dynamic dispatch theo kiểu thực tế",
+      code:
+        "class Animal {\n" +
+        "    void speak() { System.out.println(\"Animal\"); }\n" +
+        "    static void info() { System.out.println(\"static Animal\"); }\n" +
+        "}\n" +
+        "class Dog extends Animal {\n" +
+        "    @Override void speak() { System.out.println(\"Dog\"); }   // OVERRIDE\n" +
+        "    static void info() { System.out.println(\"static Dog\"); }\n" +
+        "}\n" +
+        "\n" +
+        "class Printer {\n" +
+        "    void print(Object o) { System.out.println(\"Object\"); }  // OVERLOAD\n" +
+        "    void print(String s) { System.out.println(\"String\"); }\n" +
+        "}\n" +
+        "\n" +
+        "Animal a = new Dog();\n" +
+        "a.speak();        // \"Dog\" — dynamic dispatch: chọn theo object THỰC TẾ lúc chạy\n" +
+        "Animal.info();    // static method KHÔNG được override, chỉ bị che (hiding)\n" +
+        "a.info();         // \"static Animal\" — chọn theo kiểu KHAI BÁO -> đừng viết kiểu này\n" +
+        "\n" +
+        "Object o = \"xin chào\";\n" +
+        "new Printer().print(o);   // \"Object\", KHÔNG phải \"String\"!\n" +
+        "// Overload được chốt lúc BIÊN DỊCH theo kiểu khai báo của biến (Object),\n" +
+        "// runtime không chọn lại dù object thật là String.",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -136,6 +328,53 @@ SS.addQuestions('java', [
       ['Ý nghĩa', 'is-a — là một loại', 'can-do — năng lực / hợp đồng'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Default method: thêm hành vi mới mà không phá code cũ",
+      code:
+        "// Trước Java 8: thêm method vào interface = mọi implementation cũ vỡ.\n" +
+        "public interface Notifier {\n" +
+        "    void send(String msg);                       // abstract: bắt buộc cài đặt\n" +
+        "\n" +
+        "    // default: có thân hàm -> implementation cũ tự có, không phải sửa gì\n" +
+        "    default void sendAll(List<String> msgs) {\n" +
+        "        msgs.forEach(this::send);\n" +
+        "    }\n" +
+        "\n" +
+        "    // static: tiện ích gắn với interface, không kế thừa được\n" +
+        "    static Notifier noop() { return msg -> {}; }\n" +
+        "}\n" +
+        "\n" +
+        "// Đụng độ khi kế thừa hai default method cùng tên -> BẮT BUỘC override\n" +
+        "interface A { default String hi() { return \"A\"; } }\n" +
+        "interface B { default String hi() { return \"B\"; } }\n" +
+        "class C implements A, B {\n" +
+        "    @Override public String hi() { return A.super.hi(); }  // chỉ rõ lấy nhánh nào\n" +
+        "}",
+    },
+    {
+      lang: "java",
+      title: "Abstract class: khi cần state dùng chung + khung cố định",
+      code:
+        "public abstract class BaseJob {\n" +
+        "    protected final Clock clock;              // interface không giữ state được\n" +
+        "    protected BaseJob(Clock clock) {          // interface không có constructor\n" +
+        "        this.clock = clock;\n" +
+        "    }\n" +
+        "\n" +
+        "    protected abstract void doRun();          // phần con tự quyết\n" +
+        "\n" +
+        "    public final void run() {                 // template method: khung không cho đổi\n" +
+        "        long t0 = clock.millis();\n" +
+        "        doRun();\n" +
+        "        log.info(\"mất {}ms\", clock.millis() - t0);\n" +
+        "    }\n" +
+        "}\n" +
+        "// Chọn nhanh: cần \"là một loại X, có state/constructor chung\" -> abstract class.\n" +
+        "// Cần \"có khả năng làm được Y\", nhiều nguồn kết hợp -> interface (đa kế thừa được).",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -166,6 +405,37 @@ SS.addQuestions('java', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chọn loại exception và bọc lại cho đúng tầng",
+      code:
+        "// Unchecked (RuntimeException): lỗi do lập trình sai / vi phạm invariant.\n" +
+        "// Không bắt buộc khai báo, và không nên bắt rồi nuốt.\n" +
+        "public class InsufficientBalanceException extends RuntimeException {\n" +
+        "    public InsufficientBalanceException(String accountId) {\n" +
+        "        super(\"Tài khoản \" + accountId + \" không đủ số dư\");\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// Checked: sự cố NGOẠI CẢNH mà caller có thể xử lý được (retry, fallback).\n" +
+        "public class PaymentGatewayException extends Exception {\n" +
+        "    public PaymentGatewayException(String msg, Throwable cause) {\n" +
+        "        super(msg, cause);       // LUÔN giữ cause, đừng làm mất stack trace gốc\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "void charge(String id) throws PaymentGatewayException {\n" +
+        "    try {\n" +
+        "        gateway.call(id);\n" +
+        "    } catch (IOException e) {\n" +
+        "        // Bọc lại theo ngôn ngữ nghiệp vụ của tầng mình, giữ nguyên nguyên nhân\n" +
+        "        throw new PaymentGatewayException(\"Gọi cổng thanh toán thất bại\", e);\n" +
+        "    }\n" +
+        "    // catch (Exception ignored) {}   <- anti-pattern tệ nhất: nuốt lỗi im lặng\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -190,6 +460,50 @@ SS.addQuestions('java', [
       { to: 4, label: 'close A — lỗi khi close bị suppressed, không che lỗi gốc' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "try-with-resources vs finally thủ công",
+      code:
+        "// CÁCH CŨ: dài, dễ sai, và exception trong close() NUỐT MẤT exception gốc\n" +
+        "InputStream in = null;\n" +
+        "try {\n" +
+        "    in = new FileInputStream(\"a.txt\");\n" +
+        "    read(in);\n" +
+        "} finally {\n" +
+        "    if (in != null) in.close();   // nếu close() ném lỗi -> mất luôn lỗi của read()\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH ĐÚNG: compiler tự sinh finally, đóng NGƯỢC thứ tự khai báo\n" +
+        "try (InputStream in = new FileInputStream(\"a.txt\");\n" +
+        "     OutputStream out = new FileOutputStream(\"b.txt\")) {   // out đóng trước, in đóng sau\n" +
+        "    in.transferTo(out);\n" +
+        "} catch (IOException e) {\n" +
+        "    // Lỗi từ close() không biến mất mà được gắn kèm làm \"suppressed\"\n" +
+        "    for (Throwable s : e.getSuppressed()) log.warn(\"lỗi khi đóng\", s);\n" +
+        "}",
+    },
+    {
+      lang: "java",
+      title: "Điều kiện: resource phải implement AutoCloseable",
+      code:
+        "class Tx implements AutoCloseable {\n" +
+        "    private boolean committed = false;\n" +
+        "\n" +
+        "    void commit() { committed = true; }\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public void close() {                 // close = dọn dẹp, không chỉ là \"đóng file\"\n" +
+        "        if (!committed) rollback();       // chưa commit thì tự rollback\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "try (Tx tx = beginTransaction()) {\n" +
+        "    repo.save(order);\n" +
+        "    tx.commit();                          // không tới được dòng này -> rollback\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Collections',
@@ -213,6 +527,29 @@ SS.addQuestions('java', [
       ['Bài học', 'luôn so sánh wrapper bằng .equals()', 'luôn so sánh wrapper bằng .equals()'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Integer cache [-128, 127] và ba cái bẫy kinh điển",
+      code:
+        "Integer a = 127, b = 127;\n" +
+        "System.out.println(a == b);      // true  — cùng object trong Integer cache\n" +
+        "\n" +
+        "Integer c = 128, d = 128;\n" +
+        "System.out.println(c == d);      // false — ngoài cache, là hai object khác nhau\n" +
+        "System.out.println(c.equals(d)); // true  — với wrapper LUÔN dùng equals\n" +
+        "\n" +
+        "// Bẫy 2: NullPointerException do unboxing ngầm\n" +
+        "Map<String, Integer> counts = new HashMap<>();\n" +
+        "int n = counts.get(\"thiếu-key\");                  // null.intValue() -> NPE\n" +
+        "int safe = counts.getOrDefault(\"thiếu-key\", 0);   // đúng\n" +
+        "\n" +
+        "// Bẫy 3: boxing trong vòng lặp nóng -> hàng triệu object rác\n" +
+        "Long sum = 0L;                                     // Long, không phải long\n" +
+        "for (long i = 0; i < 10_000_000L; i++) sum += i;   // mỗi vòng tạo 1 Long mới\n" +
+        "long fast = LongStream.range(0, 10_000_000L).sum(); // dùng primitive stream",
+    },
+  ],
 },
 {
   cat: 'Collections',
@@ -237,6 +574,29 @@ SS.addQuestions('java', [
       ['Thực tế', 'mặc định nên chọn', 'hiếm; cần Deque → ArrayDeque'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vì sao LinkedList gần như luôn thua trên thực tế",
+      code:
+        "// ArrayList: mảng liên tục -> get(i) O(1), duyệt rất nhanh nhờ cache CPU\n" +
+        "List<Integer> arr = new ArrayList<>(1_000_000);  // cấp sẵn -> tránh copy khi resize\n" +
+        "arr.get(500_000);          // O(1)\n" +
+        "arr.add(0, x);             // O(n) — phải dịch toàn bộ phần tử phía sau\n" +
+        "\n" +
+        "// LinkedList: mỗi phần tử là một node riêng, nằm rải rác trong heap\n" +
+        "List<Integer> ll = new LinkedList<>();\n" +
+        "ll.get(500_000);           // O(n) — phải đi lần lượt từng node\n" +
+        "// Thêm giữa danh sách O(1) CHỈ KHI đã có iterator đứng sẵn ở vị trí đó:\n" +
+        "ListIterator<Integer> it = ll.listIterator();\n" +
+        "while (it.hasNext()) { if (it.next() == 42) it.add(99); }   // chỗ này mới O(1)\n" +
+        "\n" +
+        "// Cần queue/deque: đừng dùng LinkedList, dùng ArrayDeque (mảng vòng, ít rác hơn)\n" +
+        "Deque<Integer> queue = new ArrayDeque<>();\n" +
+        "queue.addLast(1);\n" +
+        "queue.pollFirst();",
+    },
+  ],
 },
 {
   cat: 'Collections',
@@ -261,6 +621,28 @@ SS.addQuestions('java', [
       { to: 5, label: '≥ 8 phần tử & bảng ≥ 64 → treeify thành cây O(log n)' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bucket, load factor, resize và treeify",
+      code:
+        "// Cấu trúc: mảng bucket; mỗi bucket là linked list, đủ dài thì thành cây đỏ-đen\n" +
+        "Map<String, Integer> map = new HashMap<>();   // capacity 16, load factor 0.75\n" +
+        "\n" +
+        "// Chỉ số bucket = (n - 1) & hash, với hash được \"khuấy\" để trộn bit cao xuống thấp:\n" +
+        "//   static int hash(Object key) { int h = key.hashCode(); return h ^ (h >>> 16); }\n" +
+        "// Vì n luôn là luỹ thừa của 2 nên & rẻ hơn %, nhưng chỉ dùng các bit thấp\n" +
+        "// -> phải trộn bit cao vào, không thì hashCode kém sẽ dồn hết vào vài bucket.\n" +
+        "\n" +
+        "// Resize: khi size > capacity * 0.75 -> gấp đôi capacity và rehash TOÀN BỘ.\n" +
+        "// 16 -> tới phần tử thứ 13 là resize thành 32. Biết trước số lượng thì cấp sẵn:\n" +
+        "Map<String, Integer> sized = new HashMap<>(1000 / 3 * 4 + 1);  // tránh resize nhiều lần\n" +
+        "\n" +
+        "// Treeify: một bucket có >= 8 node VÀ capacity >= 64 -> chuyển sang cây đỏ-đen\n" +
+        "// -> trường hợp xấu nhất từ O(n) xuống O(log n). Tụt xuống dưới 6 thì trả về list.\n" +
+        "// Đây là lá chắn chống tấn công cố ý gây đụng độ hash (HashDoS).",
+    },
+  ],
 },
 {
   cat: 'Collections',
@@ -285,6 +667,32 @@ SS.addQuestions('java', [
       ['Dùng', '1 thread', 'đừng dùng nữa', 'ít', 'nhiều thread, thông lượng cao'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn lựa chọn, nhưng thực tế chỉ cần nhớ hai",
+      code:
+        "// 1) HashMap — KHÔNG thread-safe. Ghi đồng thời có thể mất dữ liệu.\n" +
+        "Map<String, Integer> plain = new HashMap<>();\n" +
+        "\n" +
+        "// 2) Hashtable — legacy: synchronized toàn bộ method, không cho null. Đừng dùng nữa.\n" +
+        "Map<String, Integer> old = new Hashtable<>();\n" +
+        "\n" +
+        "// 3) Collections.synchronizedMap — khoá DUY NHẤT một object cho cả map\n" +
+        "Map<String, Integer> sync = Collections.synchronizedMap(new HashMap<>());\n" +
+        "synchronized (sync) {                 // từng thao tác thì atomic, nhưng DUYỆT\n" +
+        "    for (String k : sync.keySet()) {} // thì vẫn phải tự khoá bằng tay\n" +
+        "}\n" +
+        "\n" +
+        "// 4) ConcurrentHashMap — nên dùng. Khoá theo từng bucket (CAS + synchronized node)\n" +
+        "ConcurrentMap<String, Integer> chm = new ConcurrentHashMap<>();\n" +
+        "chm.putIfAbsent(\"a\", 1);                             // atomic\n" +
+        "chm.compute(\"a\", (k, v) -> v == null ? 1 : v + 1);   // atomic read-modify-write\n" +
+        "chm.merge(\"a\", 1, Integer::sum);                     // cách đếm gọn nhất\n" +
+        "// Lưu ý: KHÔNG cho null key/value — vì get() == null sẽ nhập nhằng giữa\n" +
+        "// \"không có key\" và \"value chính là null\" trong môi trường đa luồng.",
+    },
+  ],
 },
 {
   cat: 'Collections',
@@ -306,6 +714,34 @@ SS.addQuestions('java', [
       ['Sửa đúng', 'iterator.remove(), removeIf()', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "ConcurrentModificationException đến từ đâu và ba cách tránh",
+      code:
+        "List<String> list = new ArrayList<>(List.of(\"a\", \"b\", \"c\"));\n" +
+        "\n" +
+        "// SAI: sửa collection trong khi for-each đang duyệt\n" +
+        "for (String s : list) {\n" +
+        "    if (s.equals(\"b\")) list.remove(s);   // -> ConcurrentModificationException\n" +
+        "}\n" +
+        "// Cơ chế: ArrayList giữ biến đếm modCount. Iterator nhớ expectedModCount lúc tạo;\n" +
+        "// mỗi lần next() nó so hai giá trị, lệch nhau là ném CME ngay (fail-FAST).\n" +
+        "// Đây là cảnh báo lỗi lập trình, KHÔNG phải bảo đảm an toàn luồng.\n" +
+        "\n" +
+        "// Đúng 1: xoá qua chính iterator (nó tự cập nhật expectedModCount)\n" +
+        "Iterator<String> it = list.iterator();\n" +
+        "while (it.hasNext()) if (it.next().equals(\"b\")) it.remove();\n" +
+        "\n" +
+        "// Đúng 2: removeIf — ngắn gọn nhất\n" +
+        "list.removeIf(s -> s.equals(\"b\"));\n" +
+        "\n" +
+        "// Đúng 3: collection fail-SAFE — duyệt trên bản snapshot, không bao giờ ném CME\n" +
+        "List<String> safe = new CopyOnWriteArrayList<>(list);  // mỗi lần ghi là copy cả mảng\n" +
+        "for (String s : safe) safe.remove(s);   // chạy được, nhưng vòng lặp thấy dữ liệu CŨ\n" +
+        "// -> chỉ hợp khi đọc nhiều ghi rất ít (danh sách listener, config)",
+    },
+  ],
 },
 {
   cat: 'Collections',
@@ -328,6 +764,34 @@ SS.addQuestions('java', [
       ['Bẫy', 'a - b tràn số → dùng Integer.compare', 'phải là total order nhất quán'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Thứ tự tự nhiên vs thứ tự tuỳ ngữ cảnh, và bẫy tràn số",
+      code:
+        "// Comparable: MỘT thứ tự tự nhiên, gắn vào chính class\n" +
+        "record Version(int major, int minor) implements Comparable<Version> {\n" +
+        "    @Override public int compareTo(Version o) {\n" +
+        "        int c = Integer.compare(major, o.major);   // KHÔNG viết major - o.major\n" +
+        "        return c != 0 ? c : Integer.compare(minor, o.minor);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// Comparator: NHIỀU thứ tự khác nhau, khai báo bên ngoài, ghép nối được\n" +
+        "Comparator<User> byAgeThenName = Comparator\n" +
+        "        .comparingInt(User::age)\n" +
+        "        .thenComparing(User::name, String.CASE_INSENSITIVE_ORDER)\n" +
+        "        .reversed();\n" +
+        "list.sort(Comparator.comparing(User::name, Comparator.nullsFirst(String::compareTo)));\n" +
+        "\n" +
+        "// BẪY 1: trừ trực tiếp gây tràn int -> thứ tự sai âm thầm\n" +
+        "Comparator<Integer> sai  = (x, y) -> x - y;   // x = Integer.MIN_VALUE là tràn\n" +
+        "Comparator<Integer> dung = Integer::compare;\n" +
+        "\n" +
+        "// BẪY 2: compareTo không nhất quán với equals -> TreeSet coi 2 phần tử là một\n" +
+        "// (TreeSet/TreeMap xác định trùng bằng compareTo, KHÔNG dùng equals)",
+    },
+  ],
 },
 {
   cat: 'Generics',
@@ -351,6 +815,46 @@ SS.addQuestions('java', [
       ['Trong copy(dest, src)', 'src', 'dest'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Những gì biến mất lúc chạy",
+      code:
+        "// Lúc chạy thông tin generic bị XOÁ: List<String> và List<Integer> cùng là List\n" +
+        "List<String> a = new ArrayList<>();\n" +
+        "List<Integer> b = new ArrayList<>();\n" +
+        "System.out.println(a.getClass() == b.getClass());   // true\n" +
+        "\n" +
+        "// Hệ quả: những việc sau không làm được\n" +
+        "// if (a instanceof List<String>) {}   // lỗi biên dịch\n" +
+        "// new T[10];                          // không tạo được mảng generic\n" +
+        "// class X<T> { static T field; }      // static không dùng được T\n" +
+        "\n" +
+        "// Cách lách khi thật sự cần kiểu lúc runtime: truyền Class<T> vào\n" +
+        "static <T> T parse(String json, Class<T> type) { return mapper.readValue(json, type); }",
+    },
+    {
+      lang: "java",
+      title: "PECS — Producer Extends, Consumer Super",
+      code:
+        "// extends: chỉ ĐỌC ra (producer). Không add được vì không biết kiểu con cụ thể.\n" +
+        "static double sum(List<? extends Number> src) {\n" +
+        "    double s = 0;\n" +
+        "    for (Number n : src) s += n.doubleValue();   // đọc: OK\n" +
+        "    // src.add(1);                               // ghi: lỗi biên dịch\n" +
+        "    return s;\n" +
+        "}\n" +
+        "\n" +
+        "// super: chỉ GHI vào (consumer). Đọc ra thì chỉ chắc chắn được là Object.\n" +
+        "static void fill(List<? super Integer> dst) {\n" +
+        "    dst.add(1);                     // ghi: OK\n" +
+        "    Object o = dst.get(0);          // đọc: chỉ được Object\n" +
+        "}\n" +
+        "\n" +
+        "// Cả hai gặp nhau trong chữ ký chuẩn của thư viện:\n" +
+        "// static <T> void copy(List<? super T> dst, List<? extends T> src)",
+    },
+  ],
 },
 {
   cat: 'Java 8+',
@@ -374,6 +878,34 @@ SS.addQuestions('java', [
       { to: 3, label: 'terminal kích hoạt: duyệt nguồn 1 lần, các phép được fusion; limit/findFirst → short-circuit' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Lazy, short-circuit và map vs flatMap",
+      code:
+        "// Intermediate (map/filter/sorted) LƯỜI: chưa chạy gì tới khi có terminal\n" +
+        "Stream<String> s = list.stream().peek(x -> System.out.println(\"thấy \" + x));\n" +
+        "// ...tới đây vẫn chưa in ra gì cả\n" +
+        "\n" +
+        "// Terminal (collect/forEach/reduce/count) mới kích hoạt cả pipeline\n" +
+        "List<String> out = s.filter(x -> x.length() > 3).collect(Collectors.toList());\n" +
+        "\n" +
+        "// Mỗi phần tử chạy HẾT chuỗi toán tử rồi mới tới phần tử sau (không phải xong\n" +
+        "// từng tầng), nên findFirst/anyMatch/limit dừng sớm được:\n" +
+        "Optional<String> first = Stream.of(\"a\", \"bb\", \"ccc\")\n" +
+        "        .peek(x -> System.out.println(\"xét \" + x))\n" +
+        "        .filter(x -> x.length() == 2)\n" +
+        "        .findFirst();               // chỉ in \"xét a\", \"xét bb\" rồi dừng\n" +
+        "\n" +
+        "// map: 1 phần tử -> 1 phần tử\n" +
+        "List<Integer> lens = words.stream().map(String::length).toList();\n" +
+        "\n" +
+        "// flatMap: 1 phần tử -> N phần tử, rồi LÀM PHẲNG một tầng\n" +
+        "List<List<String>> nested = List.of(List.of(\"a\", \"b\"), List.of(\"c\"));\n" +
+        "List<String> flat = nested.stream().flatMap(List::stream).toList();  // [a, b, c]\n" +
+        "// map(List::stream) sẽ cho Stream<Stream<String>> — sai kiểu",
+    },
+  ],
 },
 {
   cat: 'Java 8+',
@@ -400,6 +932,36 @@ SS.addQuestions('java', [
       { to: 3, label: 'rỗng → ném BusinessException; không dùng get() trần, không isPresent()+get()' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Dùng đúng chỗ, và bốn anti-pattern hay gặp",
+      code:
+        "// ĐÚNG: giá trị trả về của method có thể \"không tìm thấy\"\n" +
+        "Optional<User> findByEmail(String email);\n" +
+        "\n" +
+        "String name = findByEmail(e)\n" +
+        "        .map(User::name)                          // biến đổi khi có giá trị\n" +
+        "        .filter(n -> !n.isBlank())\n" +
+        "        .orElseGet(() -> loadDefaultName());      // lười: chỉ chạy khi rỗng\n" +
+        "findByEmail(e).ifPresentOrElse(this::send, () -> log.warn(\"không có user\"));\n" +
+        "User u = findByEmail(e).orElseThrow(() -> new UserNotFoundException(e));\n" +
+        "\n" +
+        "// ANTI-PATTERN 1: get() không kiểm tra — chỉ đổi NPE thành NoSuchElementException\n" +
+        "String bad = findByEmail(e).get();\n" +
+        "\n" +
+        "// ANTI-PATTERN 2: if (o.isPresent()) o.get() — dài dòng hơn cả null check\n" +
+        "if (findByEmail(e).isPresent()) { }\n" +
+        "\n" +
+        "// ANTI-PATTERN 3: orElse với biểu thức tốn kém — LUÔN được tính dù có giá trị\n" +
+        "String eager = findByEmail(e).map(User::name).orElse(loadDefaultName()); // gọi thừa\n" +
+        "// -> dùng orElseGet(...) như ở trên\n" +
+        "\n" +
+        "// ANTI-PATTERN 4: Optional làm field / tham số / phần tử collection\n" +
+        "class User { private Optional<String> phone; }   // không Serializable, tốn bộ nhớ\n" +
+        "// -> field cứ để null; chỉ bọc Optional ở ranh giới TRẢ VỀ",
+    },
+  ],
 },
 {
   cat: 'Java 8+',
@@ -422,6 +984,38 @@ SS.addQuestions('java', [
       ['this', '—', 'trỏ class bao ngoài', 'trỏ class bao ngoài'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba khái niệm và bốn dạng method reference",
+      code:
+        "// Functional interface = interface đúng MỘT abstract method\n" +
+        "@FunctionalInterface                 // không bắt buộc, nhưng nên có: compiler sẽ\n" +
+        "interface Validator<T> {             // báo lỗi nếu lỡ thêm abstract method thứ hai\n" +
+        "    boolean test(T value);\n" +
+        "    default Validator<T> and(Validator<T> other) {\n" +
+        "        return v -> this.test(v) && other.test(v);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// Lambda = cách viết ngắn để tạo một instance của interface đó\n" +
+        "Validator<String> notBlank = v -> v != null && !v.isBlank();\n" +
+        "// Lambda KHÔNG sinh anonymous class: compiler dùng invokedynamic + LambdaMetafactory\n" +
+        "// -> ít class file hơn, và `this` trong lambda là `this` của lớp bao ngoài\n" +
+        "// (khác anonymous class, nơi `this` trỏ vào chính object ẩn danh).\n" +
+        "\n" +
+        "// 4 dạng method reference — chỉ là lambda viết gọn\n" +
+        "Supplier<List<String>> ctor   = ArrayList::new;        // constructor\n" +
+        "Function<String, Integer> stt = Integer::parseInt;     // static method\n" +
+        "Function<String, String> inst = String::toUpperCase;   // instance method của tham số\n" +
+        "Predicate<String> bound       = prefix::startsWith;    // instance method của object cụ thể\n" +
+        "\n" +
+        "// Biến bắt vào lambda phải \"effectively final\"\n" +
+        "int count = 0;\n" +
+        "Runnable r = () -> System.out.println(count);   // OK khi count không bị gán lại\n" +
+        "// count++;   // thêm dòng này là lambda ở trên lỗi biên dịch",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -445,6 +1039,35 @@ SS.addQuestions('java', [
       ['Vì sao', 'chỉ đổi bản sao của reference', 'cả hai reference cùng trỏ 1 object trên heap'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Java LUÔN pass-by-value — kể cả với object",
+      code:
+        "static void reassign(StringBuilder sb) {\n" +
+        "    sb = new StringBuilder(\"mới\");     // chỉ đổi BẢN SAO của tham chiếu\n" +
+        "}\n" +
+        "static void mutate(StringBuilder sb) {\n" +
+        "    sb.append(\" đã sửa\");              // sửa chính object mà tham chiếu trỏ tới\n" +
+        "}\n" +
+        "\n" +
+        "StringBuilder s = new StringBuilder(\"gốc\");\n" +
+        "reassign(s);\n" +
+        "System.out.println(s);      // \"gốc\"         <- không đổi\n" +
+        "mutate(s);\n" +
+        "System.out.println(s);      // \"gốc đã sửa\"  <- có đổi\n" +
+        "\n" +
+        "// Giải thích: Java copy GIÁ TRỊ của biến khi truyền vào method.\n" +
+        "// Với object, giá trị của biến chính là \"địa chỉ\" -> copy địa chỉ.\n" +
+        "// Sửa object qua địa chỉ đó thì bên ngoài thấy; gán lại địa chỉ thì không.\n" +
+        "// Nếu Java thật sự pass-by-reference thì reassign() đã đổi được s.\n" +
+        "\n" +
+        "int x = 1;\n" +
+        "static void inc(int n) { n++; }   // n là bản sao hoàn toàn\n" +
+        "inc(x);\n" +
+        "System.out.println(x);      // 1",
+    },
+  ],
 },
 {
   cat: 'Java Core & OOP',
@@ -468,5 +1091,51 @@ SS.addQuestions('java', [
       ['Nên dùng', 'copy constructor / static factory', 'copy constructor deep từng field'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vì sao Cloneable là thiết kế hỏng",
+      code:
+        "class Order implements Cloneable {\n" +
+        "    private String id;\n" +
+        "    private List<String> items;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    protected Order clone() throws CloneNotSupportedException {\n" +
+        "        Order c = (Order) super.clone();   // SHALLOW: copy từng field theo bit\n" +
+        "        // items của bản sao vẫn TRỎ CHUNG list với bản gốc!\n" +
+        "        c.items = new ArrayList<>(items);  // phải tự deep copy từng field mutable\n" +
+        "        return c;\n" +
+        "    }\n" +
+        "}\n" +
+        "// Vì sao nên tránh Cloneable:\n" +
+        "// - Cloneable là marker interface RỖNG, không hề khai báo clone()\n" +
+        "// - clone() nằm ở Object và là protected -> caller khó gọi\n" +
+        "// - super.clone() không chạy constructor -> field final không gán lại được\n" +
+        "// - ném checked CloneNotSupportedException dù gần như không bao giờ xảy ra",
+    },
+    {
+      lang: "java",
+      title: "Hai cách thay thế nên dùng",
+      code:
+        "// THAY THẾ 1: copy constructor / static factory — rõ ràng, không ma thuật\n" +
+        "class Order2 {\n" +
+        "    private final String id;\n" +
+        "    private final List<String> items;\n" +
+        "\n" +
+        "    Order2(Order2 other) {\n" +
+        "        this.id = other.id;\n" +
+        "        this.items = new ArrayList<>(other.items);   // deep copy tường minh\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// THAY THẾ 2: làm immutable luôn -> không cần copy nữa\n" +
+        "record OrderView(String id, List<String> items) {\n" +
+        "    OrderView {\n" +
+        "        items = List.copyOf(items);   // chốt bản sao bất biến ngay trong constructor\n" +
+        "    }\n" +
+        "}",
+    },
+  ],
 },
 ]);

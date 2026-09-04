@@ -30,7 +30,7 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords)}">` : ''}
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,600&display=swap">
 <link rel="stylesheet" href="${o.root}assets/styles.css">
 <link rel="sitemap" type="application/xml" href="${o.root}sitemap.xml">
-<script>(function(){try{var t=localStorage.getItem('iv-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+<script>(function(){document.documentElement.className+=' has-js';try{var t=localStorage.getItem('iv-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <script>window.IV_ROOT=${JSON.stringify(o.root || '')};</script>
 ${o.analyticsUrl ? `<script>window.IV_ANALYTICS=${JSON.stringify(o.analyticsUrl)};</script>` : ''}
 ${o.googleClientId ? `<script>window.IV_GOOGLE_CLIENT_ID=${JSON.stringify(o.googleClientId)};</script>` : ''}

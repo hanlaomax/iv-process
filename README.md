@@ -3,7 +3,8 @@
 Trang web tĩnh ôn tập **700+ câu hỏi phỏng vấn cấp độ Middle** cho 7 chủ đề:
 **Java / Spring Boot · Apache Kafka · AWS · Redis · SQL · Microservices · Design Patterns**.
 
-Mỗi câu gồm ba phần: **Trả lời** (chi tiết) · **Bản chất** (cốt lõi để nhớ nhanh) · **Ví dụ thực tế**.
+Mỗi câu gồm ba phần: **Trả lời** (chi tiết) · **Bản chất** (cốt lõi để nhớ nhanh) · **Ví dụ thực tế**,
+nhiều câu có thêm khối **Code & cấu hình** (tô màu cú pháp sẵn, giải thích ngay trong comment).
 Nội dung tiếng Việt, giữ nguyên thuật ngữ kỹ thuật tiếng Anh.
 
 Trang được **render sẵn thành HTML tĩnh** (tối ưu SEO), hoạt động **không cần JavaScript**;
@@ -107,6 +108,7 @@ Lượt xem trang **không** gắn với danh tính người đăng nhập — t
 src/
   data/                 # 35 file câu hỏi + _topics.js (nội dung, tự đăng ký qua SS.addQuestions)
   format.mjs            # markdown-lite -> HTML, slug, hash id, strip
+  highlight.mjs         # tô màu cú pháp lúc build cho khối demo (tokenizer tự viết)
   templates.mjs         # <head> đầy đủ SEO, header, footer, breadcrumb, khung trang
   render.mjs            # sinh trang chủ, trang chủ đề, /stats, /luyen-tap, sitemap, 404
   render-user.mjs      # sinh /tai-khoan, /bang-xep-hang, /privacy
@@ -120,6 +122,8 @@ assets/
   account.js           # trang /tai-khoan
   leaderboard.js       # trang /bang-xep-hang
   stats.js             # nạp & vẽ số liệu cho trang /stats
+tools/
+  add-demos.mjs        # chèn field demo hàng loạt từ file patch (không tham gia build)
 analytics/             # Cloudflare Worker + D1 — thống kê ẩn danh + tài khoản Google (deploy riêng)
   src/{worker,analytics,auth,users,lib}.js
 static/                # file copy nguyên trạng ra gốc site (google….html, BingSiteAuth.xml, CNAME…)
@@ -151,3 +155,21 @@ Tuỳ chọn thêm cho mỗi câu:
 - `viz: { type, ... }` — hình minh hoạ tương tác. `type` là một trong: `compare`, `layers`,
   `tree`, `bars`, `flow`, `sequence`, `states`, `cycle`, `timeline`, `quadrant`
   (xem `assets/viz/viz-static.js` và `assets/viz/viz-anim.js` để biết cấu trúc dữ liệu từng loại).
+- `demo: [{ lang, title, code }]` — ví dụ **code & cấu hình**, hiện dưới phần "Ví dụ thực tế"
+  (một object cũng được, không cần bọc mảng). Phần giải thích viết ngay trong **comment của
+  đoạn code**, không có field riêng.
+
+### Ví dụ code (`demo`)
+
+Code được **tô màu cú pháp sẵn lúc build** (`src/highlight.mjs` — tokenizer tự viết, không thêm
+dependency, không cần JavaScript ở phía trình duyệt). Ngôn ngữ hỗ trợ: `java`, `sql`, `yaml`,
+`properties`, `json`, `xml`, `bash`, `dockerfile`, `js`, `lua` (kèm alias `yml`, `sh`, `ini`…).
+Mỗi khối có nút *Sao chép* (chỉ hiện khi bật JavaScript).
+
+Soạn hàng loạt bằng file patch thay vì sửa tay:
+
+```bash
+node tools/add-demos.mjs patch.txt src/data/java-01-core-oop.js
+```
+
+Hiện đã có demo cho trọn chủ đề **Java / Spring Boot** (100/100 câu). Các chủ đề còn lại làm dần.

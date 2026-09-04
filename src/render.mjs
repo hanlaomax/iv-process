@@ -2,6 +2,7 @@
 import { fmt, esc, plain, slugify, truncate } from './format.mjs';
 import { head, header, footer, breadcrumb, page } from './templates.mjs';
 import { connect } from './relate.mjs';
+import { highlight, langLabel } from './highlight.mjs';
 
 /* Gom câu hỏi theo mục (giữ thứ tự xuất hiện) */
 function groupByCat(list) {
@@ -59,13 +60,34 @@ function relatedChips(q, ctx) {
     </nav>`;
 }
 
-/* 3 khối trả lời + hình minh hoạ — dùng chung cho trang chủ đề và trình luyện tập.
+/* Một khối code/config minh hoạ: nhãn ngôn ngữ + tiêu đề + code đã tô màu.
+   Giải thích nằm trong chính comment của đoạn code. */
+function demoBlock(d) {
+  const title = d.title ? `<span class="demo-title">${esc(d.title)}</span>` : '';
+  return `<div class="demo">
+      <div class="demo-head"><span class="demo-lang">${esc(langLabel(d.lang))}</span>${title}
+        <button type="button" class="demo-copy" aria-label="Sao chép đoạn code">Sao chép</button>
+      </div>
+      <pre class="demo-pre"><code>${highlight(d.code, d.lang)}</code></pre>
+    </div>`;
+}
+
+/* q.demo: một object hoặc mảng object { lang, title?, code } */
+function demoSection(q) {
+  if (!q.demo) return '';
+  const items = (Array.isArray(q.demo) ? q.demo : [q.demo]).filter((d) => d && d.code);
+  if (!items.length) return '';
+  return `<div class="qa-block qa-demo"><h4>Code &amp; cấu hình</h4>${items.map(demoBlock).join('')}</div>`;
+}
+
+/* 3 khối trả lời + code minh hoạ + hình minh hoạ — dùng chung cho trang chủ đề và trình luyện tập.
    forPlayer: bỏ hình diagram cũ (cần script riêng); viz vẫn giữ. */
 function qaBlocks(q, forPlayer) {
   const figure = q.viz ? vizFigure(q.viz) : !forPlayer && q.diagram ? diagramFigure(q.diagram) : '';
   return `<div class="qa-block qa-answer"><h4>Trả lời</h4>${fmt(q.answer)}</div>
     <div class="qa-block qa-essence"><h4>Bản chất</h4>${fmt(q.essence)}</div>
     <div class="qa-block qa-example"><h4>Ví dụ thực tế</h4>${fmt(q.example)}</div>
+    ${demoSection(q)}
     ${figure}`;
 }
 

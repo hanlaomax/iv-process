@@ -24,6 +24,36 @@ SS.addQuestions('java', [
       { from: 1, to: 3, label: 'remove()' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn trạng thái và đường đi giữa chúng",
+      code:
+        "@PersistenceContext EntityManager em;\n" +
+        "\n" +
+        "// 1) TRANSIENT — object Java thường, JPA chưa biết gì về nó, chưa có id\n" +
+        "Order o = new Order(\"SKU-1\");\n" +
+        "\n" +
+        "// 2) MANAGED — nằm trong persistence context, mọi thay đổi được THEO DÕI\n" +
+        "em.persist(o);                 // transient -> managed\n" +
+        "Order found = em.find(Order.class, 1L);        // load lên là managed sẵn\n" +
+        "found.setStatus(\"PAID\");       // KHÔNG cần gọi save(): dirty checking tự UPDATE\n" +
+        "\n" +
+        "// 3) DETACHED — từng managed, nhưng persistence context đã đóng/tách ra\n" +
+        "em.detach(o);                  // managed -> detached\n" +
+        "em.clear();                    // tách TẤT CẢ\n" +
+        "// Sau khi transaction kết thúc, mọi entity đều thành detached.\n" +
+        "// Sửa entity detached KHÔNG sinh UPDATE nào cả — đây là nguồn bug \"mất dữ liệu\".\n" +
+        "Order merged = em.merge(o);    // detached -> managed (TRẢ VỀ object mới,\n" +
+        "                               // object cũ VẪN detached — hay bị nhầm chỗ này)\n" +
+        "\n" +
+        "// 4) REMOVED — đã đánh dấu xoá, DELETE chạy khi flush\n" +
+        "em.remove(found);              // managed -> removed\n" +
+        "\n" +
+        "// Ghi nhớ: chỉ MANAGED mới có dirty checking. Ba trạng thái còn lại,\n" +
+        "// bạn sửa gì cũng không xuống DB.",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -47,6 +77,40 @@ SS.addQuestions('java', [
       { to: 5, label: 'field đã đổi → sinh UPDATE cho đúng cột đó' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cache cấp 1 và dirty checking",
+      code:
+        "@Transactional\n" +
+        "public void demo() {\n" +
+        "    Order a = repo.findById(1L).orElseThrow();\n" +
+        "    Order b = repo.findById(1L).orElseThrow();\n" +
+        "\n" +
+        "    // CHỈ MỘT câu SELECT chạy. Lần thứ hai lấy từ persistence context.\n" +
+        "    System.out.println(a == b);      // true — CÙNG một object trong bộ nhớ\n" +
+        "    // -> Đây là \"repeatable read\" ở mức ứng dụng, luôn bật, không tắt được.\n" +
+        "\n" +
+        "    a.setStatus(\"PAID\");             // không gọi save() gì cả\n" +
+        "    // Lúc commit, Hibernate so sánh snapshot chụp lúc load với giá trị hiện tại\n" +
+        "    // -> phát hiện status đổi -> tự sinh UPDATE. Đó là DIRTY CHECKING.\n" +
+        "}\n" +
+        "// Phạm vi: persistence context sống theo TRANSACTION. Hết transaction là hết.\n" +
+        "\n" +
+        "@Transactional\n" +
+        "public void batchLeak() {\n" +
+        "    for (int i = 0; i < 100_000; i++) {\n" +
+        "        em.persist(new Order(\"SKU-\" + i));\n" +
+        "        // Mỗi entity managed được giữ + một SNAPSHOT để so sánh -> tốn RAM gấp đôi,\n" +
+        "        // và dirty checking phải quét toàn bộ -> càng lúc càng chậm -> OOM.\n" +
+        "        if (i % 500 == 0) {\n" +
+        "            em.flush();    // đẩy SQL xuống DB\n" +
+        "            em.clear();    // BẮT BUỘC: dọn persistence context\n" +
+        "        }\n" +
+        "    }\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -69,6 +133,46 @@ SS.addQuestions('java', [
       ['Khuyến nghị', 'đặt tất cả LAZY, fetch join khi cần', 'tránh'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "LazyInitializationException và ba cách chữa đúng",
+      code:
+        "@Entity\n" +
+        "public class Order {\n" +
+        "    @ManyToOne(fetch = FetchType.LAZY)     // @ManyToOne/@OneToOne MẶC ĐỊNH LÀ EAGER\n" +
+        "    private Customer customer;             // -> luôn ghi rõ LAZY\n" +
+        "\n" +
+        "    @OneToMany(mappedBy = \"order\")         // @OneToMany/@ManyToMany mặc định LAZY (đúng)\n" +
+        "    private List<OrderLine> lines;\n" +
+        "}\n" +
+        "\n" +
+        "// LazyInitializationException: chạm vào field lazy SAU khi session đã đóng\n" +
+        "public Order getBroken(Long id) {\n" +
+        "    Order o = repo.findById(id).orElseThrow();   // transaction kết thúc ở đây\n" +
+        "    return o;                                     // controller gọi o.getLines()\n" +
+        "}                                                 // -> no Session\n" +
+        "\n" +
+        "// CHỮA 1 (tốt nhất): fetch join — lấy đúng thứ cần, trong MỘT câu truy vấn\n" +
+        "@Query(\"SELECT o FROM Order o JOIN FETCH o.lines WHERE o.id = :id\")\n" +
+        "Optional<Order> findWithLines(@Param(\"id\") Long id);\n" +
+        "\n" +
+        "// CHỮA 2: entity graph — khai báo, không phải sửa JPQL\n" +
+        "@EntityGraph(attributePaths = {\"lines\", \"customer\"})\n" +
+        "Optional<Order> findById(Long id);\n" +
+        "\n" +
+        "// CHỮA 3: map sang DTO NGAY TRONG transaction\n" +
+        "@Transactional(readOnly = true)\n" +
+        "public OrderDto get(Long id) {\n" +
+        "    Order o = repo.findById(id).orElseThrow();\n" +
+        "    return new OrderDto(o.getId(), o.getLines().size());   // chạm lazy khi còn session\n" +
+        "}\n" +
+        "\n" +
+        "// ĐỪNG chữa bằng spring.jpa.open-in-view: nó giữ session mở suốt request,\n" +
+        "// che lỗi đi và âm thầm bắn N+1 query từ tầng view. Boot còn cảnh báo khi bật.\n" +
+        "// -> spring.jpa.open-in-view: false",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -97,6 +201,60 @@ SS.addQuestions('java', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "N+1 xuất hiện thế nào và bốn cách khắc phục",
+      code:
+        "// 1 câu lấy danh sách + N câu lấy quan hệ của từng phần tử\n" +
+        "List<Order> orders = repo.findAll();          // SELECT * FROM orders        (1 câu)\n" +
+        "for (Order o : orders) {\n" +
+        "    o.getCustomer().getName();                // SELECT * FROM customers ... (N câu)\n" +
+        "}\n" +
+        "// 100 đơn -> 101 query. Trên môi trường thật, đây là nguyên nhân chậm\n" +
+        "// phổ biến nhất của ứng dụng JPA.\n" +
+        "\n" +
+        "// CÁCH 1: JOIN FETCH — dùng nhiều nhất\n" +
+        "@Query(\"SELECT DISTINCT o FROM Order o JOIN FETCH o.customer\")\n" +
+        "List<Order> findAllWithCustomer();\n" +
+        "// Lưu ý: JOIN FETCH nhiều collection cùng lúc -> tích Descartes.\n" +
+        "// Nhiều hơn một collection thì tách query hoặc dùng @BatchSize.\n" +
+        "\n" +
+        "// CÁCH 2: @EntityGraph — sạch hơn, giữ nguyên method Spring Data\n" +
+        "@EntityGraph(attributePaths = \"customer\")\n" +
+        "List<Order> findAll();\n" +
+        "\n" +
+        "// CÁCH 3: @BatchSize — gom N câu thành N/size câu IN (...)\n" +
+        "@Entity\n" +
+        "class Order {\n" +
+        "    @ManyToOne(fetch = FetchType.LAZY)\n" +
+        "    @BatchSize(size = 50)                     // 100 câu -> 2 câu\n" +
+        "    private Customer customer;\n" +
+        "}\n" +
+        "// Hoặc bật toàn cục: spring.jpa.properties.hibernate.default_batch_fetch_size=50\n" +
+        "\n" +
+        "// CÁCH 4: chiếu thẳng sang DTO — không nạp entity, thường là nhanh nhất\n" +
+        "@Query(\"SELECT new com.example.OrderDto(o.id, c.name) FROM Order o JOIN o.customer c\")\n" +
+        "List<OrderDto> findAllDto();",
+    },
+    {
+      lang: "yaml",
+      title: "Phát hiện N+1 trước khi lên production",
+      code:
+        "spring:\n" +
+        "  jpa:\n" +
+        "    properties:\n" +
+        "      hibernate:\n" +
+        "        generate_statistics: true      # in số câu truy vấn mỗi transaction\n" +
+        "    open-in-view: false                # đừng để view tự bắn query\n" +
+        "logging:\n" +
+        "  level:\n" +
+        "    org.hibernate.SQL: DEBUG\n" +
+        "    org.hibernate.stat: DEBUG\n" +
+        "# Chắc chắn hơn: thêm datasource-proxy hoặc thư viện quick-perf vào test,\n" +
+        "# rồi ASSERT số câu query. N+1 xuất hiện là test đỏ ngay.",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -122,6 +280,34 @@ SS.addQuestions('java', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba lợi ích thật sự",
+      code:
+        "@Transactional(readOnly = true)     // nên đặt mặc định cho MỌI method chỉ đọc\n" +
+        "public OrderDto get(Long id) {\n" +
+        "    return repo.findById(id).map(OrderDto::from).orElseThrow();\n" +
+        "}\n" +
+        "// 1) Hibernate chuyển FlushMode sang MANUAL -> KHÔNG chạy dirty checking,\n" +
+        "//    không giữ snapshot -> đỡ CPU và RAM rõ rệt khi đọc nhiều bản ghi.\n" +
+        "// 2) Đặt cờ read-only xuống JDBC Connection -> DB có thể tối ưu thêm\n" +
+        "//    (PostgreSQL/MySQL). Với replica, đây còn là điều kiện để định tuyến đọc.\n" +
+        "// 3) Là tài liệu sống: người đọc code biết ngay method này không ghi.\n" +
+        "\n" +
+        "@Service\n" +
+        "@Transactional(readOnly = true)      // mặc định cho cả class\n" +
+        "public class OrderService {\n" +
+        "\n" +
+        "    @Transactional                   // ghi đè cho method ghi\n" +
+        "    public void place(Order o) { repo.save(o); }\n" +
+        "}\n" +
+        "\n" +
+        "// BẪY: readOnly KHÔNG phải là bảo đảm an toàn. Với REQUIRED, nếu đã có\n" +
+        "// transaction ghi ở ngoài thì cờ readOnly bị BỎ QUA và ghi vẫn xuống DB.\n" +
+        "// Nó là gợi ý tối ưu, không phải cơ chế cấm ghi.",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -144,6 +330,47 @@ SS.addQuestions('java', [
       ['Dùng khi', 'truy vấn tĩnh (90%)', 'tính năng riêng DB: window, CTE, upsert', 'query động theo input'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba công cụ, ba mục đích",
+      code:
+        "public interface OrderRepository extends JpaRepository<Order, Long> {\n" +
+        "\n" +
+        "    // 1) Derived query — đơn giản nhất, tên method sinh ra câu truy vấn.\n" +
+        "    // Quá 3-4 điều kiện là tên method dài không đọc nổi -> chuyển sang @Query.\n" +
+        "    List<Order> findByStatusAndCreatedAtAfter(String status, Instant after);\n" +
+        "\n" +
+        "    // 2) JPQL — viết theo ENTITY và field Java, không phải bảng/cột.\n" +
+        "    // Được kiểm tra lúc khởi động, đổi DB không phải sửa.\n" +
+        "    @Query(\"SELECT o FROM Order o WHERE o.status = :status AND o.total > :min\")\n" +
+        "    List<Order> search(@Param(\"status\") String status, @Param(\"min\") BigDecimal min);\n" +
+        "\n" +
+        "    // Chiếu thẳng sang DTO -> chỉ lấy đúng cột cần\n" +
+        "    @Query(\"SELECT new com.example.OrderSummary(o.id, o.total) FROM Order o\")\n" +
+        "    List<OrderSummary> summaries();\n" +
+        "\n" +
+        "    // 3) NATIVE — khi cần tính năng riêng của DB (window function, CTE, JSONB,\n" +
+        "    // full-text). Đổi lại: mất tính di động, không kiểm tra được lúc biên dịch.\n" +
+        "    @Query(value = \"\"\"\n" +
+        "            SELECT o.*, RANK() OVER (PARTITION BY customer_id ORDER BY total DESC) rnk\n" +
+        "            FROM orders o WHERE o.created_at > :since\n" +
+        "            \"\"\", nativeQuery = true)\n" +
+        "    List<Order> ranked(@Param(\"since\") Instant since);\n" +
+        "}\n" +
+        "\n" +
+        "// 4) Criteria API / Specification — khi điều kiện lọc ĐỘNG theo input người dùng.\n" +
+        "// Rất dài dòng, chỉ dùng đúng chỗ này.\n" +
+        "public static Specification<Order> hasStatus(String s) {\n" +
+        "    return (root, q, cb) -> s == null ? null : cb.equal(root.get(\"status\"), s);\n" +
+        "}\n" +
+        "repo.findAll(where(hasStatus(status)).and(createdAfter(from)), pageable);\n" +
+        "// -> Cân nhắc QueryDSL: cùng mục đích nhưng đọc dễ hơn nhiều.\n" +
+        "\n" +
+        "// TUYỆT ĐỐI KHÔNG nối chuỗi để tạo query -> SQL injection:\n" +
+        "//   \"SELECT o FROM Order o WHERE o.status = \u0027\" + input + \"\u0027\"   // SAI",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -165,6 +392,53 @@ SS.addQuestions('java', [
       ['Đánh đổi', 'throughput cao, cần retry logic', 'đơn giản, giảm concurrency, nguy cơ deadlock'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "@Version vs khoá ở DB",
+      code:
+        "// OPTIMISTIC — không khoá gì cả, chỉ KIỂM TRA lúc ghi.\n" +
+        "@Entity\n" +
+        "public class Product {\n" +
+        "    @Id private Long id;\n" +
+        "    private int stock;\n" +
+        "\n" +
+        "    @Version                       // Hibernate tự tăng mỗi lần UPDATE\n" +
+        "    private Long version;          // UPDATE ... WHERE id = ? AND version = ?\n" +
+        "}                                  // 0 dòng bị ảnh hưởng -> ai đó đã sửa trước\n" +
+        "                                   // -> OptimisticLockException\n" +
+        "\n" +
+        "@Service\n" +
+        "public class StockService {\n" +
+        "    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class,\n" +
+        "               maxAttempts = 3, backoff = @Backoff(delay = 50))\n" +
+        "    @Transactional\n" +
+        "    public void decrease(Long id, int qty) {       // xung đột thì thử lại\n" +
+        "        Product p = repo.findById(id).orElseThrow();\n" +
+        "        p.setStock(p.getStock() - qty);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// PESSIMISTIC — khoá NGAY từ lúc đọc, người khác phải chờ.\n" +
+        "public interface ProductRepository extends JpaRepository<Product, Long> {\n" +
+        "\n" +
+        "    @Lock(LockModeType.PESSIMISTIC_WRITE)          // SELECT ... FOR UPDATE\n" +
+        "    @QueryHints(@QueryHint(name = \"jakarta.persistence.lock.timeout\", value = \"3000\"))\n" +
+        "    Optional<Product> findByIdForUpdate(Long id);\n" +
+        "\n" +
+        "    @Lock(LockModeType.PESSIMISTIC_READ)           // SELECT ... FOR SHARE\n" +
+        "    Optional<Product> findByIdShared(Long id);\n" +
+        "}\n" +
+        "\n" +
+        "// CHỌN THẾ NÀO:\n" +
+        "//   Xung đột HIẾM (đa số trường hợp)      -> optimistic. Không khoá, dễ mở rộng.\n" +
+        "//   Xung đột NHIỀU trên cùng một bản ghi  -> pessimistic. Retry liên tục còn tệ hơn.\n" +
+        "//   Giao dịch dài, người dùng ngồi sửa form -> BẮT BUỘC optimistic\n" +
+        "//     (khoá pessimistic qua nhiều request là công thức gây deadlock).\n" +
+        "// Nhớ: pessimistic lock luôn cần TIMEOUT, nếu không một transaction treo\n" +
+        "// sẽ kéo theo cả hệ thống.",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -188,6 +462,40 @@ SS.addQuestions('java', [
       ['Dùng khi', 'bình thường (tối ưu batch)', 'cần thấy lỗi ràng buộc / id / sequence ngay'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba thời điểm flush tự động và save vs saveAndFlush",
+      code:
+        "@Transactional\n" +
+        "public void demo() {\n" +
+        "    Order o = new Order(\"SKU-1\");\n" +
+        "    repo.save(o);          // CHƯA chắc có INSERT ngay. Với id GenerationType.IDENTITY\n" +
+        "                           // thì buộc phải INSERT ngay để lấy id; với SEQUENCE thì không.\n" +
+        "\n" +
+        "    // Hibernate tự flush ở ba thời điểm:\n" +
+        "    //  1) trước khi COMMIT\n" +
+        "    //  2) trước khi chạy một QUERY có thể bị ảnh hưởng bởi thay đổi đang treo\n" +
+        "    //  3) khi gọi tay em.flush()\n" +
+        "    List<Order> all = repo.findAll();   // <- flush ở đây để query thấy dữ liệu mới\n" +
+        "}\n" +
+        "\n" +
+        "// save() vs saveAndFlush()\n" +
+        "repo.save(o);            // chỉ đưa vào persistence context, để dành tới lúc flush\n" +
+        "repo.saveAndFlush(o);    // ép SQL xuống DB NGAY\n" +
+        "\n" +
+        "// Khi nào cần saveAndFlush:\n" +
+        "//  - cần đọc lại bằng native query (native query KHÔNG kích hoạt flush tự động)\n" +
+        "//  - muốn bắt lỗi ràng buộc (unique, FK) ngay tại chỗ để xử lý\n" +
+        "//  - trong test, muốn kiểm chứng SQL thật sự chạy\n" +
+        "// LƯU Ý: flush KHÔNG phải commit. Rollback sau flush vẫn huỷ sạch mọi thứ.\n" +
+        "\n" +
+        "// Batch insert cần cả ba thứ, thiếu một là không có hiệu quả:\n" +
+        "//   spring.jpa.properties.hibernate.jdbc.batch_size=50\n" +
+        "//   spring.jpa.properties.hibernate.order_inserts=true\n" +
+        "//   + id KHÔNG dùng IDENTITY (IDENTITY vô hiệu hoá batch hoàn toàn)",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -213,6 +521,42 @@ SS.addQuestions('java', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cascade nào an toàn, cascade nào nguy hiểm",
+      code:
+        "@Entity\n" +
+        "public class Order {\n" +
+        "\n" +
+        "    // Quan hệ SỞ HỮU thật sự: OrderLine không tồn tại độc lập ngoài Order\n" +
+        "    @OneToMany(mappedBy = \"order\",\n" +
+        "               cascade = CascadeType.ALL,     // PERSIST + MERGE + REMOVE + REFRESH + DETACH\n" +
+        "               orphanRemoval = true)          // gỡ khỏi list -> XOÁ hẳn khỏi DB\n" +
+        "    private List<OrderLine> lines = new ArrayList<>();\n" +
+        "\n" +
+        "    // Quan hệ THAM CHIẾU: Customer sống độc lập -> TUYỆT ĐỐI không cascade REMOVE\n" +
+        "    @ManyToOne(fetch = FetchType.LAZY)        // cascade = {} (mặc định)\n" +
+        "    private Customer customer;                // xoá 1 đơn mà mất luôn khách hàng\n" +
+        "}                                             // là tai nạn kinh điển\n" +
+        "\n" +
+        "// CASCADE REMOVE vs ORPHAN REMOVAL — khác nhau ở chỗ nào:\n" +
+        "order.getLines().remove(line);      // orphanRemoval=true -> DELETE dòng đó\n" +
+        "                                    // chỉ cascade REMOVE  -> KHÔNG xoá, chỉ mất liên kết\n" +
+        "repo.delete(order);                 // cả hai đều xoá các line theo\n" +
+        "\n" +
+        "// BẪY thay cả danh sách: gán list mới làm Hibernate mất dấu collection\n" +
+        "order.setLines(newLines);                     // SAI với orphanRemoval\n" +
+        "order.getLines().clear();                     // ĐÚNG: sửa TẠI CHỖ\n" +
+        "order.getLines().addAll(newLines);\n" +
+        "\n" +
+        "// Luôn có helper hai chiều để tránh lệch quan hệ:\n" +
+        "public void addLine(OrderLine l) {\n" +
+        "    lines.add(l);\n" +
+        "    l.setOrder(this);         // thiếu dòng này -> cột FK là null\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -237,6 +581,46 @@ SS.addQuestions('java', [
       ['Dữ liệu truy vấn', 'hydrate cả đồ thị', 'SELECT đúng cột cần'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn lý do và ba cách map",
+      code:
+        "// Lý do:\n" +
+        "//  1) BẢO MẬT: field nhạy cảm (passwordHash, internalNote) lộ ra ngoài\n" +
+        "//  2) LazyInitializationException hoặc N+1 khi Jackson serialize field lazy\n" +
+        "//  3) Vòng lặp vô hạn với quan hệ hai chiều (Order -> lines -> order -> ...)\n" +
+        "//  4) Đổi schema DB là VỠ hợp đồng API của client\n" +
+        "\n" +
+        "// CÁCH 1: DTO thủ công — rõ ràng nhất, không ma thuật\n" +
+        "public record OrderDto(Long id, String status, BigDecimal total, String customerName) {\n" +
+        "    public static OrderDto from(Order o) {\n" +
+        "        return new OrderDto(o.getId(), o.getStatus(), o.getTotal(), o.getCustomer().getName());\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH 2: interface projection — Spring Data tự sinh, CHỈ SELECT cột cần\n" +
+        "public interface OrderSummary {\n" +
+        "    Long getId();\n" +
+        "    BigDecimal getTotal();\n" +
+        "    @Value(\"#{target.customer.name}\")      // projection động (mở, kèm rủi ro N+1)\n" +
+        "    String getCustomerName();\n" +
+        "}\n" +
+        "List<OrderSummary> findByStatus(String status);   // SQL chỉ lấy id, total\n" +
+        "\n" +
+        "// CÁCH 3: chiếu vào class trong JPQL — kiểm soát chính xác câu SQL\n" +
+        "@Query(\"SELECT new com.example.OrderDto(o.id, o.status, o.total, c.name) \" +\n" +
+        "       \"FROM Order o JOIN o.customer c WHERE o.status = :s\")\n" +
+        "List<OrderDto> findDtos(@Param(\"s\") String status);\n" +
+        "\n" +
+        "// MapStruct sinh code map lúc BIÊN DỊCH -> không reflection, không tốn runtime.\n" +
+        "@Mapper(componentModel = \"spring\")\n" +
+        "public interface OrderMapper {\n" +
+        "    @Mapping(source = \"customer.name\", target = \"customerName\")\n" +
+        "    OrderDto toDto(Order order);\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Spring MVC',
@@ -259,6 +643,48 @@ SS.addQuestions('java', [
       ['Content negotiation', '—', 'chọn converter theo header Accept + classpath'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "@ResponseBody và content negotiation",
+      code:
+        "// @Controller: trả về TÊN VIEW, ViewResolver đi tìm template\n" +
+        "@Controller\n" +
+        "public class PageController {\n" +
+        "    @GetMapping(\"/orders\")\n" +
+        "    public String list(Model model) {\n" +
+        "        model.addAttribute(\"orders\", service.findAll());\n" +
+        "        return \"orders/list\";            // -> templates/orders/list.html\n" +
+        "    }\n" +
+        "\n" +
+        "    @GetMapping(\"/api/orders\")\n" +
+        "    @ResponseBody                        // ghi thẳng vào response body\n" +
+        "    public List<Order> api() { return service.findAll(); }\n" +
+        "}\n" +
+        "\n" +
+        "// @RestController = @Controller + @ResponseBody cho MỌI method\n" +
+        "@RestController\n" +
+        "@RequestMapping(\"/api/orders\")\n" +
+        "public class OrderApi {\n" +
+        "\n" +
+        "    @GetMapping(produces = {MediaType.APPLICATION_JSON_VALUE,\n" +
+        "                            MediaType.APPLICATION_XML_VALUE})\n" +
+        "    public List<Order> list() { return service.findAll(); }\n" +
+        "\n" +
+        "    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)\n" +
+        "    public ResponseEntity<Order> create(@RequestBody CreateOrder req) {\n" +
+        "        Order o = service.create(req);\n" +
+        "        return ResponseEntity.created(URI.create(\"/api/orders/\" + o.getId())).body(o);\n" +
+        "    }\n" +
+        "}\n" +
+        "// CONTENT NEGOTIATION: Spring chọn HttpMessageConverter theo thứ tự\n" +
+        "//  1) đuôi mở rộng URL (mặc định TẮT từ Boot 2.6 — nguy cơ bảo mật)\n" +
+        "//  2) tham số ?format=json (phải bật thủ công)\n" +
+        "//  3) header Accept                       <- chuẩn, dùng cái này\n" +
+        "// Không converter nào khớp -> 406 Not Acceptable.\n" +
+        "// Chỉ có jackson-databind trên classpath thì mọi Accept khác JSON đều 406.",
+    },
+  ],
 },
 {
   cat: 'Spring MVC',
@@ -281,6 +707,51 @@ SS.addQuestions('java', [
       ['Tuỳ chọn', '—', 'required, defaultValue', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Lấy dữ liệu từ đâu và ràng buộc nào",
+      code:
+        "@RestController\n" +
+        "@RequestMapping(\"/api/orders\")\n" +
+        "public class OrderController {\n" +
+        "\n" +
+        "    // @PathVariable — ĐỊNH DANH tài nguyên, nằm trong đường dẫn\n" +
+        "    @GetMapping(\"/{id}\")\n" +
+        "    public Order get(@PathVariable Long id) { }\n" +
+        "\n" +
+        "    @GetMapping(\"/{orderId}/lines/{lineId}\")\n" +
+        "    public Line line(@PathVariable Long orderId, @PathVariable Long lineId) { }\n" +
+        "\n" +
+        "    // @RequestParam — LỌC / PHÂN TRANG / TUỲ CHỌN, nằm sau dấu ?\n" +
+        "    @GetMapping\n" +
+        "    public Page<Order> search(\n" +
+        "            @RequestParam(required = false) String status,       // ?status=PAID\n" +
+        "            @RequestParam(defaultValue = \"0\") int page,          // có mặc định\n" +
+        "            @RequestParam(defaultValue = \"20\") @Max(100) int size,\n" +
+        "            @RequestParam List<String> tags,                     // ?tags=a&tags=b\n" +
+        "            Pageable pageable) { }                               // Spring tự bind\n" +
+        "\n" +
+        "    // @RequestBody — DỮ LIỆU của thao tác ghi, nằm trong body, parse bởi Jackson\n" +
+        "    @PostMapping\n" +
+        "    public Order create(@Valid @RequestBody CreateOrderRequest req) { }\n" +
+        "\n" +
+        "    // Các nguồn khác\n" +
+        "    @GetMapping(\"/me\")\n" +
+        "    public Order me(@RequestHeader(\"X-Tenant\") String tenant,\n" +
+        "                    @CookieValue(name = \"sid\", required = false) String sid,\n" +
+        "                    @AuthenticationPrincipal UserDetails user) { }\n" +
+        "\n" +
+        "    // Form + upload file\n" +
+        "    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)\n" +
+        "    public void upload(@RequestPart(\"meta\") Meta meta,\n" +
+        "                       @RequestPart(\"file\") MultipartFile file) { }\n" +
+        "}\n" +
+        "// LƯU Ý: @PathVariable và @RequestParam mặc định BẮT BUỘC — thiếu là 400.\n" +
+        "// Muốn tuỳ chọn thì required = false hoặc dùng Optional/defaultValue.\n" +
+        "// Biên dịch không có -parameters thì phải ghi rõ tên: @PathVariable(\"id\").",
+    },
+  ],
 },
 {
   cat: 'Spring MVC',
@@ -304,6 +775,66 @@ SS.addQuestions('java', [
       { name: 'Controller', tag: 'trong cùng' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba tầng chặn, ba phạm vi khác nhau",
+      code:
+        "// 1) FILTER — chuẩn Servlet, NGOÀI CÙNG, chạy trước DispatcherServlet.\n" +
+        "// Thấy mọi request kể cả tài nguyên tĩnh và lỗi. Không biết gì về controller.\n" +
+        "@Component\n" +
+        "@Order(1)\n" +
+        "public class TraceIdFilter extends OncePerRequestFilter {\n" +
+        "    @Override\n" +
+        "    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res,\n" +
+        "                                    FilterChain chain) throws ServletException, IOException {\n" +
+        "        MDC.put(\"traceId\", UUID.randomUUID().toString());\n" +
+        "        try {\n" +
+        "            chain.doFilter(req, res);      // quên dòng này là request treo\n" +
+        "        } finally {\n" +
+        "            MDC.clear();                   // luôn dọn trong finally\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "// Việc hợp với filter: logging, CORS, nén, đọc/ghi lại body, security.\n" +
+        "\n" +
+        "// 2) INTERCEPTOR — của Spring MVC, chạy TRONG DispatcherServlet.\n" +
+        "// Biết handler nào sắp chạy -> đọc được annotation trên method.\n" +
+        "@Component\n" +
+        "public class AuthInterceptor implements HandlerInterceptor {\n" +
+        "    @Override\n" +
+        "    public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {\n" +
+        "        if (handler instanceof HandlerMethod hm && hm.hasMethodAnnotation(AdminOnly.class)) {\n" +
+        "            if (!isAdmin(req)) { res.setStatus(403); return false; }   // false = chặn\n" +
+        "        }\n" +
+        "        return true;\n" +
+        "    }\n" +
+        "    // postHandle: sau controller, trước render view\n" +
+        "    // afterCompletion: sau khi xong hết, kể cả khi có exception\n" +
+        "}\n" +
+        "\n" +
+        "@Configuration\n" +
+        "class WebConfig implements WebMvcConfigurer {\n" +
+        "    @Override\n" +
+        "    public void addInterceptors(InterceptorRegistry reg) {\n" +
+        "        reg.addInterceptor(new AuthInterceptor()).addPathPatterns(\"/api/**\");\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 3) @ControllerAdvice — trong tầng controller: xử lý exception, bind dữ liệu,\n" +
+        "// thêm model chung. Không thấy được request bị chặn từ trước bởi filter.\n" +
+        "@RestControllerAdvice\n" +
+        "class Advice {\n" +
+        "    @ExceptionHandler(Exception.class)\n" +
+        "    ProblemDetail handle(Exception e) { }\n" +
+        "\n" +
+        "    @ModelAttribute\n" +
+        "    void common(Model m) { m.addAttribute(\"version\", buildVersion); }\n" +
+        "}\n" +
+        "// Thứ tự: Filter -> DispatcherServlet -> Interceptor.preHandle -> Controller\n" +
+        "//         -> ControllerAdvice (nếu lỗi) -> Interceptor.postHandle -> Filter",
+    },
+  ],
 },
 {
   cat: 'Spring MVC',
@@ -329,6 +860,49 @@ SS.addQuestions('java', [
       { from: 1, to: 0, label: 'response — JS chỉ đọc được nếu origin khớp', dashed: true },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cấu hình đúng chỗ và bẫy credentials",
+      code:
+        "// CORS là cơ chế của TRÌNH DUYỆT: JS ở origin A gọi API ở origin B thì trình duyệt\n" +
+        "// chặn, TRỪ KHI server trả header cho phép. Không phải bảo mật phía server —\n" +
+        "// curl/Postman không bị ảnh hưởng gì.\n" +
+        "\n" +
+        "// Cấu hình TOÀN CỤC — nên dùng\n" +
+        "@Configuration\n" +
+        "public class CorsConfig implements WebMvcConfigurer {\n" +
+        "    @Override\n" +
+        "    public void addCorsMappings(CorsRegistry reg) {\n" +
+        "        reg.addMapping(\"/api/**\")\n" +
+        "           .allowedOrigins(\"https://app.example.com\")   // liệt kê rõ, KHÔNG dùng \"*\"\n" +
+        "           .allowedMethods(\"GET\", \"POST\", \"PUT\", \"DELETE\")\n" +
+        "           .allowedHeaders(\"*\")\n" +
+        "           .exposedHeaders(\"X-Total-Count\")   // header client ĐỌC ĐƯỢC từ JS\n" +
+        "           .allowCredentials(true)            // cho gửi cookie\n" +
+        "           .maxAge(3600);                     // cache preflight 1 giờ\n" +
+        "    }\n" +
+        "}\n" +
+        "// BẪY LỚN: allowCredentials(true) + allowedOrigins(\"*\") -> trình duyệt TỪ CHỐI.\n" +
+        "// Cần pattern thì dùng allowedOriginPatterns(\"https://*.example.com\").\n" +
+        "\n" +
+        "// Theo controller\n" +
+        "@CrossOrigin(origins = \"https://app.example.com\")\n" +
+        "@RestController\n" +
+        "class PublicApi { }\n" +
+        "\n" +
+        "// CÓ SPRING SECURITY thì phải bật riêng, nếu không filter security chặn\n" +
+        "// request preflight OPTIONS trước khi CORS kịp chạy:\n" +
+        "@Bean\n" +
+        "SecurityFilterChain chain(HttpSecurity http) throws Exception {\n" +
+        "    return http.cors(withDefaults())        // dòng này là bắt buộc\n" +
+        "               .csrf(csrf -> csrf.disable())\n" +
+        "               .build();\n" +
+        "}\n" +
+        "// PREFLIGHT: trình duyệt gửi OPTIONS trước khi gửi request \"không đơn giản\"\n" +
+        "// (method khác GET/POST/HEAD, hoặc có header tuỳ chỉnh như Authorization).",
+    },
+  ],
 },
 {
   cat: 'Spring Security',
@@ -352,6 +926,47 @@ SS.addQuestions('java', [
       { to: 5, label: 'AuthorizationFilter kiểm tra quyền theo rule, ngay trước controller' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Luồng xác thực và cấu hình kiểu mới",
+      code:
+        "// Security là MỘT filter servlet (springSecurityFilterChain) chứa một CHUỖI\n" +
+        "// filter bên trong. Luồng của form login:\n" +
+        "//   1) UsernamePasswordAuthenticationFilter lấy user/pass -> tạo Authentication chưa xác thực\n" +
+        "//   2) AuthenticationManager (ProviderManager) chọn AuthenticationProvider phù hợp\n" +
+        "//   3) DaoAuthenticationProvider gọi UserDetailsService.loadUserByUsername\n" +
+        "//   4) PasswordEncoder.matches(raw, encoded)\n" +
+        "//   5) Thành công -> Authentication đã xác thực vào SecurityContextHolder\n" +
+        "//      (mặc định lưu ở ThreadLocal, và ghi vào session qua SecurityContextRepository)\n" +
+        "//   6) FilterSecurityInterceptor/AuthorizationFilter kiểm tra quyền ở cuối chuỗi\n" +
+        "\n" +
+        "@Configuration\n" +
+        "@EnableWebSecurity\n" +
+        "@EnableMethodSecurity                      // bật @PreAuthorize\n" +
+        "public class SecurityConfig {\n" +
+        "\n" +
+        "    // Spring Security 6: WebSecurityConfigurerAdapter đã bị XOÁ -> khai bean\n" +
+        "    @Bean\n" +
+        "    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {\n" +
+        "        return http\n" +
+        "            .authorizeHttpRequests(auth -> auth\n" +
+        "                .requestMatchers(\"/public/**\", \"/actuator/health\").permitAll()\n" +
+        "                .requestMatchers(\"/admin/**\").hasRole(\"ADMIN\")\n" +
+        "                .anyRequest().authenticated())          // luôn kết thúc bằng dòng này\n" +
+        "            .oauth2ResourceServer(o -> o.jwt(withDefaults()))\n" +
+        "            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))\n" +
+        "            .csrf(csrf -> csrf.disable())               // chỉ vì API stateless dùng JWT\n" +
+        "            .build();\n" +
+        "    }\n" +
+        "\n" +
+        "    @Bean\n" +
+        "    PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(12); }\n" +
+        "}\n" +
+        "// THỨ TỰ RULE QUAN TRỌNG: khớp cái đầu tiên là dừng -> rule cụ thể phải\n" +
+        "// đứng TRƯỚC rule chung. Đặt anyRequest() lên đầu là mở toang mọi thứ.",
+    },
+  ],
 },
 {
   cat: 'Spring Security',
@@ -374,6 +989,39 @@ SS.addQuestions('java', [
       ['Rủi ro', 'CSRF', 'lộ token nguy hiểm tới khi hết hạn'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hai mô hình, hai kiểu đánh đổi",
+      code:
+        "// SESSION: server giữ trạng thái, client chỉ cầm session id trong cookie.\n" +
+        "// + Thu hồi TỨC THÌ (xoá session là xong)\n" +
+        "// + Cookie HttpOnly -> JS không đọc được -> chống XSS đánh cắp token\n" +
+        "// - Server phải lưu state -> scale ngang cần session store dùng chung\n" +
+        "http.sessionManagement(s -> s\n" +
+        "        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)\n" +
+        "        .sessionFixation().migrateSession()      // chống session fixation\n" +
+        "        .maximumSessions(1));                    // một tài khoản một phiên\n" +
+        "// spring-session-data-redis: chia sẻ session giữa nhiều instance\n" +
+        "\n" +
+        "// JWT: server không giữ gì, mọi thông tin nằm trong token đã ký.\n" +
+        "// + Không state -> scale ngang thoải mái, hợp microservice\n" +
+        "// - KHÔNG THU HỒI ĐƯỢC trước khi hết hạn (đây là nhược điểm cốt tử)\n" +
+        "// - Payload ai cũng đọc được (chỉ ký, KHÔNG mã hoá) -> đừng nhét dữ liệu nhạy cảm\n" +
+        "// - Token dài, gửi kèm mọi request\n" +
+        "@Bean\n" +
+        "JwtDecoder jwtDecoder() {\n" +
+        "    return NimbusJwtDecoder.withJwkSetUri(\"https://idp.example.com/.well-known/jwks.json\")\n" +
+        "            .build();\n" +
+        "}\n" +
+        "\n" +
+        "// Mô hình thực dụng nhất hiện nay:\n" +
+        "//   access token sống NGẮN (5-15 phút, JWT, không thu hồi cũng chấp nhận được)\n" +
+        "//   + refresh token sống dài, LƯU Ở SERVER (thu hồi được), đặt trong cookie\n" +
+        "//     HttpOnly + Secure + SameSite=Strict\n" +
+        "// ĐỪNG lưu JWT trong localStorage: dính XSS là mất token.",
+    },
+  ],
 },
 {
   cat: 'Spring Security',
@@ -397,6 +1045,40 @@ SS.addQuestions('java', [
       ['Nâng cấp thuật toán', '—', 'DelegatingPasswordEncoder: prefix {bcrypt} verify hash cũ, re-encode dần'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vì sao SHA-256 sai và PasswordEncoder giải quyết gì",
+      code:
+        "// SAI: SHA-256/MD5 được thiết kế để NHANH. GPU thử được hàng tỉ hash mỗi giây\n" +
+        "// -> dò toàn bộ mật khẩu phổ biến trong vài phút. Không salt thì rainbow table\n" +
+        "// còn phá được ngay lập tức.\n" +
+        "String bad = DigestUtils.sha256Hex(password);      // ĐỪNG\n" +
+        "\n" +
+        "// ĐÚNG: hàm hash mật khẩu được thiết kế CHẬM CÓ CHỦ Ý, có salt sẵn bên trong\n" +
+        "@Bean\n" +
+        "public PasswordEncoder passwordEncoder() {\n" +
+        "    return new BCryptPasswordEncoder(12);   // cost 12 = 2^12 vòng lặp\n" +
+        "}                                           // tăng 1 -> chậm gấp đôi cho CẢ hacker\n" +
+        "\n" +
+        "String hash = encoder.encode(\"matkhau123\");\n" +
+        "// $2a$12$N9qo8uLOickgx2ZMRZoMye...  = thuật toán $ cost $ salt+hash\n" +
+        "// Cùng một mật khẩu, mỗi lần encode ra chuỗi KHÁC nhau (salt ngẫu nhiên)\n" +
+        "// -> vì vậy KHÔNG BAO GIỜ so sánh bằng equals:\n" +
+        "encoder.matches(\"matkhau123\", hash);        // true — phải dùng matches()\n" +
+        "\n" +
+        "// Argon2 (thắng Password Hashing Competition) — lựa chọn tốt nhất hiện nay,\n" +
+        "// chống cả tấn công bằng GPU/ASIC vì tốn NHIỀU BỘ NHỚ:\n" +
+        "@Bean\n" +
+        "PasswordEncoder argon2() {\n" +
+        "    return new Argon2PasswordEncoder(16, 32, 1, 1 << 14, 3);  // salt, hash, song song, 16MB, 3 vòng\n" +
+        "}\n" +
+        "\n" +
+        "// DelegatingPasswordEncoder (mặc định của Spring Security): prefix {bcrypt},\n" +
+        "// {argon2} trong chuỗi hash -> nâng cấp thuật toán dần mà không bắt user đổi mật khẩu.\n" +
+        "PasswordEncoder delegating = PasswordEncoderFactories.createDelegatingPasswordEncoder();",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -418,6 +1100,52 @@ SS.addQuestions('java', [
       ['Hợp với', 'trang admin ít dữ liệu', 'feed, infinite scroll, export lớn'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Vì sao OFFSET chậm dần và keyset thì không",
+      code:
+        "-- OFFSET: DB phải ĐỌC RỒI VỨT BỎ toàn bộ số dòng bị bỏ qua\n" +
+        "SELECT * FROM orders ORDER BY created_at DESC LIMIT 20 OFFSET 100000;\n" +
+        "-- -> quét 100.020 dòng để trả về 20. Trang càng sâu càng chậm tuyến tính.\n" +
+        "-- Lỗi thứ hai, ít người để ý: nếu có bản ghi mới chèn vào giữa lúc phân trang,\n" +
+        "-- dòng ở ranh giới bị LẶP hoặc BỊ NHẢY QUA.\n" +
+        "\n" +
+        "-- KEYSET (seek): nhớ vị trí cuối của trang trước, dùng index nhảy thẳng tới đó\n" +
+        "SELECT * FROM orders\n" +
+        "WHERE (created_at, id) < (\u00272026-09-01 10:00:00\u0027, 12345)   -- con trỏ trang trước\n" +
+        "ORDER BY created_at DESC, id DESC\n" +
+        "LIMIT 20;\n" +
+        "-- -> luôn chỉ đọc 20 dòng, trang thứ 1 hay thứ 100.000 đều nhanh như nhau.\n" +
+        "-- Cần index khớp đúng thứ tự sắp xếp:\n" +
+        "CREATE INDEX idx_orders_created_id ON orders (created_at DESC, id DESC);\n" +
+        "-- Phải thêm cột UNIQUE (id) vào khoá sắp xếp để không nhập nhằng khi trùng created_at.",
+    },
+    {
+      lang: "java",
+      title: "Cài đặt trong Spring Data",
+      code:
+        "// OFFSET — tiện, dùng cho trang admin có ít dữ liệu hoặc cần tổng số trang\n" +
+        "Page<Order> page = repo.findAll(PageRequest.of(pageNo, 20, Sort.by(\"createdAt\").descending()));\n" +
+        "page.getTotalElements();   // COUNT(*) thêm một câu query NỮA — rất đắt trên bảng lớn\n" +
+        "// -> Không cần tổng số thì trả Slice, Spring Data sẽ bỏ câu count đi\n" +
+        "Slice<Order> slice = repo.findByStatus(\"PAID\", PageRequest.of(0, 20));\n" +
+        "\n" +
+        "// KEYSET — cho API công khai, infinite scroll, hoặc bảng hàng chục triệu dòng\n" +
+        "public interface OrderRepository extends JpaRepository<Order, Long> {\n" +
+        "    @Query(\"\"\"\n" +
+        "           SELECT o FROM Order o\n" +
+        "           WHERE o.createdAt < :cursorTime\n" +
+        "              OR (o.createdAt = :cursorTime AND o.id < :cursorId)\n" +
+        "           ORDER BY o.createdAt DESC, o.id DESC\n" +
+        "           \"\"\")\n" +
+        "    List<Order> nextPage(@Param(\"cursorTime\") Instant t, @Param(\"cursorId\") Long id,\n" +
+        "                         Pageable limit);\n" +
+        "}\n" +
+        "// Trả cursor (mã hoá base64) cho client thay vì số trang.\n" +
+        "// ĐÁNH ĐỔI: không nhảy tới \"trang 57\" được, không hiện tổng số trang.",
+    },
+  ],
 },
 {
   cat: 'Spring Data / JPA',
@@ -441,6 +1169,41 @@ SS.addQuestions('java', [
       { to: 4, label: 'flushAutomatically trước, clearAutomatically sau → lần đọc kế tiếp lấy dữ liệu mới' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba tham số bắt buộc nhớ và vì sao",
+      code:
+        "public interface OrderRepository extends JpaRepository<Order, Long> {\n" +
+        "\n" +
+        "    // Thiếu @Modifying -> Hibernate coi đây là SELECT và ném lỗi ngay\n" +
+        "    @Modifying(\n" +
+        "        flushAutomatically = true,   // FLUSH thay đổi đang treo XUỐNG DB TRƯỚC khi chạy,\n" +
+        "                                     // nếu không UPDATE này chạy trên dữ liệu cũ\n" +
+        "        clearAutomatically = true    // XOÁ persistence context SAU khi chạy, vì entity\n" +
+        "    )                                // đang cache trong bộ nhớ giờ đã LỖI THỜI\n" +
+        "    @Transactional                   // bắt buộc — không có thì TransactionRequiredException\n" +
+        "    @Query(\"UPDATE Order o SET o.status = :status WHERE o.createdAt < :before\")\n" +
+        "    int expireOld(@Param(\"status\") String status, @Param(\"before\") Instant before);\n" +
+        "    // trả về SỐ DÒNG bị ảnh hưởng\n" +
+        "}\n" +
+        "\n" +
+        "// VÌ SAO nguy hiểm: bulk update/delete đi THẲNG xuống DB, KHÔNG qua\n" +
+        "// persistence context. Hệ quả:\n" +
+        "//  - entity đang managed trong bộ nhớ vẫn giữ giá trị CŨ -> đọc ra là sai\n" +
+        "//  - KHÔNG kích hoạt @PreUpdate/@PostUpdate, không tăng @Version\n" +
+        "//  - KHÔNG cascade sang quan hệ con -> có thể vi phạm khoá ngoại\n" +
+        "@Transactional\n" +
+        "public void demo() {\n" +
+        "    Order o = repo.findById(1L).orElseThrow();     // status = \"NEW\", đang managed\n" +
+        "    repo.expireOld(\"EXPIRED\", Instant.now());      // DB đã thành \"EXPIRED\"\n" +
+        "    System.out.println(o.getStatus());             // vẫn in \"NEW\" nếu không clear!\n" +
+        "}\n" +
+        "\n" +
+        "// Đổi lại: cập nhật 1 triệu dòng bằng một câu UPDATE nhanh hơn hàng nghìn lần\n" +
+        "// so với load từng entity rồi sửa. Dùng đúng chỗ: job dọn dẹp, migrate dữ liệu.",
+    },
+  ],
 },
 {
   cat: 'Spring Security',
@@ -461,5 +1224,72 @@ SS.addQuestions('java', [
       ['@PreAuthorize', 'hoạt động như nhau (SpEL, gần logic nghiệp vụ)', 'hoạt động như nhau'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Phân quyền ở mức method và khi nào cần CSRF",
+      code:
+        "@Configuration\n" +
+        "@EnableMethodSecurity          // bắt buộc, mặc định TẮT\n" +
+        "public class MethodSecurityConfig { }\n" +
+        "\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "\n" +
+        "    @PreAuthorize(\"hasRole(\u0027ADMIN\u0027)\")                     // kiểm tra TRƯỚC khi chạy\n" +
+        "    public void deleteAll() { }\n" +
+        "\n" +
+        "    @PreAuthorize(\"hasAnyAuthority(\u0027SCOPE_orders:write\u0027, \u0027ROLE_ADMIN\u0027)\")\n" +
+        "    public Order create(CreateOrder req) { }\n" +
+        "\n" +
+        "    // Truy cập tham số của method bằng #tên\n" +
+        "    @PreAuthorize(\"#userId == authentication.principal.id or hasRole(\u0027ADMIN\u0027)\")\n" +
+        "    public User profile(Long userId) { }\n" +
+        "\n" +
+        "    // Kiểm tra SAU khi chạy, dựa trên kết quả trả về\n" +
+        "    @PostAuthorize(\"returnObject.ownerId == authentication.principal.id\")\n" +
+        "    public Order get(Long id) { }\n" +
+        "\n" +
+        "    // Lọc phần tử trong collection\n" +
+        "    @PostFilter(\"filterObject.ownerId == authentication.principal.id\")\n" +
+        "    public List<Order> listAll() { }\n" +
+        "\n" +
+        "    // Logic phức tạp -> viết thành bean rồi gọi trong biểu thức\n" +
+        "    @PreAuthorize(\"@orderPermission.canEdit(#id, authentication)\")\n" +
+        "    public void edit(Long id) { }\n" +
+        "}\n" +
+        "// Lưu ý: hasRole(\u0027ADMIN\u0027) tự thêm tiền tố ROLE_ -> quyền thật là \"ROLE_ADMIN\".\n" +
+        "// hasAuthority(\u0027ADMIN\u0027) thì KHÔNG thêm gì. Nhầm hai cái này là lỗi rất hay gặp.\n" +
+        "// @PreAuthorize dựa trên proxy -> self-invocation cũng vô hiệu hoá nó.",
+    },
+    {
+      lang: "java",
+      title: "CSRF: khi nào cần bật, khi nào tắt được",
+      code:
+        "// CSRF: trang web độc hại khiến TRÌNH DUYỆT của nạn nhân gửi request kèm\n" +
+        "// cookie phiên tới site của bạn. Trình duyệt tự đính cookie -> server tưởng hợp lệ.\n" +
+        "\n" +
+        "// CẦN CSRF khi xác thực bằng COOKIE/SESSION (app web truyền thống, form)\n" +
+        "@Bean\n" +
+        "SecurityFilterChain webChain(HttpSecurity http) throws Exception {\n" +
+        "    return http.csrf(csrf -> csrf\n" +
+        "            .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()) // cho SPA đọc\n" +
+        "            .ignoringRequestMatchers(\"/webhook/**\"))    // webhook bên ngoài không có token\n" +
+        "        .build();\n" +
+        "}\n" +
+        "\n" +
+        "// TẮT ĐƯỢC khi API hoàn toàn STATELESS, xác thực bằng header Authorization:\n" +
+        "// trình duyệt KHÔNG tự thêm header đó -> không có bề mặt tấn công CSRF.\n" +
+        "@Bean\n" +
+        "SecurityFilterChain apiChain(HttpSecurity http) throws Exception {\n" +
+        "    return http.csrf(csrf -> csrf.disable())\n" +
+        "        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))\n" +
+        "        .build();\n" +
+        "}\n" +
+        "// CẢNH BÁO: lưu JWT trong cookie thì CSRF QUAY LẠI -> phải bật lại,\n" +
+        "// hoặc dùng SameSite=Strict. \"Dùng JWT nên tắt CSRF\" chỉ đúng khi token\n" +
+        "// nằm trong header, không nằm trong cookie.",
+    },
+  ],
 },
 ]);

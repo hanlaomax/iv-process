@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync } f
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hash } from './format.mjs';
+import { isSupportedLang } from './highlight.mjs';
 import {
   renderHub, renderTopicPage, renderStatsPage, renderPracticePage, practiceData,
   renderSitemap, render404,
@@ -73,6 +74,17 @@ for (const t of topics) {
       for (const r of q.related)
         if (!ids.has(r)) console.warn(`⚠ ${q.id}: related "${r}" không có trong chủ đề ${t.id}`);
     if (q.viz && !q.viz.type) console.warn(`⚠ ${q.id}: viz thiếu "type"`);
+    if (q.demo) {
+      const items = Array.isArray(q.demo) ? q.demo : [q.demo];
+      if (!items.length) console.warn(`⚠ ${q.id}: demo rỗng`);
+      items.forEach((d, i) => {
+        const at = `demo[${i}]`;
+        if (!d || !d.code) return console.warn(`⚠ ${q.id}: ${at} thiếu "code"`);
+        if (!d.lang) return console.warn(`⚠ ${q.id}: ${at} thiếu "lang"`);
+        if (!isSupportedLang(d.lang))
+          console.warn(`⚠ ${q.id}: ${at} lang "${d.lang}" chưa có bộ tô màu (sẽ render không màu)`);
+      });
+    }
     if (q.code) {
       const c = q.code;
       const miss = ['lang', 'prompt', 'tables', 'solution'].filter((k) => !c[k]);

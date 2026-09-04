@@ -268,6 +268,44 @@ img, svg { max-width: 100%; }
 .qa-block pre { background: var(--code-bg); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 0 0 10px; border: 1px solid var(--line-strong); }
 .qa-block pre code { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--code-ink); background: none; padding: 0; }
 
+/* ---------- Khối code & cấu hình minh hoạ (q.demo) ---------- */
+/* Nền code luôn tối ở cả hai theme -> chỉ cần một bảng màu token. */
+.qa-demo { margin-top: 2px; }
+.demo { margin: 0 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; background: var(--code-bg); }
+.demo:last-child { margin-bottom: 0; }
+.demo-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 7px 12px; background: rgba(255, 255, 255, .05); border-bottom: 1px solid rgba(255, 255, 255, .08);
+  font-family: var(--font-ui);
+}
+.demo-lang {
+  font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: #7fe0c4; background: rgba(127, 224, 196, .13); border-radius: 5px; padding: 2px 7px;
+}
+.demo-title { font-size: 12.5px; font-weight: 500; color: #cdd6d2; margin-right: auto; }
+.demo-copy {
+  margin-left: auto; font-family: var(--font-ui); font-size: 11px; font-weight: 600; cursor: pointer;
+  color: #9fb0aa; background: transparent; border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 6px; padding: 3px 9px; transition: color .15s, border-color .15s;
+}
+.demo-title + .demo-copy { margin-left: 0; }
+.demo-copy:hover { color: #eaf3ef; border-color: rgba(255, 255, 255, .38); }
+.demo-copy.is-done { color: #7fe0c4; border-color: rgba(127, 224, 196, .5); }
+html:not(.has-js) .demo-copy { display: none; }
+.demo-pre { margin: 0; padding: 13px 15px; overflow-x: auto; background: none; border: 0; border-radius: 0; }
+.qa-block .demo-pre code { font-size: 12.5px; line-height: 1.65; color: #d6e2dc; }
+
+/* Token — comment sáng rõ vì phần giải thích nằm trong comment */
+.hl-c { color: #86b8a4; font-style: italic; }
+.hl-s { color: #e3b98a; }
+.hl-k { color: #7ac0e8; }
+.hl-n { color: #d3a2e0; }
+.hl-b { color: #8fd9c0; }
+.hl-t { color: #e6c76a; }
+.hl-y { color: #7fd6b8; }
+.hl-v { color: #e08f8f; }
+.hl-f { color: #b9d78a; }
+
 /* ---------- Hình minh hoạ động ---------- */
 .diagram { margin: 4px 0 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); font-family: var(--font-ui); }
 .diagram-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }

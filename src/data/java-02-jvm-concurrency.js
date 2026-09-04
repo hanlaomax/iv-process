@@ -26,6 +26,42 @@ SS.addQuestions('java', [
       { label: 'Native Method Stack', qx: 0, qy: 0, jx: 1, jy: 0 },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Mỗi biến trong đoạn này nằm ở vùng nhớ nào",
+      code:
+        "public class Demo {                 // metadata của class -> Metaspace (ngoài heap)\n" +
+        "    static int counter = 0;         // biến static -> vùng static của Metaspace\n" +
+        "    private String name;            // field của instance -> nằm cùng object trên HEAP\n" +
+        "\n" +
+        "    void run(int n) {               // n là tham số -> STACK của thread đang chạy\n" +
+        "        int local = n * 2;          // primitive local -> STACK\n" +
+        "        String s = new String(\"x\"); // biến s (tham chiếu) -> STACK\n" +
+        "                                    // object String thật sự -> HEAP\n" +
+        "        byte[] buf = new byte[1024];// mảng luôn nằm trên HEAP\n" +
+        "    }\n" +
+        "}\n" +
+        "// Mỗi thread có STACK riêng (không chia sẻ) + PC register riêng.\n" +
+        "// HEAP và Metaspace dùng chung cho MỌI thread -> đây chính là nơi\n" +
+        "// phát sinh mọi vấn đề đồng bộ hoá.",
+    },
+    {
+      lang: "bash",
+      title: "Xem và giới hạn từng vùng",
+      code:
+        "# Xem toàn bộ tham số bộ nhớ JVM đang dùng thực tế\n" +
+        "java -XX:+PrintFlagsFinal -version | grep -iE \"heapsize|metaspace|threadstack\"\n" +
+        "\n" +
+        "java -Xms512m -Xmx512m \\          # heap: min = max để tránh co giãn lúc chạy\n" +
+        "     -XX:MaxMetaspaceSize=256m \\  # Metaspace: mặc định KHÔNG giới hạn -> nên chặn\n" +
+        "     -Xss512k \\                   # stack mỗi thread (nhiều thread thì giảm xuống)\n" +
+        "     -jar app.jar\n" +
+        "\n" +
+        "# Trong container: để JVM tự tính heap theo memory limit của container\n" +
+        "java -XX:MaxRAMPercentage=75.0 -jar app.jar",
+    },
+  ],
 },
 {
   cat: 'JVM & Memory',
@@ -49,6 +85,29 @@ SS.addQuestions('java', [
       ['Phạm vi', 'riêng mỗi thread', 'chia sẻ giữa các thread'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vòng đời khác nhau tạo ra hai loại lỗi khác nhau",
+      code:
+        "// STACK: cấp phát/thu hồi theo frame, tự động, cực nhanh, không cần GC\n" +
+        "void recurse(int n) {\n" +
+        "    long[] frameLocal = new long[0];   // biến tham chiếu ở stack\n" +
+        "    recurse(n + 1);                    // mỗi lần gọi đẩy thêm 1 frame\n" +
+        "}\n" +
+        "// -> StackOverflowError: stack của MỘT thread đầy (mặc định ~512KB–1MB)\n" +
+        "\n" +
+        "// HEAP: cấp phát khi new, thu hồi bởi GC, chậm hơn, dùng chung mọi thread\n" +
+        "List<byte[]> keep = new ArrayList<>();\n" +
+        "while (true) keep.add(new byte[1_000_000]);   // giữ tham chiếu -> GC không dọn được\n" +
+        "// -> OutOfMemoryError: Java heap space\n" +
+        "\n" +
+        "// Vì sao stack nhanh hơn: chỉ cần dịch con trỏ stack pointer lên/xuống.\n" +
+        "// Heap phải tìm chỗ trống, quản lý phân mảnh, rồi GC còn phải quét lại.\n" +
+        "// Escape analysis: nếu JIT chứng minh object không \"thoát\" khỏi method,\n" +
+        "// nó có thể cấp phát thẳng trên stack (scalar replacement) -> khỏi GC.",
+    },
+  ],
 },
 {
   cat: 'JVM & Memory',
@@ -64,6 +123,39 @@ SS.addQuestions('java', [
     'GC không đếm reference mà truy vết từ root. Chia thế hệ để tận dụng việc "object chết trẻ": quét vùng nhỏ thường xuyên, quét vùng lớn hiếm khi.',
   example:
     'Service tạo nhiều DTO ngắn hạn cho mỗi request: chúng sinh-diệt trong Young, Minor GC dọn sạch với pause vài ms. Nếu vô tình giữ chúng trong một `static List` (cache sai), chúng thăng lên Old → Full GC dài, p99 latency tăng vọt.',
+  demo: [
+    {
+      lang: "java",
+      title: "Reachability, generational và cách quan sát GC",
+      code:
+        "// GC KHÔNG đếm tham chiếu, mà đi từ GC Roots (biến static, biến local trên\n" +
+        "// stack, JNI...) tìm mọi object CÒN VỚI TỚI ĐƯỢC. Phần còn lại là rác.\n" +
+        "Object a = new Object();\n" +
+        "a = null;              // không còn đường đi từ GC Root -> đủ điều kiện thu hồi\n" +
+        "System.gc();           // chỉ là GỢI Ý, JVM có quyền phớt lờ. Đừng dùng trong prod.\n" +
+        "\n" +
+        "// Giả thuyết thế hệ (weak generational hypothesis):\n" +
+        "//   \"hầu hết object chết rất trẻ\" -> chia heap thành Young và Old\n" +
+        "//   Young (Eden + 2 Survivor): Minor GC chạy thường xuyên, rất nhanh,\n" +
+        "//     chỉ copy phần SỐNG sang Survivor -> chi phí tỉ lệ với object sống, không phải rác\n" +
+        "//   Object sống sót đủ số lần (MaxTenuringThreshold) -> promote sang Old\n" +
+        "//   Old: Major/Full GC, hiếm hơn nhưng đắt hơn nhiều",
+    },
+    {
+      lang: "bash",
+      title: "Đọc log GC để biết có vấn đề hay không",
+      code:
+        "# Bật log GC (Java 9+, thay cho -XX:+PrintGCDetails cũ)\n" +
+        "java -Xlog:gc*:file=gc.log:time,uptime -jar app.jar\n" +
+        "\n" +
+        "# Dấu hiệu XẤU cần tìm trong log:\n" +
+        "#   - Full GC lặp lại liên tục mà heap sau GC gần như không giảm -> sắp OOM / leak\n" +
+        "#   - pause time > SLA của bạn                                   -> đổi collector\n" +
+        "#   - promotion cao bất thường                                   -> Young quá nhỏ\n" +
+        "jcmd <pid> GC.heap_info          # xem nhanh tình trạng heap đang chạy\n" +
+        "jcmd <pid> GC.class_histogram    # class nào đang chiếm nhiều bộ nhớ nhất",
+    },
+  ],
 },
 {
   cat: 'JVM & Memory',
@@ -89,6 +181,30 @@ SS.addQuestions('java', [
       { label: 'ZGC / Shenandoah', value: 1, note: 'gần như concurrent, pause < 1ms bất kể heap lớn' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Chọn collector theo mục tiêu, không theo \"cái nào mới nhất\"",
+      code:
+        "# Serial — 1 thread, STW dài. Chỉ hợp heap nhỏ (< 100MB), CLI, container tí hon\n" +
+        "java -XX:+UseSerialGC -jar app.jar\n" +
+        "\n" +
+        "# Parallel — nhiều thread, tối ưu THROUGHPUT, chấp nhận pause dài.\n" +
+        "# Hợp batch job: tổng thời gian chạy quan trọng hơn độ trễ từng request\n" +
+        "java -XX:+UseParallelGC -XX:ParallelGCThreads=4 -jar app.jar\n" +
+        "\n" +
+        "# G1 — MẶC ĐỊNH từ Java 9. Chia heap thành region, thu region nhiều rác trước\n" +
+        "# (\"garbage first\"). Cân bằng, có thể đặt mục tiêu pause:\n" +
+        "java -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Xmx8g -jar app.jar\n" +
+        "\n" +
+        "# ZGC — pause dưới 1ms gần như không phụ thuộc kích thước heap (hàng TB).\n" +
+        "# Đổi lại: tốn CPU và RAM hơn. Hợp dịch vụ nhạy độ trễ, heap lớn\n" +
+        "java -XX:+UseZGC -Xmx32g -jar app.jar\n" +
+        "\n" +
+        "# Quy tắc chọn: heap < 4GB và không nhạy trễ -> cứ để G1 mặc định.\n" +
+        "# Chỉ đổi collector khi ĐÃ ĐO được pause là nút thắt thật sự.",
+    },
+  ],
 },
 {
   cat: 'JVM & Memory',
@@ -121,6 +237,54 @@ SS.addQuestions('java', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn dạng leak hay gặp nhất và cách sửa",
+      code:
+        "// 1) Collection static phình mãi — GC Root giữ vĩnh viễn\n" +
+        "static final Map<String, Session> CACHE = new HashMap<>();   // không bao giờ dọn\n" +
+        "static final Map<String, Session> OK =\n" +
+        "        Caffeine.newBuilder().maximumSize(10_000)\n" +
+        "                .expireAfterAccess(Duration.ofMinutes(30)).build().asMap();\n" +
+        "\n" +
+        "// 2) Listener/callback đăng ký mà không huỷ đăng ký\n" +
+        "bus.register(this);          // nếu quên bus.unregister(this) -> object sống mãi\n" +
+        "\n" +
+        "// 3) Inner class không static giữ tham chiếu ngầm tới outer\n" +
+        "class Outer {\n" +
+        "    class Inner {}                  // Inner GIỮ tham chiếu Outer.this -> outer không chết\n" +
+        "    static class SafeInner {}       // static thì không giữ -> ưu tiên dùng\n" +
+        "}\n" +
+        "\n" +
+        "// 4) ThreadLocal trong thread pool (xem câu về ThreadLocal)\n" +
+        "private static final ThreadLocal<Ctx> CTX = new ThreadLocal<>();\n" +
+        "try {\n" +
+        "    CTX.set(ctx);\n" +
+        "    handle();\n" +
+        "} finally {\n" +
+        "    CTX.remove();               // BẮT BUỘC, vì thread được tái sử dụng\n" +
+        "}",
+    },
+    {
+      lang: "bash",
+      title: "Quy trình chẩn đoán leak",
+      code:
+        "# 1) Xác nhận là leak: heap sau mỗi Full GC vẫn tăng dần theo thời gian\n" +
+        "jstat -gcutil <pid> 5s\n" +
+        "\n" +
+        "# 2) Xem class nào phình\n" +
+        "jcmd <pid> GC.class_histogram | head -20\n" +
+        "\n" +
+        "# 3) Chụp heap dump rồi mở bằng Eclipse MAT / VisualVM\n" +
+        "jcmd <pid> GC.heap_dump /tmp/heap.hprof\n" +
+        "# Trong MAT: dùng \"Leak Suspects\" rồi xem \"Path to GC Roots\" của object nghi ngờ\n" +
+        "# -> chính cái path đó chỉ ra AI đang giữ tham chiếu\n" +
+        "\n" +
+        "# 4) Tự động dump khi OOM (nên bật sẵn ở production)\n" +
+        "java -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/heap.hprof -jar app.jar",
+    },
+  ],
 },
 {
   cat: 'JVM & Memory',
@@ -149,6 +313,30 @@ SS.addQuestions('java', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Mỗi thông báo OOM chỉ về một nguyên nhân khác nhau",
+      code:
+        "# \"Java heap space\" -> object sống quá nhiều: leak, cache không giới hạn,\n" +
+        "# hoặc heap thật sự thiếu. Sửa: tìm leak trước, tăng -Xmx sau.\n" +
+        "\n" +
+        "# \"GC overhead limit exceeded\" -> tốn > 98% thời gian cho GC mà thu < 2% heap.\n" +
+        "# Bản chất vẫn là heap space, chỉ là JVM chết sớm hơn để báo cho bạn biết.\n" +
+        "\n" +
+        "# \"Metaspace\" -> nạp quá nhiều class: sinh proxy/class động, redeploy nhiều lần,\n" +
+        "# classloader bị giữ lại. Tăng -XX:MaxMetaspaceSize chỉ là hoãn, phải tìm nguồn.\n" +
+        "\n" +
+        "# \"unable to create new native thread\" -> chạm giới hạn thread của OS.\n" +
+        "# KHÔNG phải do heap. Thường là tạo thread thủ công thay vì dùng pool.\n" +
+        "ulimit -u                        # xem giới hạn process/thread của user\n" +
+        "\n" +
+        "# \"Direct buffer memory\" -> ByteBuffer.allocateDirect() ngoài heap (Netty, NIO)\n" +
+        "java -XX:MaxDirectMemorySize=512m -jar app.jar\n" +
+        "\n" +
+        "# \"Requested array size exceeds VM limit\" -> xin mảng gần Integer.MAX_VALUE",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -173,6 +361,32 @@ SS.addQuestions('java', [
       { from: 1, to: 3, label: 'run() kết thúc' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "start() vs run() và 6 trạng thái",
+      code:
+        "Thread t = new Thread(() -> System.out.println(Thread.currentThread().getName()));\n" +
+        "\n" +
+        "t.run();     // SAI: gọi như method thường -> chạy trên thread HIỆN TẠI, in \"main\"\n" +
+        "t.start();   // ĐÚNG: xin OS tạo thread mới -> in \"Thread-0\"\n" +
+        "\n" +
+        "t.start();   // gọi start() lần thứ hai -> IllegalThreadStateException\n" +
+        "             // Thread là đối tượng dùng MỘT LẦN, không tái khởi động được\n" +
+        "\n" +
+        "// 6 trạng thái trong enum Thread.State:\n" +
+        "//   NEW            đã new, chưa start()\n" +
+        "//   RUNNABLE       đang chạy HOẶC sẵn sàng chạy, chờ CPU xếp lịch\n" +
+        "//   BLOCKED        đang chờ lấy monitor lock để vào khối synchronized\n" +
+        "//   WAITING        wait() / join() / LockSupport.park() — chờ vô thời hạn\n" +
+        "//   TIMED_WAITING  sleep(n) / wait(n) / join(n) — chờ có hạn\n" +
+        "//   TERMINATED     đã chạy xong hoặc chết vì exception\n" +
+        "System.out.println(t.getState());\n" +
+        "\n" +
+        "// Java 21: virtual thread — rẻ tới mức tạo hàng triệu cái được\n" +
+        "Thread v = Thread.ofVirtual().start(() -> blockingIoCall());",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -196,6 +410,38 @@ SS.addQuestions('java', [
       ['Vai trò', 'làm việc này', 'làm việc này + trả kết quả', 'tay cầm cho kết quả async'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mảnh ghép của một tác vụ bất đồng bộ",
+      code:
+        "ExecutorService pool = Executors.newFixedThreadPool(4);\n" +
+        "\n" +
+        "// Runnable: không trả về gì, KHÔNG ném checked exception được\n" +
+        "Runnable r = () -> log.info(\"chạy xong\");\n" +
+        "pool.submit(r);\n" +
+        "\n" +
+        "// Callable: TRẢ VỀ giá trị và được phép ném checked exception\n" +
+        "Callable<Integer> c = () -> {\n" +
+        "    Thread.sleep(100);          // InterruptedException là checked -> Runnable không cho\n" +
+        "    return 42;\n" +
+        "};\n" +
+        "\n" +
+        "// Future: tay cầm để lấy kết quả sau\n" +
+        "Future<Integer> f = pool.submit(c);\n" +
+        "Integer v = f.get();            // CHẶN cho tới khi xong -> mất hết tính bất đồng bộ\n" +
+        "Integer v2 = f.get(2, TimeUnit.SECONDS);   // luôn ưu tiên bản có timeout\n" +
+        "f.cancel(true);                 // true = cho phép interrupt thread đang chạy\n" +
+        "\n" +
+        "// Exception trong task KHÔNG mất, nó được bọc lại và ném ra ở get():\n" +
+        "try {\n" +
+        "    f.get();\n" +
+        "} catch (ExecutionException e) {\n" +
+        "    Throwable real = e.getCause();   // lỗi thật nằm trong cause\n" +
+        "}\n" +
+        "// Hạn chế của Future: không compose được, không callback -> dùng CompletableFuture",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -219,6 +465,38 @@ SS.addQuestions('java', [
       ['Lưu ý', 'reentrant', 'khác lock với instance method', 'kiểm soát hạt khoá'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Object lock, class lock và tính reentrant",
+      code:
+        "class Counter {\n" +
+        "    private int value;\n" +
+        "    private final Object lock = new Object();    // khoá riêng: an toàn hơn khoá this\n" +
+        "\n" +
+        "    // Khoá trên INSTANCE (this) — hai object khác nhau không chặn nhau\n" +
+        "    public synchronized void inc() { value++; }\n" +
+        "\n" +
+        "    // Khoá trên CLASS (Counter.class) — dùng chung cho MỌI instance\n" +
+        "    public static synchronized void resetAll() { }\n" +
+        "\n" +
+        "    // Khối synchronized: giữ khoá ngắn nhất có thể -> ít tranh chấp hơn\n" +
+        "    public void incBlock() {\n" +
+        "        prepare();                       // phần không cần khoá thì để ngoài\n" +
+        "        synchronized (lock) {\n" +
+        "            value++;                     // chỉ bọc đúng phần dùng chung\n" +
+        "        }\n" +
+        "    }\n" +
+        "\n" +
+        "    // REENTRANT: thread đang giữ khoá gọi tiếp method synchronized khác\n" +
+        "    // của cùng object thì KHÔNG tự khoá chính mình (JVM đếm số lần vào)\n" +
+        "    public synchronized void a() { b(); }\n" +
+        "    public synchronized void b() { }\n" +
+        "}\n" +
+        "// synchronized đảm bảo CẢ HAI: loại trừ lẫn nhau + hiển thị bộ nhớ\n" +
+        "// (vào khối = đọc mới từ main memory, ra khối = ghi hết xuống main memory).",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -242,6 +520,35 @@ SS.addQuestions('java', [
       ['Dùng cho', 'cờ trạng thái, publish an toàn', 'bộ đếm → dùng AtomicLong / LongAdder'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "volatile giải quyết hiển thị, KHÔNG giải quyết nguyên tử",
+      code:
+        "class Worker {\n" +
+        "    private volatile boolean running = true;   // ĐÚNG chỗ dùng volatile\n" +
+        "\n" +
+        "    void run() {\n" +
+        "        while (running) { doWork(); }\n" +
+        "        // Không có volatile, JIT được phép cache `running` vào thanh ghi\n" +
+        "        // -> vòng lặp không bao giờ thấy giá trị mới -> treo vĩnh viễn\n" +
+        "    }\n" +
+        "    void stop() { running = false; }           // thread khác gọi\n" +
+        "}\n" +
+        "\n" +
+        "class Broken {\n" +
+        "    private volatile int count;\n" +
+        "    void inc() { count++; }     // SAI: count++ là 3 lệnh (đọc, cộng, ghi)\n" +
+        "}                               // volatile không làm chuỗi đó thành nguyên tử\n" +
+        "\n" +
+        "// Đúng: dùng atomic hoặc khoá\n" +
+        "AtomicInteger ok = new AtomicInteger();\n" +
+        "ok.incrementAndGet();\n" +
+        "\n" +
+        "// volatile đảm bảo:  hiển thị (ghi xong là mọi thread thấy) + cấm sắp xếp lại lệnh\n" +
+        "// volatile KHÔNG đảm bảo: nguyên tử của chuỗi đọc-sửa-ghi",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -267,6 +574,33 @@ SS.addQuestions('java', [
       ['Ví dụ ready+config', 'B thấy ready=true nhưng config=null', 'ready volatile → B thấy config đã gán'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Các cặp happens-before dùng nhiều nhất",
+      code:
+        "// JMM không nói \"khi nào ghi xuống RAM\", nó nói: nếu A happens-before B\n" +
+        "// thì B CHẮC CHẮN thấy mọi thứ A đã làm. Không có quan hệ đó -> không bảo đảm gì.\n" +
+        "\n" +
+        "// 1) Mở khoá happens-before lần khoá kế tiếp trên CÙNG monitor\n" +
+        "synchronized (lock) { shared = 1; }      // ghi\n" +
+        "synchronized (lock) { read(shared); }    // thread khác chắc chắn thấy 1\n" +
+        "\n" +
+        "// 2) Ghi volatile happens-before mọi lần đọc volatile đó sau này\n" +
+        "volatile boolean ready;\n" +
+        "data = compute();  ready = true;         // thread A: data ghi TRƯỚC ready\n" +
+        "if (ready) use(data);                    // thread B: thấy ready -> chắc chắn thấy data\n" +
+        "\n" +
+        "// 3) Thread.start() happens-before mọi thứ trong thread mới\n" +
+        "config = load();  new Thread(this::run).start();   // run() chắc chắn thấy config\n" +
+        "\n" +
+        "// 4) Mọi thứ trong thread happens-before join() trả về\n" +
+        "t.join();  read(result);                 // chắc chắn thấy kết quả t đã ghi\n" +
+        "\n" +
+        "// 5) Ghi field final trong constructor happens-before object được công bố\n" +
+        "// -> đây là lý do object immutable an toàn khi chia sẻ mà không cần đồng bộ",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -293,6 +627,42 @@ SS.addQuestions('java', [
       { to: 5, label: 'quay lại while: kiểm tra lại vì có thể bị "cướp" điều kiện hoặc wakeup giả' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vì sao phải while, và vì sao nên bỏ hẳn wait/notify",
+      code:
+        "class Queue<T> {\n" +
+        "    private final LinkedList<T> items = new LinkedList<>();\n" +
+        "    private final int max = 10;\n" +
+        "\n" +
+        "    public synchronized void put(T x) throws InterruptedException {\n" +
+        "        // BẮT BUỘC while, KHÔNG được dùng if:\n" +
+        "        //  - spurious wakeup: JVM cho phép wait() tự tỉnh không lý do\n" +
+        "        //  - notifyAll() đánh thức nhiều thread, chỉ 1 thread thắng khoá,\n" +
+        "        //    các thread còn lại tỉnh dậy khi điều kiện đã sai trở lại\n" +
+        "        while (items.size() == max) {\n" +
+        "            wait();          // NHẢ khoá rồi mới ngủ -> nếu không giữ khoá:\n" +
+        "        }                    // IllegalMonitorStateException\n" +
+        "        items.add(x);\n" +
+        "        notifyAll();         // đánh thức cả consumer lẫn producer đang chờ\n" +
+        "    }\n" +
+        "\n" +
+        "    public synchronized T take() throws InterruptedException {\n" +
+        "        while (items.isEmpty()) wait();\n" +
+        "        T x = items.removeFirst();\n" +
+        "        notifyAll();\n" +
+        "        return x;\n" +
+        "    }\n" +
+        "}\n" +
+        "// Phải giữ khoá vì \"kiểm tra điều kiện\" và \"đi ngủ\" bắt buộc phải nguyên tử —\n" +
+        "// nếu không, notify() có thể chen vào đúng giữa hai bước -> ngủ quên mãi mãi.\n" +
+        "\n" +
+        "// THỰC TẾ: đừng viết tay như trên, dùng sẵn có:\n" +
+        "BlockingQueue<T> q = new ArrayBlockingQueue<>(10);\n" +
+        "q.put(x);   q.take();",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -318,6 +688,48 @@ SS.addQuestions('java', [
       { label: 'T2 chờ A', note: 'nhưng A đang bị T1 giữ → deadlock. Phá vòng: luôn khoá theo id tăng dần' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Tạo deadlock, rồi phá nó bằng thứ tự khoá cố định",
+      code:
+        "// 4 điều kiện phải ĐỒNG THỜI đúng: loại trừ lẫn nhau, giữ-và-chờ,\n" +
+        "// không giành lại được, và chờ vòng tròn. Phá 1 trong 4 là hết deadlock.\n" +
+        "\n" +
+        "// DEADLOCK: hai thread khoá hai object theo thứ tự NGƯỢC nhau\n" +
+        "void transferBad(Account a, Account b, long amount) {\n" +
+        "    synchronized (a) {              // T1: khoá A rồi chờ B\n" +
+        "        synchronized (b) {          // T2: khoá B rồi chờ A  -> chờ vòng tròn\n" +
+        "            a.debit(amount); b.credit(amount);\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH 1 (tốt nhất): áp một THỨ TỰ TOÀN CỤC -> phá \"chờ vòng tròn\"\n" +
+        "void transferOk(Account a, Account b, long amount) {\n" +
+        "    Account first  = a.id() < b.id() ? a : b;    // luôn khoá id nhỏ trước\n" +
+        "    Account second = a.id() < b.id() ? b : a;\n" +
+        "    synchronized (first) {\n" +
+        "        synchronized (second) { a.debit(amount); b.credit(amount); }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH 2: khoá có timeout -> phá \"giữ-và-chờ\"\n" +
+        "if (lockA.tryLock(1, TimeUnit.SECONDS)) {\n" +
+        "    try {\n" +
+        "        if (lockB.tryLock(1, TimeUnit.SECONDS)) { }\n" +
+        "    } finally { lockA.unlock(); }     // nhả hết rồi thử lại sau\n" +
+        "}",
+    },
+    {
+      lang: "bash",
+      title: "Phát hiện deadlock trên hệ thống đang chạy",
+      code:
+        "jstack <pid> | grep -A 20 \"Found one Java-level deadlock\"\n" +
+        "# jstack in thẳng ra chu trình chờ: thread nào giữ khoá nào, đang chờ khoá nào\n" +
+        "jcmd <pid> Thread.print",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -342,6 +754,37 @@ SS.addQuestions('java', [
       { to: 5, label: 'thấy user của request trước → lỗ hổng bảo mật' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Vì sao thread pool biến ThreadLocal thành nguồn rò rỉ",
+      code:
+        "// Dùng đúng: mang context theo suốt một request mà không phải truyền tham số\n" +
+        "public class RequestContext {\n" +
+        "    private static final ThreadLocal<String> TRACE_ID = new ThreadLocal<>();\n" +
+        "\n" +
+        "    public static void set(String id) { TRACE_ID.set(id); }\n" +
+        "    public static String get()        { return TRACE_ID.get(); }\n" +
+        "    public static void clear()        { TRACE_ID.remove(); }   // mấu chốt\n" +
+        "}\n" +
+        "\n" +
+        "// Trong filter/interceptor: LUÔN dọn trong finally\n" +
+        "try {\n" +
+        "    RequestContext.set(traceId);\n" +
+        "    chain.doFilter(req, res);\n" +
+        "} finally {\n" +
+        "    RequestContext.clear();     // thiếu dòng này là rò rỉ + rò rỉ DỮ LIỆU\n" +
+        "}\n" +
+        "\n" +
+        "// Vì sao rò rỉ: mỗi Thread có một ThreadLocalMap, key là WeakReference tới\n" +
+        "// ThreadLocal nhưng VALUE là strong reference. Thread trong pool sống mãi\n" +
+        "// -> value sống mãi theo. Tệ hơn: request sau dùng lại thread đó và ĐỌC ĐƯỢC\n" +
+        "// dữ liệu của request trước (lộ thông tin người dùng khác).\n" +
+        "\n" +
+        "// Với thread pool + tác vụ con: giá trị KHÔNG tự truyền sang thread khác\n" +
+        "// -> dùng InheritableThreadLocal (chỉ lúc tạo thread) hoặc truyền tường minh.",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -366,6 +809,37 @@ SS.addQuestions('java', [
       { to: 4, label: 'vẫn không nhận nổi → handler: AbortPolicy (mặc định) / CallerRunsPolicy / Discard…' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bảy tham số và bẫy của Executors.newFixedThreadPool",
+      code:
+        "// Đừng dùng Executors.newFixedThreadPool / newCachedThreadPool ở production:\n" +
+        "//   - newFixedThreadPool  -> hàng đợi LinkedBlockingQueue KHÔNG GIỚI HẠN -> OOM\n" +
+        "//   - newCachedThreadPool -> tạo tới Integer.MAX_VALUE thread -> chết OS\n" +
+        "ExecutorService pool = new ThreadPoolExecutor(\n" +
+        "        4,                                  // corePoolSize: luôn giữ sống\n" +
+        "        16,                                 // maximumPoolSize: trần khi hàng đợi ĐẦY\n" +
+        "        60L, TimeUnit.SECONDS,              // keepAlive: thread thừa quá core thì chết\n" +
+        "        new ArrayBlockingQueue<>(1000),     // hàng đợi CÓ GIỚI HẠN -> áp lực ngược\n" +
+        "        new ThreadFactoryBuilder().setNameFormat(\"order-%d\").build(),  // đặt tên: dễ debug\n" +
+        "        new ThreadPoolExecutor.CallerRunsPolicy());   // rejection policy\n" +
+        "\n" +
+        "// THỨ TỰ QUYẾT ĐỊNH (hay bị hiểu sai): đủ core -> XẾP HÀNG ĐỢI trước,\n" +
+        "// hàng đợi đầy rồi MỚI mở thêm thread tới max. Nên hàng đợi vô hạn nghĩa là\n" +
+        "// maximumPoolSize không bao giờ có tác dụng.\n" +
+        "\n" +
+        "// 4 rejection policy:\n" +
+        "//   AbortPolicy         (mặc định) ném RejectedExecutionException\n" +
+        "//   CallerRunsPolicy    thread gọi tự chạy -> làm chậm producer = áp lực ngược\n" +
+        "//   DiscardPolicy       vứt im lặng — gần như luôn sai\n" +
+        "//   DiscardOldestPolicy vứt task cũ nhất trong hàng đợi\n" +
+        "\n" +
+        "pool.shutdown();                                   // không nhận task mới\n" +
+        "if (!pool.awaitTermination(30, TimeUnit.SECONDS))  // chờ task đang chạy xong\n" +
+        "    pool.shutdownNow();                            // hết kiên nhẫn -> interrupt",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -388,6 +862,32 @@ SS.addQuestions('java', [
       ['Ví dụ', 'resize ảnh = 4 (số vCPU)', 'gọi API ~40, chặn ở HikariCP 20'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Công thức và cách đo thay vì đoán",
+      code:
+        "int cores = Runtime.getRuntime().availableProcessors();\n" +
+        "\n" +
+        "// CPU-bound (tính toán, nén, mã hoá): thêm thread chỉ tổ tốn context switch\n" +
+        "ExecutorService cpu = Executors.newFixedThreadPool(cores + 1);\n" +
+        "\n" +
+        "// IO-bound (gọi HTTP, query DB): thread ngồi chờ, nên cần nhiều hơn nhiều\n" +
+        "//   N = cores * targetUtilization * (1 + waitTime / serviceTime)\n" +
+        "// Ví dụ: 8 core, chờ 90ms, tính 10ms, muốn dùng 100% CPU:\n" +
+        "//   8 * 1 * (1 + 90/10) = 80 thread\n" +
+        "int io = cores * 1 * (1 + 90 / 10);\n" +
+        "\n" +
+        "// TRẦN THỰC TẾ quan trọng hơn công thức: pool gọi DB không được lớn hơn\n" +
+        "// connection pool, nếu không thread chỉ xếp hàng chờ connection.\n" +
+        "// -> đo p99 latency và mức dùng CPU rồi chỉnh, đừng tin công thức tuyệt đối.\n" +
+        "\n" +
+        "// Java 21: IO-bound không cần tính nữa — virtual thread rẻ như object thường\n" +
+        "try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {\n" +
+        "    ex.submit(() -> httpClient.send(req, ofString()));   // chặn thoải mái\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -417,6 +917,34 @@ SS.addQuestions('java', [
       { from: 0, to: 0, label: 'allOf(...).thenApply(assemble)' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chuỗi, ghép song song và xử lý lỗi",
+      code:
+        "// Chạy bất đồng bộ trên pool CHỈ ĐỊNH (mặc định là ForkJoinPool.commonPool —\n" +
+        "// dùng chung toàn JVM, tác vụ chặn sẽ làm đói các phần khác)\n" +
+        "CompletableFuture<User> userF = CompletableFuture.supplyAsync(() -> loadUser(id), pool);\n" +
+        "\n" +
+        "// thenApply: biến đổi đồng bộ | thenCompose: nối một future khác (tránh lồng nhau)\n" +
+        "CompletableFuture<List<Order>> ordersF = userF\n" +
+        "        .thenApply(User::id)                         // U -> V\n" +
+        "        .thenCompose(uid -> loadOrdersAsync(uid));   // U -> CompletableFuture<V>\n" +
+        "\n" +
+        "// thenCombine: hai việc chạy SONG SONG rồi gộp kết quả\n" +
+        "CompletableFuture<Profile> profile = userF.thenCombine(ordersF, Profile::new);\n" +
+        "\n" +
+        "// allOf: chờ tất cả (chú ý: allOf trả về Void, phải join lại từng cái)\n" +
+        "CompletableFuture.allOf(userF, ordersF).join();\n" +
+        "\n" +
+        "// Xử lý lỗi: exceptionally (chỉ khi lỗi) / handle (cả hai) / whenComplete (side-effect)\n" +
+        "profile.orTimeout(2, TimeUnit.SECONDS)             // Java 9+: tự huỷ khi quá hạn\n" +
+        "       .exceptionally(ex -> Profile.empty())       // fallback\n" +
+        "       .thenAccept(this::render);\n" +
+        "\n" +
+        "// BẪY: quên join()/get() thì exception biến mất hoàn toàn, không log gì cả.",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -439,6 +967,37 @@ SS.addQuestions('java', [
       { label: 'thất bại → lặp lại', note: 'thread khác vừa đổi → đọc lại và thử lại; không thread nào bị chặn' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "CAS, vòng lặp thử lại và ABA",
+      code:
+        "// CAS = compare-and-swap: một lệnh CPU nguyên tử.\n" +
+        "// \"Nếu ô nhớ đang là expected thì đặt thành newValue, trả về có đổi được không\"\n" +
+        "AtomicInteger counter = new AtomicInteger(0);\n" +
+        "counter.incrementAndGet();          // bên trong là vòng lặp CAS, không dùng khoá\n" +
+        "\n" +
+        "// Bản chất incrementAndGet():\n" +
+        "int prev, next;\n" +
+        "do {\n" +
+        "    prev = counter.get();\n" +
+        "    next = prev + 1;\n" +
+        "} while (!counter.compareAndSet(prev, next));   // thua thì đọc lại và thử lại\n" +
+        "\n" +
+        "// Ưu: không khoá -> không có context switch, không deadlock.\n" +
+        "// Nhược: tranh chấp cao thì quay vòng đốt CPU. Khi đó dùng LongAdder:\n" +
+        "LongAdder adder = new LongAdder();   // tách thành nhiều ô, cộng dồn khi đọc\n" +
+        "adder.increment();\n" +
+        "long total = adder.sum();\n" +
+        "\n" +
+        "// ABA: T1 đọc A; T2 đổi A->B->A; T1 CAS vẫn THÀNH CÔNG dù state đã khác.\n" +
+        "// Với int thường vô hại, nhưng với con trỏ/stack thì hỏng. Cách chữa: gắn thêm tem\n" +
+        "AtomicStampedReference<Node> head = new AtomicStampedReference<>(node, 0);\n" +
+        "int[] stamp = new int[1];\n" +
+        "Node cur = head.get(stamp);\n" +
+        "head.compareAndSet(cur, next, stamp[0], stamp[0] + 1);   // so cả giá trị lẫn tem",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -462,6 +1021,36 @@ SS.addQuestions('java', [
       ['Mục đích', 'trì hoãn theo đồng hồ', 'phối hợp thread theo điều kiện'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Khác biệt cốt lõi: có nhả khoá hay không",
+      code:
+        "synchronized (lock) {\n" +
+        "    Thread.sleep(1000);   // GIỮ NGUYÊN khoá suốt 1 giây\n" +
+        "                          // -> mọi thread khác chờ lock đều bị chặn theo\n" +
+        "}\n" +
+        "\n" +
+        "synchronized (lock) {\n" +
+        "    lock.wait(1000);      // NHẢ khoá rồi mới ngủ, tỉnh dậy thì giành lại khoá\n" +
+        "}\n" +
+        "\n" +
+        "// Bảng khác biệt:\n" +
+        "//   sleep  -> method static của Thread, gọi ở ĐÂU CŨNG ĐƯỢC, không nhả khoá,\n" +
+        "//             tự tỉnh khi hết giờ. Dùng để: trì hoãn, giãn nhịp retry.\n" +
+        "//   wait   -> method của Object, BẮT BUỘC trong synchronized (không thì\n" +
+        "//             IllegalMonitorStateException), nhả khoá, chờ notify/notifyAll.\n" +
+        "//             Dùng để: chờ một ĐIỀU KIỆN do thread khác tạo ra.\n" +
+        "\n" +
+        "// Cả hai đều ném InterruptedException — và cách xử lý đúng là:\n" +
+        "try {\n" +
+        "    Thread.sleep(1000);\n" +
+        "} catch (InterruptedException e) {\n" +
+        "    Thread.currentThread().interrupt();   // khôi phục cờ interrupt\n" +
+        "    return;                               // rồi thoát sớm, ĐỪNG nuốt im lặng\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Concurrency',
@@ -488,5 +1077,36 @@ SS.addQuestions('java', [
       ['Nhả khoá', 'tự động khi rời block', 'phải unlock() trong finally'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn thứ ReentrantLock làm được mà synchronized không",
+      code:
+        "ReentrantLock lock = new ReentrantLock();\n" +
+        "\n" +
+        "// 1) Khoá có timeout -> tránh chờ vô hạn, phá được deadlock\n" +
+        "if (lock.tryLock(500, TimeUnit.MILLISECONDS)) {\n" +
+        "    try { doWork(); } finally { lock.unlock(); }   // BẮT BUỘC unlock trong finally\n" +
+        "} else {\n" +
+        "    log.warn(\"bỏ qua, hệ thống đang bận\");\n" +
+        "}\n" +
+        "\n" +
+        "// 2) Khoá có thể bị interrupt (synchronized thì không)\n" +
+        "lock.lockInterruptibly();\n" +
+        "\n" +
+        "// 3) Khoá công bằng: FIFO, không thread nào bị bỏ đói (đổi lại: chậm hơn)\n" +
+        "ReentrantLock fair = new ReentrantLock(true);\n" +
+        "\n" +
+        "// 4) NHIỀU điều kiện chờ trên cùng một khoá — synchronized chỉ có một hàng chờ\n" +
+        "Condition notFull  = lock.newCondition();\n" +
+        "Condition notEmpty = lock.newCondition();\n" +
+        "notFull.await();        // chỉ đánh thức đúng nhóm cần thiết\n" +
+        "notEmpty.signalAll();\n" +
+        "\n" +
+        "// Điểm trừ: phải tự unlock. Quên finally là treo toàn hệ thống.\n" +
+        "// -> mặc định cứ dùng synchronized, chỉ đổi sang ReentrantLock khi cần\n" +
+        "// một trong bốn thứ trên. Từ Java 15, hiệu năng hai bên gần như tương đương.",
+    },
+  ],
 },
 ]);
