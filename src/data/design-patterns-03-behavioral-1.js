@@ -20,6 +20,52 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Không sửa client. Comparator trong Java chính là Strategy' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Đóng gói thuật toán, hoán đổi lúc chạy",
+      code:
+        "// VẤN ĐỀ: cùng một việc, nhiều cách làm, và cách làm được chọn lúc chạy.\n" +
+        "public interface ShippingCostCalculator {\n" +
+        "    Money calculate(Order order);\n" +
+        "}\n" +
+        "\n" +
+        "@Component(\"standard\")\n" +
+        "public class StandardShipping implements ShippingCostCalculator {\n" +
+        "    public Money calculate(Order o) { return Money.vnd(30_000); }\n" +
+        "}\n" +
+        "@Component(\"express\")\n" +
+        "public class ExpressShipping implements ShippingCostCalculator {\n" +
+        "    public Money calculate(Order o) { return Money.vnd(30_000 + o.weightKg() * 5_000); }\n" +
+        "}\n" +
+        "@Component(\"free\")\n" +
+        "public class FreeShipping implements ShippingCostCalculator {\n" +
+        "    public Money calculate(Order o) { return Money.ZERO; }\n" +
+        "}\n" +
+        "\n" +
+        "// CONTEXT — không biết gì về các cài đặt cụ thể\n" +
+        "@Service\n" +
+        "public class ShippingService {\n" +
+        "    private final Map<String, ShippingCostCalculator> strategies;   // Spring tiêm HẾT\n" +
+        "\n" +
+        "    public Money cost(Order o, String method) {\n" +
+        "        var s = strategies.get(method);\n" +
+        "        if (s == null) throw new IllegalArgumentException(\"phương thức lạ: \" + method);\n" +
+        "        return s.calculate(o);\n" +
+        "    }\n" +
+        "}\n" +
+        "// -> Thêm phương thức giao hàng mới = thêm MỘT @Component. KHÔNG sửa\n" +
+        "//    dòng nào ở ShippingService (đúng Open/Closed Principle).\n" +
+        "\n" +
+        "// VỚI LOGIC ĐƠN GIẢN, lambda là đủ — không cần cả hệ thống class:\n" +
+        "Map<String, Function<Order, Money>> strategies = Map.of(\n" +
+        "    \"standard\", o -> Money.vnd(30_000),\n" +
+        "    \"free\",     o -> Money.ZERO);\n" +
+        "\n" +
+        "// KHI NÀO DÙNG CLASS thay vì lambda: thuật toán có state, cần test riêng,\n" +
+        "// cần tiêm phụ thuộc, hoặc dài hơn vài dòng.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -47,6 +93,45 @@ SS.addQuestions('design-patterns', [
       ['2–3 nhánh đơn giản, ổn định, một chỗ', 'quá nặng', 'rõ ràng hơn, ít file'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Không phải mọi switch đều cần thành Strategy",
+      code:
+        "// SWITCH VẪN TỐT khi: ít nhánh, logic NGẮN, ổn định, và nằm ở MỘT chỗ\n" +
+        "public Money shippingCost(Order o, ShippingMethod m) {\n" +
+        "    return switch (m) {\n" +
+        "        case STANDARD -> Money.vnd(30_000);\n" +
+        "        case EXPRESS  -> Money.vnd(50_000);\n" +
+        "        case FREE     -> Money.ZERO;\n" +
+        "    };\n" +
+        "}\n" +
+        "// Với sealed/enum, compiler còn ĐẢM BẢO bạn xử lý hết mọi nhánh —\n" +
+        "// điều mà Strategy KHÔNG cho bạn.\n" +
+        "\n" +
+        "// TÁCH THÀNH STRATEGY khi có ÍT NHẤT MỘT dấu hiệu:\n" +
+        "// 1) mỗi nhánh dài hơn ~10 dòng, hoặc có logic con phức tạp\n" +
+        "// 2) CÙNG một switch xuất hiện ở NHIỀU chỗ trong code\n" +
+        "//    (tính phí ở chỗ này, hiển thị nhãn ở chỗ kia, validate ở chỗ khác)\n" +
+        "// 3) mỗi nhánh cần PHỤ THUỘC KHÁC NHAU (gọi service khác nhau)\n" +
+        "public class ExpressShipping implements ShippingCostCalculator {\n" +
+        "    private final DistanceService distances;      // chỉ nhánh này cần\n" +
+        "    private final WeatherService weather;\n" +
+        "}\n" +
+        "// 4) thêm nhánh mới là chuyện THƯỜNG XUYÊN\n" +
+        "// 5) cần test từng nhánh ĐỘC LẬP\n" +
+        "// 6) nhánh được nạp động (plugin, cấu hình theo tenant)\n" +
+        "\n" +
+        "// ĐỪNG TÁCH khi:\n" +
+        "//  - chỉ có 2-3 nhánh, mỗi nhánh một dòng\n" +
+        "//  - tập giá trị cố định và gần như không đổi\n" +
+        "//  - việc tách chỉ làm phải nhảy qua 5 file mới hiểu được một logic đơn giản\n" +
+        "\n" +
+        "// QUY TẮC BA: xuất hiện lần thứ ba thì mới trừu tượng hoá. Trừu tượng\n" +
+        "// hoá quá sớm thường tạo ra ranh giới SAI, và ranh giới sai đắt hơn\n" +
+        "// nhiều so với một switch dài.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -69,6 +154,60 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Nền tảng của event handling, reactive, data binding, MVC' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Một đối tượng đổi, nhiều đối tượng được báo",
+      code:
+        "// SUBJECT giữ danh sách observer và thông báo khi có thay đổi.\n" +
+        "public interface OrderObserver {\n" +
+        "    void onOrderPlaced(Order order);\n" +
+        "}\n" +
+        "\n" +
+        "public class OrderSubject {\n" +
+        "    private final List<OrderObserver> observers = new CopyOnWriteArrayList<>();\n" +
+        "    // CopyOnWriteArrayList: an toàn khi observer tự gỡ mình trong lúc duyệt\n" +
+        "\n" +
+        "    public void subscribe(OrderObserver o)   { observers.add(o); }\n" +
+        "    public void unsubscribe(OrderObserver o) { observers.remove(o); }\n" +
+        "\n" +
+        "    public void place(Order order) {\n" +
+        "        repository.save(order);\n" +
+        "        for (var o : observers) {\n" +
+        "            try { o.onOrderPlaced(order); }\n" +
+        "            catch (Exception e) {\n" +
+        "                // MỘT observer lỗi KHÔNG được làm hỏng các observer khác\n" +
+        "                log.error(\"observer {} lỗi\", o.getClass(), e);\n" +
+        "            }\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// TRONG SPRING — không cần tự viết:\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "    private final ApplicationEventPublisher publisher;\n" +
+        "    @Transactional\n" +
+        "    public void place(Order o) {\n" +
+        "        repo.save(o);\n" +
+        "        publisher.publishEvent(new OrderPlacedEvent(o.id()));\n" +
+        "    }\n" +
+        "}\n" +
+        "@Component\n" +
+        "public class EmailNotifier {\n" +
+        "    @EventListener\n" +
+        "    public void on(OrderPlacedEvent e) { mailer.send(e); }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: OrderService KHÔNG biết ai đang lắng nghe -> thêm việc cần làm\n" +
+        "// khi có đơn hàng mà không sửa OrderService.\n" +
+        "\n" +
+        "// BA CẠM BẪY (xem các câu riêng):\n" +
+        "//  1) rò rỉ bộ nhớ nếu quên unsubscribe\n" +
+        "//  2) đồng bộ mặc định -> observer chậm làm chậm cả luồng chính\n" +
+        "//  3) thứ tự thông báo không đảm bảo, và dễ tạo chuỗi sự kiện dây chuyền",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -93,6 +232,42 @@ SS.addQuestions('design-patterns', [
       ['Coupling', 'nhẹ (subject biết interface Observer)', 'publisher/subscriber không biết nhau', 'service không biết nhau'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mức độ tách rời",
+      code:
+        "// 1) OBSERVER (GoF) — subject GIỮ THAM CHIẾU trực tiếp tới observer\n" +
+        "subject.subscribe(observer);           // subject BIẾT observer là ai\n" +
+        "// - cùng tiến trình, cùng bộ nhớ\n" +
+        "// - đồng bộ, gọi trực tiếp\n" +
+        "// - subject và observer gắn với nhau (dù qua interface)\n" +
+        "\n" +
+        "// 2) PUB/SUB — có TRUNG GIAN (message bus/broker); publisher và subscriber\n" +
+        "//    KHÔNG BIẾT NHAU\n" +
+        "publisher.publishEvent(new OrderPlacedEvent(id));    // Spring: bus trong tiến trình\n" +
+        "kafkaTemplate.send(\"order-events\", event);           // Kafka: bus ngoài tiến trình\n" +
+        "// - tách rời hoàn toàn: thêm/bớt subscriber không ảnh hưởng publisher\n" +
+        "// - có thể qua mạng, có thể bền vững, có thể phát lại\n" +
+        "\n" +
+        "// 3) EVENT-DRIVEN ARCHITECTURE — không chỉ là cơ chế, mà là KIẾN TRÚC:\n" +
+        "//    hệ thống được tổ chức quanh việc SẢN SINH và PHẢN ỨNG với sự kiện.\n" +
+        "//    Bao gồm: event sourcing, CQRS, saga, event streaming.\n" +
+        "\n" +
+        "// SO SÁNH THEO BA TIÊU CHÍ:\n" +
+        "//              Observer      Pub/Sub trong tiến trình   Pub/Sub qua broker\n" +
+        "// Phạm vi      cùng process  cùng process               nhiều service\n" +
+        "// Bền vững     không         không                      có (Kafka)\n" +
+        "// Biết nhau    có            không                      không\n" +
+        "// Phát lại     không         không                      có\n" +
+        "\n" +
+        "// LƯU Ý QUAN TRỌNG: Spring ApplicationEvent mặc định là ĐỒNG BỘ và nằm\n" +
+        "// trong CÙNG TRANSACTION -> listener ném lỗi là rollback cả nghiệp vụ chính.\n" +
+        "@TransactionalEventListener(phase = AFTER_COMMIT)   // chờ commit rồi mới chạy\n" +
+        "public void on(OrderPlacedEvent e) { mailer.send(e); }\n" +
+        "// Đây là cấu hình đúng cho việc gửi mail/đẩy message: tránh gửi rồi mới rollback.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -114,6 +289,51 @@ SS.addQuestions('design-patterns', [
       { to: 4, label: 'Dùng khi nhiều biến thể chia sẻ cùng quy trình, khác vài bước' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Lớp cha giữ khung, lớp con điền chi tiết",
+      code:
+        "public abstract class DataImporter {\n" +
+        "\n" +
+        "    // TEMPLATE METHOD — final: khung KHÔNG được đổi\n" +
+        "    public final ImportResult importData(Path file) {\n" +
+        "        validate(file);                      // bước CỐ ĐỊNH\n" +
+        "        var raw = read(file);                // bước THAY ĐỔI\n" +
+        "        var records = parse(raw);            // bước THAY ĐỔI\n" +
+        "        var valid = filterValid(records);    // bước CỐ ĐỊNH\n" +
+        "        var saved = save(valid);             // bước THAY ĐỔI\n" +
+        "        afterImport(saved);                  // HOOK — mặc định không làm gì\n" +
+        "        return new ImportResult(saved.size(), records.size() - valid.size());\n" +
+        "    }\n" +
+        "\n" +
+        "    protected abstract String read(Path file);\n" +
+        "    protected abstract List<Record> parse(String raw);\n" +
+        "    protected abstract int save(List<Record> records);\n" +
+        "\n" +
+        "    // HOOK: lớp con override nếu muốn, không bắt buộc\n" +
+        "    protected void afterImport(List<Record> saved) { }\n" +
+        "\n" +
+        "    private void validate(Path f) { if (!Files.exists(f)) throw new IllegalArgumentException(); }\n" +
+        "    private List<Record> filterValid(List<Record> r) { return r.stream().filter(Record::isValid).toList(); }\n" +
+        "}\n" +
+        "\n" +
+        "public class CsvImporter extends DataImporter {\n" +
+        "    protected String read(Path f) { return Files.readString(f); }\n" +
+        "    protected List<Record> parse(String raw) { return CsvParser.parse(raw); }\n" +
+        "    protected int save(List<Record> r) { return repo.saveAll(r).size(); }\n" +
+        "    @Override protected void afterImport(List<Record> saved) { cache.invalidateAll(); }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: thuật toán tổng thể ĐƯỢC ĐẢM BẢO không đổi; lớp con không thể\n" +
+        "// quên bước validate hay filterValid. Đây là \"Hollywood principle\":\n" +
+        "// lớp cha gọi lớp con, không phải ngược lại.\n" +
+        "\n" +
+        "// CẠM BẪY: dùng KẾ THỪA -> gắn chặt, chỉ chọn được biến thể lúc BIÊN DỊCH,\n" +
+        "// và lớp con phụ thuộc vào chi tiết của lớp cha. Cần linh hoạt lúc chạy\n" +
+        "// -> dùng Strategy (truyền các bước vào dưới dạng hàm).",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -138,6 +358,52 @@ SS.addQuestions('design-patterns', [
       ['Hợp khi', 'biến thể ít, cố định, nhiều code chung', 'đổi runtime, tránh kế thừa sâu, test cô lập'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Kế thừa vs composition",
+      code:
+        "// TEMPLATE METHOD — KẾ THỪA. Khung ở lớp cha, biến thể ở lớp con.\n" +
+        "public abstract class Report {\n" +
+        "    public final void generate() {          // khung CỐ ĐỊNH\n" +
+        "        var data = fetchData();\n" +
+        "        var formatted = format(data);\n" +
+        "        send(formatted);\n" +
+        "    }\n" +
+        "    protected abstract Data fetchData();\n" +
+        "    protected abstract String format(Data d);\n" +
+        "    private void send(String s) { ... }     // không cho đổi\n" +
+        "}\n" +
+        "// + đảm bảo khung không bị phá vỡ; lớp con dùng được state của cha\n" +
+        "// - chọn biến thể lúc BIÊN DỊCH; chỉ kế thừa được MỘT lớp\n" +
+        "// - lớp con phụ thuộc chi tiết lớp cha (kế thừa là gắn kết chặt nhất)\n" +
+        "\n" +
+        "// STRATEGY — COMPOSITION. Biến thể được TRUYỀN VÀO.\n" +
+        "public class Report {\n" +
+        "    private final DataFetcher fetcher;\n" +
+        "    private final Formatter formatter;\n" +
+        "\n" +
+        "    public Report(DataFetcher f, Formatter fmt) { this.fetcher = f; this.formatter = fmt; }\n" +
+        "\n" +
+        "    public void generate() {\n" +
+        "        var data = fetcher.fetch();\n" +
+        "        send(formatter.format(data));\n" +
+        "    }\n" +
+        "}\n" +
+        "new Report(new SqlFetcher(), new PdfFormatter()).generate();\n" +
+        "new Report(new ApiFetcher(), new ExcelFormatter()).generate();   // đổi LÚC CHẠY\n" +
+        "// + kết hợp tự do; test từng phần độc lập; đổi được lúc chạy\n" +
+        "// - khung không được bảo vệ (ai cũng có thể gọi sai thứ tự)\n" +
+        "\n" +
+        "// CHỌN:\n" +
+        "//  - có NHIỀU bước cần thay đổi, và chúng ĐỘC LẬP với nhau -> STRATEGY\n" +
+        "//  - cần ĐẢM BẢO thứ tự các bước, và lớp con cần state chung -> TEMPLATE METHOD\n" +
+        "//  - cần đổi lúc chạy hoặc kết hợp nhiều chiều              -> STRATEGY\n" +
+        "\n" +
+        "// Java hiện đại nghiêng về STRATEGY vì lambda làm nó rất nhẹ:\n" +
+        "public void generate(Supplier<Data> fetcher, Function<Data, String> formatter) { }",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -164,6 +430,51 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Biến lời gọi method thành object",
+      code:
+        "public interface Command {\n" +
+        "    void execute();\n" +
+        "}\n" +
+        "\n" +
+        "public class PlaceOrderCommand implements Command {\n" +
+        "    private final OrderService service;      // RECEIVER\n" +
+        "    private final CreateOrderRequest request;\n" +
+        "\n" +
+        "    public PlaceOrderCommand(OrderService s, CreateOrderRequest r) {\n" +
+        "        this.service = s; this.request = r;\n" +
+        "    }\n" +
+        "    @Override public void execute() { service.place(request); }\n" +
+        "}\n" +
+        "\n" +
+        "// INVOKER — không biết gì về nội dung command\n" +
+        "public class CommandQueue {\n" +
+        "    private final BlockingQueue<Command> queue = new LinkedBlockingQueue<>();\n" +
+        "    public void submit(Command c) { queue.offer(c); }\n" +
+        "    public void run() {\n" +
+        "        while (running) queue.take().execute();\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// VÌ SAO BIẾN LỜI GỌI THÀNH OBJECT — nó mở ra những việc sau:\n" +
+        "// 1) XẾP HÀNG và thực thi SAU (job queue, xử lý nền)\n" +
+        "// 2) GHI LOG mọi thao tác -> audit trail, và phát lại được\n" +
+        "// 3) UNDO/REDO (xem câu riêng)\n" +
+        "// 4) THỬ LẠI khi lỗi — command chứa đủ thông tin để chạy lại\n" +
+        "// 5) GỬI QUA MẠNG — command tuần tự hoá được (đây chính là ý tưởng\n" +
+        "//    của message/event trong hệ phân tán)\n" +
+        "// 6) GỘP nhiều command thành MACRO command\n" +
+        "\n" +
+        "// TRONG JAVA HIỆN ĐẠI, Runnable/Callable CHÍNH LÀ Command:\n" +
+        "executor.submit(() -> orderService.place(request));    // lambda = command\n" +
+        "\n" +
+        "// KHI NÀO CẦN CLASS THẬT: khi command cần MANG DỮ LIỆU để tuần tự hoá,\n" +
+        "// để undo, hoặc để kiểm tra/lọc trước khi thực thi.\n" +
+        "// Trong CQRS, \"Command\" chính là pattern này ở mức kiến trúc.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -191,6 +502,68 @@ SS.addQuestions('design-patterns', [
       { to: 4, label: 'Redo stack bị xoá khi có nhánh lịch sử mới' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Command biết cách tự hoàn tác",
+      code:
+        "public interface UndoableCommand {\n" +
+        "    void execute();\n" +
+        "    void undo();\n" +
+        "}\n" +
+        "\n" +
+        "public class AddItemCommand implements UndoableCommand {\n" +
+        "    private final Cart cart;\n" +
+        "    private final Item item;\n" +
+        "\n" +
+        "    public void execute() { cart.add(item); }\n" +
+        "    public void undo()    { cart.remove(item); }    // thao tác NGƯỢC\n" +
+        "}\n" +
+        "\n" +
+        "public class UpdatePriceCommand implements UndoableCommand {\n" +
+        "    private final Product product;\n" +
+        "    private final Money newPrice;\n" +
+        "    private Money oldPrice;                          // LƯU trạng thái cũ\n" +
+        "\n" +
+        "    public void execute() {\n" +
+        "        this.oldPrice = product.price();             // ghi nhớ TRƯỚC khi đổi\n" +
+        "        product.setPrice(newPrice);\n" +
+        "    }\n" +
+        "    public void undo() { product.setPrice(oldPrice); }\n" +
+        "}\n" +
+        "\n" +
+        "// HISTORY — hai ngăn xếp\n" +
+        "public class CommandHistory {\n" +
+        "    private final Deque<UndoableCommand> undoStack = new ArrayDeque<>();\n" +
+        "    private final Deque<UndoableCommand> redoStack = new ArrayDeque<>();\n" +
+        "\n" +
+        "    public void execute(UndoableCommand c) {\n" +
+        "        c.execute();\n" +
+        "        undoStack.push(c);\n" +
+        "        redoStack.clear();          // làm việc mới -> mất nhánh redo\n" +
+        "    }\n" +
+        "    public void undo() {\n" +
+        "        if (undoStack.isEmpty()) return;\n" +
+        "        var c = undoStack.pop();\n" +
+        "        c.undo();\n" +
+        "        redoStack.push(c);\n" +
+        "    }\n" +
+        "    public void redo() {\n" +
+        "        if (redoStack.isEmpty()) return;\n" +
+        "        var c = redoStack.pop();\n" +
+        "        c.execute();\n" +
+        "        undoStack.push(c);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// HAI CÁCH LƯU TRẠNG THÁI ĐỂ HOÀN TÁC:\n" +
+        "//  a) THAO TÁC NGƯỢC (như AddItem) — nhẹ, nhưng không phải việc gì cũng có\n" +
+        "//  b) LƯU TRẠNG THÁI CŨ (như UpdatePrice) -> đây chính là MEMENTO pattern\n" +
+        "//     Tốn bộ nhớ hơn nhưng luôn đúng.\n" +
+        "// Với object lớn: lưu snapshot định kỳ + command từ snapshot đó (giống\n" +
+        "// cách event sourcing dùng snapshot).",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -216,6 +589,54 @@ SS.addQuestions('design-patterns', [
       { from: 1, to: 4, label: 'cancel() + refund' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Mỗi trạng thái là một class, và nó tự quyết định bước tiếp",
+      code:
+        "// KHÔNG DÙNG STATE — switch lặp lại ở mọi method\n" +
+        "public class Order {\n" +
+        "    private String status;\n" +
+        "    public void pay() {\n" +
+        "        switch (status) {\n" +
+        "            case \"NEW\" -> status = \"PAID\";\n" +
+        "            case \"PAID\" -> throw new IllegalStateException(\"đã thanh toán\");\n" +
+        "            case \"CANCELLED\" -> throw new IllegalStateException(\"đã huỷ\");\n" +
+        "        }\n" +
+        "    }\n" +
+        "    public void ship() { switch (status) { ... } }     // LẶP LẠI\n" +
+        "    public void cancel() { switch (status) { ... } }   // LẶP LẠI\n" +
+        "}\n" +
+        "\n" +
+        "// DÙNG STATE — mỗi trạng thái biết mình làm được gì\n" +
+        "public interface OrderState {\n" +
+        "    default OrderState pay()    { throw new IllegalStateException(\"không thể thanh toán\"); }\n" +
+        "    default OrderState ship()   { throw new IllegalStateException(\"không thể giao\"); }\n" +
+        "    default OrderState cancel() { throw new IllegalStateException(\"không thể huỷ\"); }\n" +
+        "}\n" +
+        "\n" +
+        "public class NewState implements OrderState {\n" +
+        "    public OrderState pay()    { return new PaidState(); }\n" +
+        "    public OrderState cancel() { return new CancelledState(); }\n" +
+        "    // ship() dùng mặc định -> tự động ném lỗi\n" +
+        "}\n" +
+        "public class PaidState implements OrderState {\n" +
+        "    public OrderState ship()   { return new ShippedState(); }\n" +
+        "    public OrderState cancel() { return new RefundingState(); }   // huỷ sau khi trả tiền\n" +
+        "}\n" +
+        "public class ShippedState implements OrderState { }   // trạng thái CUỐI\n" +
+        "\n" +
+        "public class Order {\n" +
+        "    private OrderState state = new NewState();\n" +
+        "    public void pay()  { state = state.pay(); }\n" +
+        "    public void ship() { state = state.ship(); }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: quy tắc chuyển trạng thái nằm GỌN ở một chỗ cho mỗi trạng thái,\n" +
+        "// và thêm trạng thái mới không phải sửa mọi switch.\n" +
+        "// Dùng default method để chuyển mặc định là \"không cho phép\" -> an toàn.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -240,6 +661,45 @@ SS.addQuestions('design-patterns', [
       ['Câu hỏi', '"làm việc X bằng cách nào"', '"object đang ở giai đoạn nào của vòng đời"'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Khác ở AI QUYẾT ĐỊNH và có chuyển đổi hay không",
+      code:
+        "// CẤU TRÚC GIỐNG HỆT: context giữ tham chiếu tới một interface, uỷ quyền\n" +
+        "// công việc cho nó. Khác biệt nằm ở NGỮ NGHĨA.\n" +
+        "\n" +
+        "// STRATEGY — CLIENT chọn, và lựa chọn KHÔNG TỰ ĐỔI\n" +
+        "public class ShippingService {\n" +
+        "    private final ShippingCostCalculator calculator;\n" +
+        "    public ShippingService(ShippingCostCalculator c) { this.calculator = c; }  // client quyết\n" +
+        "    public Money cost(Order o) { return calculator.calculate(o); }\n" +
+        "}\n" +
+        "new ShippingService(new ExpressShipping());       // client biết và chọn\n" +
+        "// - các strategy KHÔNG biết nhau\n" +
+        "// - không có khái niệm \"chuyển từ strategy này sang strategy kia\"\n" +
+        "// - mục đích: nhiều cách làm cùng một việc\n" +
+        "\n" +
+        "// STATE — ĐỐI TƯỢNG tự chuyển trạng thái, và các state BIẾT NHAU\n" +
+        "public class Order {\n" +
+        "    private OrderState state = new NewState();\n" +
+        "    public void pay() { state = state.pay(); }     // STATE trả về state TIẾP THEO\n" +
+        "}\n" +
+        "public class NewState implements OrderState {\n" +
+        "    public OrderState pay() { return new PaidState(); }    // biết PaidState\n" +
+        "}\n" +
+        "// - state quyết định state kế tiếp -> có ĐỒ THỊ CHUYỂN TRẠNG THÁI\n" +
+        "// - client thường KHÔNG biết object đang ở state nào\n" +
+        "// - mục đích: hành vi thay đổi theo VÒNG ĐỜI của đối tượng\n" +
+        "\n" +
+        "// PHÂN BIỆT NHANH BẰNG HAI CÂU HỎI:\n" +
+        "// 1) \"Ai chọn cài đặt?\"  Client -> Strategy. Chính object -> State.\n" +
+        "// 2) \"Có chuyển từ cái này sang cái kia không?\" Có -> State. Không -> Strategy.\n" +
+        "\n" +
+        "// Ví dụ Strategy: thuật toán nén, cách tính phí, cách sắp xếp.\n" +
+        "// Ví dụ State: vòng đời đơn hàng, kết nối TCP, trình phát nhạc (play/pause/stop).",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -263,6 +723,49 @@ SS.addQuestions('design-patterns', [
       { name: 'Thư viện state machine', tag: 'Spring StateMachine, XState', note: 'state phân cấp, parallel region, guard, action, visualization, persistence' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mức, chọn theo độ phức tạp",
+      code:
+        "// MỨC 1: ENUM với bảng chuyển trạng thái — GỌN NHẤT cho máy trạng thái nhỏ\n" +
+        "public enum OrderStatus {\n" +
+        "    NEW      { public Set<OrderStatus> next() { return Set.of(PAID, CANCELLED); } },\n" +
+        "    PAID     { public Set<OrderStatus> next() { return Set.of(SHIPPED, REFUNDING); } },\n" +
+        "    SHIPPED  { public Set<OrderStatus> next() { return Set.of(DELIVERED); } },\n" +
+        "    DELIVERED{ public Set<OrderStatus> next() { return Set.of(); } },\n" +
+        "    CANCELLED{ public Set<OrderStatus> next() { return Set.of(); } },\n" +
+        "    REFUNDING{ public Set<OrderStatus> next() { return Set.of(REFUNDED); } },\n" +
+        "    REFUNDED { public Set<OrderStatus> next() { return Set.of(); } };\n" +
+        "\n" +
+        "    public abstract Set<OrderStatus> next();\n" +
+        "\n" +
+        "    public void checkTransitionTo(OrderStatus target) {\n" +
+        "        if (!next().contains(target))\n" +
+        "            throw new IllegalStateException(\"không thể chuyển \" + this + \" -> \" + target);\n" +
+        "    }\n" +
+        "}\n" +
+        "// + rất gọn, dễ đọc toàn bộ đồ thị chuyển trạng thái trong MỘT chỗ\n" +
+        "// + enum lưu vào database tự nhiên\n" +
+        "// - khó gắn hành vi phức tạp cho từng trạng thái\n" +
+        "\n" +
+        "// MỨC 2: STATE PATTERN — khi mỗi trạng thái có HÀNH VI riêng phức tạp\n" +
+        "//   (xem câu về State pattern)\n" +
+        "\n" +
+        "// MỨC 3: THƯ VIỆN (Spring StateMachine, Temporal, Camunda) — khi cần:\n" +
+        "//  - trạng thái LƯU BỀN và khôi phục được sau khi tiến trình chết\n" +
+        "//  - máy trạng thái phân tán, chạy hàng tuần/tháng\n" +
+        "//  - hành động bù trừ, timer, sự kiện chờ\n" +
+        "//  - hình dung được luồng bằng sơ đồ, và người ngoài kỹ thuật đọc được\n" +
+        "\n" +
+        "// CHỌN:\n" +
+        "//  - dưới ~7 trạng thái, hành vi đơn giản -> ENUM\n" +
+        "//  - hành vi phức tạp cho từng trạng thái  -> STATE PATTERN\n" +
+        "//  - quy trình dài, cần bền và quan sát được -> THƯ VIỆN\n" +
+        "// LUÔN: ghi rõ đồ thị chuyển trạng thái ở MỘT chỗ, và kiểm tra chuyển\n" +
+        "// trạng thái ở tầng domain, không rải rác trong controller.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -285,6 +788,58 @@ SS.addQuestions('design-patterns', [
       { to: 4, label: 'Cẩn thận: request có thể đi hết chuỗi mà không ai xử lý' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chuyền request qua chuỗi tới khi có người xử lý",
+      code:
+        "public abstract class ApprovalHandler {\n" +
+        "    private ApprovalHandler next;\n" +
+        "\n" +
+        "    public ApprovalHandler setNext(ApprovalHandler next) {\n" +
+        "        this.next = next;\n" +
+        "        return next;                       // cho phép nối chuỗi fluent\n" +
+        "    }\n" +
+        "\n" +
+        "    public final void handle(ExpenseRequest req) {\n" +
+        "        if (canApprove(req)) {\n" +
+        "            approve(req);\n" +
+        "        } else if (next != null) {\n" +
+        "            next.handle(req);              // CHUYỀN TIẾP\n" +
+        "        } else {\n" +
+        "            throw new IllegalStateException(\"không ai duyệt được \" + req.amount());\n" +
+        "        }\n" +
+        "    }\n" +
+        "    protected abstract boolean canApprove(ExpenseRequest r);\n" +
+        "    protected abstract void approve(ExpenseRequest r);\n" +
+        "}\n" +
+        "\n" +
+        "public class TeamLeadHandler extends ApprovalHandler {\n" +
+        "    protected boolean canApprove(ExpenseRequest r) { return r.amount() <= 5_000_000; }\n" +
+        "    protected void approve(ExpenseRequest r) { log.info(\"trưởng nhóm duyệt\"); }\n" +
+        "}\n" +
+        "public class ManagerHandler extends ApprovalHandler {\n" +
+        "    protected boolean canApprove(ExpenseRequest r) { return r.amount() <= 50_000_000; }\n" +
+        "    protected void approve(ExpenseRequest r) { log.info(\"quản lý duyệt\"); }\n" +
+        "}\n" +
+        "\n" +
+        "// LẮP CHUỖI:\n" +
+        "var lead = new TeamLeadHandler();\n" +
+        "lead.setNext(new ManagerHandler()).setNext(new DirectorHandler());\n" +
+        "lead.handle(new ExpenseRequest(30_000_000));      // -> ManagerHandler xử lý\n" +
+        "\n" +
+        "// LỢI ÍCH: người GỬI không biết ai sẽ xử lý; thêm/bớt/sắp xếp lại handler\n" +
+        "// mà không sửa client. Mỗi handler chỉ biết đúng phần việc của mình.\n" +
+        "\n" +
+        "// HAI BIẾN THỂ:\n" +
+        "//  a) DỪNG ở handler đầu tiên xử lý được (như trên) — kiểu \"phê duyệt\"\n" +
+        "//  b) MỌI handler đều chạy (kiểu middleware/filter) — xem câu tiếp theo\n" +
+        "\n" +
+        "// Trong JDK/framework: Servlet Filter, Spring Security filter chain,\n" +
+        "// OkHttp/Netty interceptor, và cả try/catch của Java (exception được\n" +
+        "// chuyền lên tới khối catch xử lý được).",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -309,6 +864,48 @@ SS.addQuestions('design-patterns', [
       ['Sửa request/response, dừng chuỗi', 'hạn chế', 'có'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chuỗi \"bọc\" thay vì chuỗi \"chuyền\"",
+      code:
+        "// BẢN GoF CỔ ĐIỂN: chuyền request cho tới khi MỘT handler xử lý, rồi DỪNG.\n" +
+        "// Handler chỉ chạy TRƯỚC hoặc thay cho phần còn lại.\n" +
+        "\n" +
+        "// BẢN MIDDLEWARE: MỌI handler đều chạy, và mỗi cái bọc quanh phần còn lại\n" +
+        "// -> chạy được cả TRƯỚC và SAU khi phần sau xử lý xong.\n" +
+        "@Component\n" +
+        "public class LoggingFilter extends OncePerRequestFilter {\n" +
+        "    @Override\n" +
+        "    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res,\n" +
+        "                                    FilterChain chain) throws ServletException, IOException {\n" +
+        "        long start = System.nanoTime();\n" +
+        "        log.info(\"-> {} {}\", req.getMethod(), req.getRequestURI());   // TRƯỚC\n" +
+        "\n" +
+        "        chain.doFilter(req, res);        // gọi phần CÒN LẠI của chuỗi\n" +
+        "\n" +
+        "        log.info(\"<- {} ({}ms)\", res.getStatus(),                     // SAU\n" +
+        "                 (System.nanoTime() - start) / 1_000_000);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// KHÁC BIỆT CỐT LÕI:\n" +
+        "//  GoF        — handler QUYẾT ĐỊNH có chuyền tiếp hay không; ai xử lý thì dừng\n" +
+        "//  Middleware — handler LUÔN chuyền tiếp (trừ khi muốn chặn), và có cơ hội\n" +
+        "//               xử lý cả trên đường ĐI lẫn đường VỀ\n" +
+        "// -> Middleware giống DECORATOR lồng nhau hơn là chain of responsibility.\n" +
+        "\n" +
+        "// CHẶN chuỗi (không gọi doFilter) khi muốn từ chối request:\n" +
+        "if (!authenticated(req)) {\n" +
+        "    res.setStatus(401);\n" +
+        "    return;                              // KHÔNG gọi chain.doFilter -> dừng\n" +
+        "}\n" +
+        "\n" +
+        "// THỨ TỰ RẤT QUAN TRỌNG và phải khai báo rõ:\n" +
+        "@Order(Ordered.HIGHEST_PRECEDENCE)       // correlation id phải chạy ĐẦU TIÊN\n" +
+        "// Ứng dụng: correlation id -> xác thực -> rate limit -> log -> nén -> controller",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -336,6 +933,52 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Pattern đã trở thành một phần của ngôn ngữ",
+      code:
+        "// Iterator là ví dụ điển hình của pattern được HẤP THỤ vào ngôn ngữ.\n" +
+        "for (String s : list) { }        // Java tự dịch thành Iterator\n" +
+        "list.stream().filter(...);       // Stream cũng dựa trên Spliterator\n" +
+        "\n" +
+        "// VẪN CẦN TỰ VIẾT khi: duyệt một cấu trúc dữ liệu RIÊNG, hoặc duyệt\n" +
+        "// nguồn dữ liệu KHÔNG nằm hết trong bộ nhớ.\n" +
+        "public class PagedApiIterator<T> implements Iterator<T> {\n" +
+        "    private final Function<Integer, List<T>> fetchPage;\n" +
+        "    private Iterator<T> current = Collections.emptyIterator();\n" +
+        "    private int page = 0;\n" +
+        "    private boolean exhausted = false;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public boolean hasNext() {\n" +
+        "        while (!current.hasNext() && !exhausted) {\n" +
+        "            List<T> next = fetchPage.apply(page++);        // TẢI LƯỜI trang sau\n" +
+        "            if (next.isEmpty()) { exhausted = true; return false; }\n" +
+        "            current = next.iterator();\n" +
+        "        }\n" +
+        "        return current.hasNext();\n" +
+        "    }\n" +
+        "    @Override public T next() { return current.next(); }\n" +
+        "}\n" +
+        "// Client duyệt như một collection bình thường, KHÔNG BIẾT dữ liệu đang\n" +
+        "// được tải theo trang qua mạng:\n" +
+        "for (Order o : new PagedApiIterable<>(page -> api.getOrders(page))) {\n" +
+        "    process(o);\n" +
+        "}\n" +
+        "\n" +
+        "// GIÁ TRỊ CỐT LÕI CỦA PATTERN: tách CÁCH DUYỆT khỏi CẤU TRÚC dữ liệu.\n" +
+        "// Nhờ đó client dùng một cách duy nhất cho mọi nguồn: list, cây, file,\n" +
+        "// kết quả truy vấn database, API phân trang.\n" +
+        "\n" +
+        "// TRONG JAVA HIỆN ĐẠI, thường viết Spliterator/Stream thay vì Iterator\n" +
+        "// để tận dụng được stream API:\n" +
+        "public Stream<Order> streamOrders() {\n" +
+        "    return StreamSupport.stream(new PagedApiSpliterator<>(...), false);\n" +
+        "}\n" +
+        "// Và nhớ ĐÓNG tài nguyên: try-with-resources với Stream đọc file/DB.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -358,6 +1001,53 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Nhược: mediator có thể phình thành "god object"' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Đưa mạng lưới quan hệ về hình sao",
+      code:
+        "// VẤN ĐỀ: n component cùng nói chuyện với nhau -> n(n-1)/2 mối quan hệ.\n" +
+        "// 6 component = 15 mối quan hệ, và mỗi component phải biết 5 cái còn lại.\n" +
+        "\n" +
+        "public interface DialogMediator {\n" +
+        "    void notify(Component sender, String event);\n" +
+        "}\n" +
+        "\n" +
+        "public class OrderFormMediator implements DialogMediator {\n" +
+        "    private final CustomerSelect customer;\n" +
+        "    private final ProductList products;\n" +
+        "    private final DiscountField discount;\n" +
+        "    private final SubmitButton submit;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public void notify(Component sender, String event) {\n" +
+        "        // TOÀN BỘ logic tương tác nằm Ở ĐÂY\n" +
+        "        if (sender == customer && event.equals(\"changed\")) {\n" +
+        "            products.filterByCustomerTier(customer.getSelected().tier());\n" +
+        "            discount.setMax(customer.getSelected().maxDiscount());\n" +
+        "        }\n" +
+        "        if (sender == products && event.equals(\"changed\")) {\n" +
+        "            submit.setEnabled(!products.getSelected().isEmpty());\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "// Mỗi component chỉ biết MEDIATOR, không biết nhau:\n" +
+        "public class CustomerSelect extends Component {\n" +
+        "    public void onChange() { mediator.notify(this, \"changed\"); }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: n mối quan hệ thay vì n², và logic tương tác nằm ở MỘT chỗ\n" +
+        "// có thể đọc và test được.\n" +
+        "\n" +
+        "// CẠM BẪY LỚN NHẤT: mediator phình thành GOD OBJECT. Nó tập trung độ phức\n" +
+        "// tạp lại một chỗ — hữu ích khi độ phức tạp đó vốn đã tồn tại, nhưng nguy\n" +
+        "// hiểm khi nó tiếp tục lớn lên.\n" +
+        "// -> Chia mediator theo NHÓM component liên quan, đừng làm một cái cho cả màn hình.\n" +
+        "\n" +
+        "// VÍ DỤ THỰC TẾ: form UI phức tạp, air traffic control (kinh điển),\n" +
+        "// và ở mức kiến trúc: message broker, API gateway, và orchestrator trong saga.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -381,6 +1071,42 @@ SS.addQuestions('design-patterns', [
       ['Kết hợp', 'component notify mediator (kiểu Observer), mediator điều phối (kiểu Mediator)', ''],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ai biết ai, và luồng thông tin đi theo hướng nào",
+      code:
+        "// OBSERVER — quan hệ MỘT-NHIỀU, một chiều\n" +
+        "// Subject phát ra thay đổi; observer phản ứng. Subject KHÔNG biết observer\n" +
+        "// làm gì, observer KHÔNG nói lại với subject.\n" +
+        "publisher.publishEvent(new OrderPlacedEvent(id));\n" +
+        "@EventListener public void on(OrderPlacedEvent e) { mailer.send(e); }\n" +
+        "// - luồng MỘT CHIỀU: subject -> observer\n" +
+        "// - observer không biết nhau\n" +
+        "// - dùng khi: \"chuyện X đã xảy ra, ai quan tâm thì tự xử lý\"\n" +
+        "\n" +
+        "// MEDIATOR — quan hệ NHIỀU-NHIỀU, hai chiều\n" +
+        "// Component báo cho mediator; mediator ĐIỀU PHỐI, gọi ngược lại các\n" +
+        "// component khác.\n" +
+        "mediator.notify(this, \"changed\");        // component -> mediator\n" +
+        "// mediator gọi products.filter(), discount.setMax()  // mediator -> component\n" +
+        "// - luồng HAI CHIỀU và có LOGIC ĐIỀU PHỐI ở giữa\n" +
+        "// - mediator BIẾT tất cả component\n" +
+        "// - dùng khi: \"các component phải phối hợp với nhau theo quy tắc phức tạp\"\n" +
+        "\n" +
+        "// PHÂN BIỆT BẰNG CÂU HỎI:\n" +
+        "// 1) \"Có logic quyết định ai làm gì tiếp theo không?\"\n" +
+        "//    Có -> MEDIATOR. Không, chỉ là thông báo -> OBSERVER.\n" +
+        "// 2) \"Các bên có cần nói chuyện HAI CHIỀU không?\"\n" +
+        "//    Có -> MEDIATOR. Một chiều -> OBSERVER.\n" +
+        "\n" +
+        "// LIÊN HỆ VỚI MICROSERVICES — đây chính là:\n" +
+        "//  CHOREOGRAPHY = Observer  (mỗi service nghe event, tự quyết định)\n" +
+        "//  ORCHESTRATION = Mediator (một service điều phối toàn bộ luồng)\n" +
+        "// Và cùng đánh đổi: choreography tách rời hơn nhưng khó nhìn toàn cảnh;\n" +
+        "// orchestration tường minh hơn nhưng tạo điểm phụ thuộc trung tâm.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -405,6 +1131,54 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Hoặc: WeakReference; framework lifecycle-aware (LifecycleObserver, CompositeDisposable)' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Subject giữ tham chiếu, observer không bao giờ được thu hồi",
+      code:
+        "// VẤN ĐỀ \"LAPSED LISTENER\": observer đăng ký rồi quên gỡ. Subject sống lâu\n" +
+        "// (thường là singleton) giữ tham chiếu MẠNH -> observer KHÔNG BAO GIỜ bị\n" +
+        "// GC thu hồi, dù không ai còn dùng nó.\n" +
+        "public class EventBus {\n" +
+        "    private static final List<Listener> LISTENERS = new ArrayList<>();   // sống mãi\n" +
+        "    public static void register(Listener l) { LISTENERS.add(l); }\n" +
+        "}\n" +
+        "public class OrderScreen {\n" +
+        "    public OrderScreen() { EventBus.register(this); }    // KHÔNG BAO GIỜ gỡ\n" +
+        "}\n" +
+        "// Mở và đóng màn hình 1000 lần -> 1000 OrderScreen còn sống trong bộ nhớ,\n" +
+        "// và mỗi cái vẫn NHẬN và XỬ LÝ sự kiện -> vừa rò rỉ vừa gây hành vi sai.\n" +
+        "\n" +
+        "// CHỮA 1: LUÔN GỠ ĐĂNG KÝ — đối xứng với việc đăng ký\n" +
+        "@Component\n" +
+        "public class OrderScreen implements AutoCloseable {\n" +
+        "    @PostConstruct void init()  { bus.register(this); }\n" +
+        "    @PreDestroy   void close()  { bus.unregister(this); }     // BẮT BUỘC\n" +
+        "}\n" +
+        "\n" +
+        "// CHỮA 2: THAM CHIẾU YẾU — subject không giữ observer sống\n" +
+        "public class WeakEventBus {\n" +
+        "    private final List<WeakReference<Listener>> listeners = new CopyOnWriteArrayList<>();\n" +
+        "\n" +
+        "    public void publish(Event e) {\n" +
+        "        listeners.removeIf(ref -> ref.get() == null);      // dọn tham chiếu chết\n" +
+        "        listeners.forEach(ref -> {\n" +
+        "            Listener l = ref.get();\n" +
+        "            if (l != null) l.onEvent(e);\n" +
+        "        });\n" +
+        "    }\n" +
+        "}\n" +
+        "// CẢNH BÁO: lambda và anonymous class KHÔNG có tham chiếu mạnh nào khác\n" +
+        "// -> chúng bị GC ngay lập tức và listener \"biến mất\" một cách khó hiểu.\n" +
+        "// -> Weak reference chỉ dùng được khi observer được giữ ở nơi khác.\n" +
+        "\n" +
+        "// CHỮA 3: dùng framework quản lý vòng đời (Spring @EventListener) —\n" +
+        "// container tự gỡ listener khi bean bị huỷ.\n" +
+        "\n" +
+        "// CHỮA 4: đổi sang message queue — publisher và subscriber không giữ\n" +
+        "// tham chiếu tới nhau chút nào.",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -430,6 +1204,58 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Định nghĩa ngữ pháp và diễn giải câu",
+      code:
+        "// Interpreter biểu diễn NGỮ PHÁP của một ngôn ngữ nhỏ dưới dạng cây object,\n" +
+        "// mỗi nút biết cách tự \"diễn giải\" chính mình.\n" +
+        "public interface Expression {\n" +
+        "    boolean interpret(Map<String, Object> context);\n" +
+        "}\n" +
+        "\n" +
+        "public record EqualsExpression(String field, Object value) implements Expression {\n" +
+        "    public boolean interpret(Map<String, Object> ctx) {\n" +
+        "        return Objects.equals(ctx.get(field), value);\n" +
+        "    }\n" +
+        "}\n" +
+        "public record AndExpression(Expression left, Expression right) implements Expression {\n" +
+        "    public boolean interpret(Map<String, Object> ctx) {\n" +
+        "        return left.interpret(ctx) && right.interpret(ctx);\n" +
+        "    }\n" +
+        "}\n" +
+        "public record OrExpression(Expression left, Expression right) implements Expression {\n" +
+        "    public boolean interpret(Map<String, Object> ctx) {\n" +
+        "        return left.interpret(ctx) || right.interpret(ctx);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// Quy tắc nghiệp vụ \"tier = GOLD AND (country = VN OR country = SG)\":\n" +
+        "Expression rule = new AndExpression(\n" +
+        "    new EqualsExpression(\"tier\", \"GOLD\"),\n" +
+        "    new OrExpression(new EqualsExpression(\"country\", \"VN\"),\n" +
+        "                     new EqualsExpression(\"country\", \"SG\")));\n" +
+        "\n" +
+        "boolean matched = rule.interpret(Map.of(\"tier\", \"GOLD\", \"country\", \"VN\"));\n" +
+        "\n" +
+        "// KHI NÀO DÙNG: ngôn ngữ NHỎ, ngữ pháp ĐƠN GIẢN và ỔN ĐỊNH —\n" +
+        "//  - quy tắc nghiệp vụ do người dùng cấu hình (bộ lọc, điều kiện khuyến mãi)\n" +
+        "//  - biểu thức tìm kiếm\n" +
+        "//  - công thức tính toán đơn giản\n" +
+        "\n" +
+        "// KHI NÀO KHÔNG (gần như luôn):\n" +
+        "//  - ngữ pháp phức tạp -> dùng ANTLR/JavaCC sinh parser, đừng viết tay\n" +
+        "//  - đã có sẵn thư viện: SpEL, MVEL, JEXL, hoặc quy tắc bằng Drools\n" +
+        "//  - hiệu năng quan trọng: cây object diễn giải rất chậm so với code biên dịch\n" +
+        "\n" +
+        "// Đây là pattern ÍT DÙNG NHẤT trong GoF. Trong Java thực tế,\n" +
+        "// Spring Expression Language thường đã đủ:\n" +
+        "ExpressionParser parser = new SpelExpressionParser();\n" +
+        "parser.parseExpression(\"tier == \u0027GOLD\u0027 and country in {\u0027VN\u0027,\u0027SG\u0027}\")\n" +
+        "      .getValue(context, Boolean.class);",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -457,6 +1283,48 @@ SS.addQuestions('design-patterns', [
       ['Dùng cho', 'side-effect phải thành công CÙNG thao tác chính (trừ kho)', 'side-effect độc lập (email, cache, analytics)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba chế độ, ba mức đảm bảo",
+      code:
+        "// 1) ĐỒNG BỘ, CÙNG TRANSACTION (mặc định của Spring)\n" +
+        "@EventListener\n" +
+        "public void on(OrderPlacedEvent e) { auditRepo.save(...); }\n" +
+        "// + listener nằm TRONG transaction của publisher -> ghi audit cùng nguyên tử\n" +
+        "// - listener CHẬM làm chậm cả nghiệp vụ chính\n" +
+        "// - listener LỖI -> ROLLBACK cả việc đặt hàng\n" +
+        "// -> Chỉ dùng khi listener THỰC SỰ phải cùng số phận với nghiệp vụ chính.\n" +
+        "\n" +
+        "// 2) ĐỒNG BỘ, SAU KHI COMMIT\n" +
+        "@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)\n" +
+        "public void on(OrderPlacedEvent e) { mailer.send(e); }\n" +
+        "// + tránh gửi mail rồi transaction lại rollback (lỗi kinh điển)\n" +
+        "// - vẫn chặn luồng chính; và listener lỗi thì nghiệp vụ ĐÃ commit rồi\n" +
+        "//   -> phải tự xử lý (retry, ghi vào hàng đợi)\n" +
+        "// -> Đây là lựa chọn ĐÚNG cho phần lớn tác dụng phụ.\n" +
+        "\n" +
+        "// 3) BẤT ĐỒNG BỘ\n" +
+        "@Async(\"eventExecutor\")\n" +
+        "@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)\n" +
+        "public void on(OrderPlacedEvent e) { slowExternalCall(e); }\n" +
+        "// + không chặn luồng chính\n" +
+        "// - MẤT ngữ cảnh: SecurityContext, MDC (traceId), transaction\n" +
+        "// - listener lỗi thì KHÔNG AI BIẾT nếu không xử lý riêng\n" +
+        "// - tiến trình chết -> MẤT event (nó chỉ nằm trong bộ nhớ)\n" +
+        "@Bean(\"eventExecutor\")\n" +
+        "Executor executor() {\n" +
+        "    var ex = new ThreadPoolTaskExecutor();\n" +
+        "    ex.setQueueCapacity(500);                         // CÓ GIỚI HẠN\n" +
+        "    ex.setRejectedExecutionHandler(new CallerRunsPolicy());\n" +
+        "    return ex;\n" +
+        "}\n" +
+        "\n" +
+        "// KHI CẦN ĐẢM BẢO KHÔNG MẤT: đừng dùng event trong bộ nhớ -> ghi vào\n" +
+        "// OUTBOX trong cùng transaction, rồi một tiến trình đẩy sang message queue.\n" +
+        "// Đây là ranh giới giữa \"observer trong ứng dụng\" và \"kiến trúc hướng sự kiện\".",
+    },
+  ],
 },
 {
   cat: 'Behavioral',
@@ -485,5 +1353,56 @@ SS.addQuestions('design-patterns', [
       ['Factory Method', 'subclass', 'Supplier<T> / constructor reference'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Nhiều pattern GoF chỉ là cách lách giới hạn ngôn ngữ",
+      code:
+        "// STRATEGY -> hàm\n" +
+        "// Trước:  interface Comparator + class cài đặt\n" +
+        "// Nay:\n" +
+        "list.sort(Comparator.comparing(Order::total).reversed());\n" +
+        "Function<Order, Money> pricing = o -> o.total().multiply(0.9);\n" +
+        "\n" +
+        "// COMMAND -> Runnable/Callable\n" +
+        "executor.submit(() -> orderService.place(request));      // command = lambda\n" +
+        "List<Runnable> undoStack = new ArrayList<>();\n" +
+        "undoStack.add(() -> cart.remove(item));\n" +
+        "\n" +
+        "// TEMPLATE METHOD -> hàm bậc cao (truyền các bước vào)\n" +
+        "public <T> T withTransaction(Function<Session, T> work) {\n" +
+        "    var tx = session.beginTransaction();\n" +
+        "    try { T r = work.apply(session); tx.commit(); return r; }\n" +
+        "    catch (Exception e) { tx.rollback(); throw e; }\n" +
+        "}\n" +
+        "withTransaction(s -> s.save(order));      // khung cố định, bước biến thiên\n" +
+        "\n" +
+        "// FACTORY METHOD -> Supplier / method reference\n" +
+        "Supplier<Connection> factory = DriverManager::getConnection;\n" +
+        "\n" +
+        "// OBSERVER -> Consumer\n" +
+        "List<Consumer<Order>> listeners = new ArrayList<>();\n" +
+        "listeners.add(o -> mailer.send(o));\n" +
+        "listeners.forEach(l -> l.accept(order));\n" +
+        "\n" +
+        "// VISITOR -> sealed interface + pattern matching (Java 21)\n" +
+        "sealed interface Shape permits Circle, Square { }\n" +
+        "double area(Shape s) {\n" +
+        "    return switch (s) {\n" +
+        "        case Circle c -> Math.PI * c.r() * c.r();\n" +
+        "        case Square q -> q.side() * q.side();\n" +
+        "    };                            // compiler ĐẢM BẢO xử lý hết\n" +
+        "}\n" +
+        "\n" +
+        "// DECORATOR -> function composition\n" +
+        "Function<String, String> pipeline = ((Function<String, String>) this::trim)\n" +
+        "    .andThen(this::normalize).andThen(this::validate);\n" +
+        "\n" +
+        "// KHI NÀO VẪN CẦN CLASS: cần STATE, cần TÊN có ý nghĩa, cần tiêm phụ thuộc,\n" +
+        "// cần test riêng, hoặc logic dài hơn vài dòng.\n" +
+        "// Ý CHÍNH: pattern là GIẢI PHÁP cho vấn đề, không phải mục tiêu. Ngôn ngữ\n" +
+        "// tiến hoá thì cách giải quyết cũng đổi — nhưng VẤN ĐỀ thì vẫn còn đó.",
+    },
+  ],
 },
 ]);

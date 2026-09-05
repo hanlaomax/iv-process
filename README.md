@@ -3,8 +3,8 @@
 Trang web tĩnh ôn tập **700+ câu hỏi phỏng vấn cấp độ Middle** cho 7 chủ đề:
 **Java / Spring Boot · Apache Kafka · AWS · Redis · SQL · Microservices · Design Patterns**.
 
-Mỗi câu gồm ba phần: **Trả lời** (chi tiết) · **Bản chất** (cốt lõi để nhớ nhanh) · **Ví dụ thực tế**,
-nhiều câu có thêm khối **Code & cấu hình** (tô màu cú pháp sẵn, giải thích ngay trong comment).
+Mỗi câu gồm bốn phần: **Trả lời** (chi tiết) · **Bản chất** (cốt lõi để nhớ nhanh) · **Ví dụ thực tế**
+· **Code & cấu hình** (tô màu cú pháp sẵn, giải thích ngay trong comment).
 Nội dung tiếng Việt, giữ nguyên thuật ngữ kỹ thuật tiếng Anh.
 
 Trang được **render sẵn thành HTML tĩnh** (tối ưu SEO), hoạt động **không cần JavaScript**;
@@ -172,4 +172,5 @@ Soạn hàng loạt bằng file patch thay vì sửa tay:
 node tools/add-demos.mjs patch.txt src/data/java-01-core-oop.js
 ```
 
-Hiện đã có demo cho trọn chủ đề **Java / Spring Boot** (100/100 câu). Các chủ đề còn lại làm dần.
+**Đã phủ 702/702 câu** ở cả 7 chủ đề — tổng cộng 793 khối code
+(Java 338 · Shell 247 · SQL 109 · YAML 46 · Properties 26 · JSON 17 · Lua/Dockerfile/XML 10).

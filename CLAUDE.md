@@ -150,7 +150,10 @@ với exit 1** nếu chuỗi match khớp 0 hoặc >1 câu, hoặc câu đó đ�
 toàn. Sau khi chèn luôn chạy `node src/build.mjs` để xác nhận.
 
 Lưu ý khi viết chuỗi match: nó so với **nguyên văn dòng `q:` trong file nguồn**, kể cả dấu
-backtick, nên copy trực tiếp một đoạn từ file thay vì gõ lại.
+backtick và dấu nháy đã escape (`\'`), nên copy trực tiếp một đoạn từ file thay vì gõ lại —
+chuỗi ngắn không chứa ký tự đặc biệt là an toàn nhất.
+
+Hiện **702/702 câu đã có `demo`** (793 khối code). Thêm câu hỏi mới thì nhớ thêm demo cho nó.
 
 markdown-lite hỗ trợ: `**đậm**`, `` `code` ``, ```` ```khối``` ````, `- ` bullet, `1. ` số,
 bảng `| a | b |`. Một block phải **đồng nhất một loại** (mọi dòng đều bullet, hoặc đều bảng…);

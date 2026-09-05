@@ -26,6 +26,43 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba nhóm, và khi nào pattern làm hại nhiều hơn giúp",
+      code:
+        "// GoF (1994) chia 23 pattern thành ba nhóm theo MỤC ĐÍCH:\n" +
+        "// 1) CREATIONAL — cách TẠO object: Singleton, Factory Method, Abstract\n" +
+        "//    Factory, Builder, Prototype\n" +
+        "// 2) STRUCTURAL — cách GHÉP class/object: Adapter, Decorator, Proxy,\n" +
+        "//    Facade, Composite, Bridge, Flyweight\n" +
+        "// 3) BEHAVIORAL — cách object GIAO TIẾP: Strategy, Observer, Command,\n" +
+        "//    State, Template Method, Chain of Responsibility, Iterator, Mediator,\n" +
+        "//    Memento, Visitor, Interpreter\n" +
+        "\n" +
+        "// Pattern là TÊN GỌI CHUNG cho một giải pháp lặp lại — giá trị lớn nhất\n" +
+        "// của nó là ở việc GIAO TIẾP: nói \"dùng Strategy ở đây\" ngắn hơn nhiều\n" +
+        "// so với mô tả cả thiết kế.\n" +
+        "\n" +
+        "// KHI NÀO KHÔNG NÊN DÙNG:\n" +
+        "// SAI — dùng pattern vì \"thấy hay\", cho một bài toán không hề tồn tại:\n" +
+        "interface GreetingStrategy { String greet(String name); }\n" +
+        "class VietnameseGreeting implements GreetingStrategy { ... }\n" +
+        "class GreetingFactory { static GreetingStrategy create(String lang) { ... } }\n" +
+        "class GreetingService { private final GreetingFactory factory; ... }\n" +
+        "// 4 class, 1 interface... cho việc này:\n" +
+        "String greet(String name) { return \"Xin chào \" + name; }\n" +
+        "\n" +
+        "// ĐÚNG — thêm pattern khi ĐÃ CÓ áp lực thay đổi thật:\n" +
+        "//  - đã có 3+ biến thể của cùng một hành vi\n" +
+        "//  - đã phải sửa cùng một chỗ nhiều lần vì lý do khác nhau\n" +
+        "//  - đã cần test một phần mà không dựng được cả hệ\n" +
+        "\n" +
+        "// Nhiều pattern của GoF là cách LÁCH giới hạn ngôn ngữ những năm 90.\n" +
+        "// Java hiện đại: lambda thay Strategy/Command, record thay Value Object,\n" +
+        "// enum thay Singleton, sealed + pattern matching thay Visitor.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -51,6 +88,51 @@ SS.addQuestions('design-patterns', [
       ['Đánh giá', 'khuyến nghị (Effective Java)', 'khuyến nghị', '"bẫy phỏng vấn" — dễ viết sai', 'đơn giản, tạo cả khi không dùng'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn cách, và cách nào thật sự đúng",
+      code:
+        "// CÁCH 1: ENUM — cách ĐÚNG NHẤT (Effective Java, Item 3)\n" +
+        "public enum ConfigManager {\n" +
+        "    INSTANCE;\n" +
+        "    private final Properties props = load();\n" +
+        "    public String get(String key) { return props.getProperty(key); }\n" +
+        "}\n" +
+        "ConfigManager.INSTANCE.get(\"app.name\");\n" +
+        "// + JVM đảm bảo duy nhất, thread-safe, chống được cả REFLECTION và\n" +
+        "//   SERIALIZATION (hai cách phá vỡ singleton mà các cách khác không chặn được)\n" +
+        "// - không kế thừa được class khác, và khởi tạo LƯỜI không được\n" +
+        "\n" +
+        "// CÁCH 2: HOLDER IDIOM — lười, thread-safe, không cần đồng bộ hoá\n" +
+        "public class ConfigManager {\n" +
+        "    private ConfigManager() {}\n" +
+        "    private static class Holder {           // class con chỉ được NẠP khi\n" +
+        "        static final ConfigManager INSTANCE = new ConfigManager();   // lần đầu dùng\n" +
+        "    }\n" +
+        "    public static ConfigManager getInstance() { return Holder.INSTANCE; }\n" +
+        "}\n" +
+        "// JVM đảm bảo việc nạp class là thread-safe -> không cần synchronized.\n" +
+        "\n" +
+        "// CÁCH 3: DOUBLE-CHECKED LOCKING — BẮT BUỘC có volatile\n" +
+        "public class ConfigManager {\n" +
+        "    private static volatile ConfigManager instance;   // thiếu volatile là SAI\n" +
+        "    public static ConfigManager getInstance() {\n" +
+        "        if (instance == null) {\n" +
+        "            synchronized (ConfigManager.class) {\n" +
+        "                if (instance == null) instance = new ConfigManager();\n" +
+        "            }\n" +
+        "        }\n" +
+        "        return instance;\n" +
+        "    }\n" +
+        "}\n" +
+        "// Không có volatile: thread khác có thể thấy tham chiếu KHÁC NULL nhưng\n" +
+        "// object CHƯA KHỞI TẠO XONG (do sắp xếp lại lệnh). Lỗi này rất khó tái hiện.\n" +
+        "\n" +
+        "// CÁCH 4 (SAI): synchronized cả method -> mọi lần gọi đều tranh khoá\n" +
+        "public static synchronized ConfigManager getInstance() { ... }",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -77,6 +159,48 @@ SS.addQuestions('design-patterns', [
       ['SRP', 'vi phạm — class tự lo vòng đời của mình', 'container lo vòng đời'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bốn vấn đề, và cách DI giải quyết",
+      code:
+        "// SINGLETON CỔ ĐIỂN:\n" +
+        "public class OrderService {\n" +
+        "    public void place(Order o) {\n" +
+        "        PaymentGateway.getInstance().charge(o);   // PHỤ THUỘC ẨN\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// VẤN ĐỀ 1: PHỤ THUỘC BỊ GIẤU. Nhìn chữ ký của OrderService không biết\n" +
+        "//   nó cần PaymentGateway -> không đọc hết code thì không hiểu.\n" +
+        "// VẤN ĐỀ 2: KHÔNG TEST ĐƯỢC. Không thay được bằng mock (trừ khi dùng\n" +
+        "//   PowerMock hoặc thêm setter — cả hai đều là dấu hiệu thiết kế sai).\n" +
+        "// VẤN ĐỀ 3: TRẠNG THÁI TOÀN CỤC. Test này làm bẩn test kia, và thứ tự\n" +
+        "//   chạy test ảnh hưởng kết quả.\n" +
+        "// VẤN ĐỀ 4: VÒNG ĐỜI CỨNG. Không có instance khác nhau cho từng tenant,\n" +
+        "//   từng môi trường, hay từng request.\n" +
+        "\n" +
+        "// DI GIẢI QUYẾT: vẫn MỘT instance, nhưng do CONTAINER quản lý\n" +
+        "@Service                                 // Spring: mặc định singleton scope\n" +
+        "public class OrderService {\n" +
+        "    private final PaymentGateway gateway;\n" +
+        "    public OrderService(PaymentGateway gateway) {    // phụ thuộc TƯỜNG MINH\n" +
+        "        this.gateway = gateway;\n" +
+        "    }\n" +
+        "    public void place(Order o) { gateway.charge(o); }\n" +
+        "}\n" +
+        "\n" +
+        "// Test trở nên tầm thường:\n" +
+        "@Test void test() {\n" +
+        "    var mock = mock(PaymentGateway.class);\n" +
+        "    new OrderService(mock).place(order);              // không cần framework\n" +
+        "    verify(mock).charge(order);\n" +
+        "}\n" +
+        "\n" +
+        "// KHI NÀO SINGLETON CỔ ĐIỂN VẪN ỔN: object KHÔNG TRẠNG THÁI và thật sự\n" +
+        "// toàn cục (logger, hằng số), hoặc trong code không có container DI.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -99,6 +223,48 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Tách "logic dùng object" khỏi "logic tạo object"' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Để lớp con quyết định tạo object nào",
+      code:
+        "// VẤN ĐỀ: code có logic chung, nhưng LOẠI object cần tạo lại khác nhau\n" +
+        "// theo ngữ cảnh. Dùng new trực tiếp -> gắn chặt vào class cụ thể.\n" +
+        "public abstract class DocumentExporter {\n" +
+        "\n" +
+        "    // TEMPLATE: khung xử lý CỐ ĐỊNH\n" +
+        "    public final byte[] export(Report report) {\n" +
+        "        Formatter formatter = createFormatter();     // <- FACTORY METHOD\n" +
+        "        formatter.writeHeader(report.title());\n" +
+        "        report.rows().forEach(formatter::writeRow);\n" +
+        "        return formatter.finish();\n" +
+        "    }\n" +
+        "\n" +
+        "    // Lớp con quyết định tạo cái gì\n" +
+        "    protected abstract Formatter createFormatter();\n" +
+        "}\n" +
+        "\n" +
+        "public class PdfExporter extends DocumentExporter {\n" +
+        "    @Override protected Formatter createFormatter() { return new PdfFormatter(); }\n" +
+        "}\n" +
+        "public class ExcelExporter extends DocumentExporter {\n" +
+        "    @Override protected Formatter createFormatter() { return new ExcelFormatter(); }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: DocumentExporter KHÔNG biết gì về PdfFormatter/ExcelFormatter.\n" +
+        "// Thêm định dạng mới = thêm một lớp con, KHÔNG sửa code cũ (OCP).\n" +
+        "\n" +
+        "// TRONG JAVA HIỆN ĐẠI, thường không cần cả hệ thống lớp con:\n" +
+        "public class DocumentExporter {\n" +
+        "    private final Supplier<Formatter> factory;        // truyền hàm tạo vào\n" +
+        "    public DocumentExporter(Supplier<Formatter> factory) { this.factory = factory; }\n" +
+        "    public byte[] export(Report r) { Formatter f = factory.get(); ... }\n" +
+        "}\n" +
+        "new DocumentExporter(PdfFormatter::new).export(report);\n" +
+        "// Ngắn hơn nhiều và linh hoạt hơn. Chỉ dùng lớp con khi lớp con còn ghi\n" +
+        "// đè các hành vi KHÁC nữa, không chỉ mỗi việc tạo object.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -125,6 +291,49 @@ SS.addQuestions('design-patterns', [
       ['Quan hệ', '—', 'Abstract Factory thường chứa nhiều Factory Method'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Tạo cả một HỌ sản phẩm khớp nhau",
+      code:
+        "// ABSTRACT FACTORY tạo NHIỀU loại object LIÊN QUAN, đảm bảo chúng khớp nhau.\n" +
+        "public interface UiFactory {\n" +
+        "    Button createButton();\n" +
+        "    Checkbox createCheckbox();\n" +
+        "    Dialog createDialog();          // cả HỌ sản phẩm\n" +
+        "}\n" +
+        "\n" +
+        "public class MaterialUiFactory implements UiFactory {\n" +
+        "    public Button createButton()     { return new MaterialButton(); }\n" +
+        "    public Checkbox createCheckbox() { return new MaterialCheckbox(); }\n" +
+        "    public Dialog createDialog()     { return new MaterialDialog(); }\n" +
+        "}\n" +
+        "public class CupertinoUiFactory implements UiFactory {\n" +
+        "    public Button createButton()     { return new CupertinoButton(); }\n" +
+        "    public Checkbox createCheckbox() { return new CupertinoCheckbox(); }\n" +
+        "    public Dialog createDialog()     { return new CupertinoDialog(); }\n" +
+        "}\n" +
+        "\n" +
+        "// Client dùng MỘT factory -> mọi thành phần CHẮC CHẮN cùng một bộ giao diện\n" +
+        "public class Screen {\n" +
+        "    private final UiFactory ui;\n" +
+        "    public Screen(UiFactory ui) { this.ui = ui; }\n" +
+        "    public void render() {\n" +
+        "        ui.createButton().draw();\n" +
+        "        ui.createCheckbox().draw();     // không bao giờ lẫn Material với Cupertino\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// KHÁC BIỆT CỐT LÕI:\n" +
+        "//  FACTORY METHOD   — tạo MỘT loại object; biến thể chọn bằng KẾ THỪA\n" +
+        "//  ABSTRACT FACTORY — tạo MỘT HỌ object liên quan; biến thể chọn bằng\n" +
+        "//                     việc truyền vào một factory khác (COMPOSITION)\n" +
+        "\n" +
+        "// VÍ DỤ THỰC TẾ: DataSource/Connection/Statement của JDBC theo từng loại DB;\n" +
+        "// bộ parser/serializer theo định dạng; bộ client theo môi trường (thật/giả lập).\n" +
+        "// ĐIỂM YẾU: thêm một loại sản phẩm mới vào HỌ -> phải sửa MỌI factory.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -148,6 +357,51 @@ SS.addQuestions('design-patterns', [
       { name: 'Abstract Factory', tag: 'GoF', note: 'tạo HỌ object liên quan; client chọn một concrete factory — khi có nhiều họ phải nhất quán' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mức độ, từ đơn giản tới phức tạp",
+      code:
+        "// 1) SIMPLE FACTORY — không phải pattern GoF, chỉ là một method tập trung\n" +
+        "//    việc tạo object. Dùng nhiều nhất trong thực tế vì đơn giản.\n" +
+        "public class PaymentFactory {\n" +
+        "    public static PaymentGateway create(String type) {\n" +
+        "        return switch (type) {\n" +
+        "            case \"stripe\" -> new StripeGateway();\n" +
+        "            case \"paypal\" -> new PaypalGateway();\n" +
+        "            default -> throw new IllegalArgumentException(type);\n" +
+        "        };\n" +
+        "    }\n" +
+        "}\n" +
+        "// - Thêm loại mới phải SỬA switch (vi phạm OCP), nhưng đổi lại rất dễ đọc.\n" +
+        "\n" +
+        "// 2) FACTORY METHOD — lớp con quyết định, KHÔNG phải sửa code cũ\n" +
+        "public abstract class PaymentProcessor {\n" +
+        "    protected abstract PaymentGateway createGateway();      // lớp con cài đặt\n" +
+        "    public final void process(Order o) { createGateway().charge(o); }\n" +
+        "}\n" +
+        "\n" +
+        "// 3) ABSTRACT FACTORY — tạo cả HỌ object khớp nhau\n" +
+        "public interface PaymentKit {\n" +
+        "    PaymentGateway gateway();\n" +
+        "    RefundHandler refunds();\n" +
+        "    ReportGenerator reports();\n" +
+        "}\n" +
+        "\n" +
+        "// CHỌN THEO CÂU HỎI:\n" +
+        "//  - chỉ cần gom việc tạo object vào một chỗ?        -> SIMPLE FACTORY\n" +
+        "//  - cần lớp con quyết định tạo gì, và không muốn sửa code cũ? -> FACTORY METHOD\n" +
+        "//  - cần nhiều object LIÊN QUAN phải khớp nhau?      -> ABSTRACT FACTORY\n" +
+        "\n" +
+        "// TRONG SPRING, phần lớn nhu cầu này được giải quyết bằng DI:\n" +
+        "@Service\n" +
+        "public class PaymentProcessor {\n" +
+        "    private final Map<String, PaymentGateway> gateways;   // Spring tiêm TẤT CẢ\n" +
+        "    public void process(Order o) { gateways.get(o.method()).charge(o); }\n" +
+        "}\n" +
+        "// -> thêm gateway mới = thêm một @Component, không sửa dòng nào.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -174,6 +428,62 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Dùng khi ≥ 4–5 tham số, hoặc nhiều optional, hoặc cần immutable' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Nhiều tham số, nhiều tuỳ chọn, và object bất biến",
+      code:
+        "// VẤN ĐỀ: constructor với 8 tham số, một nửa là tuỳ chọn\n" +
+        "new Order(id, customerId, items, null, null, \"VND\", null, true);   // không đọc nổi\n" +
+        "\n" +
+        "// BUILDER:\n" +
+        "public final class Order {\n" +
+        "    private final String id;\n" +
+        "    private final String customerId;\n" +
+        "    private final List<Item> items;\n" +
+        "    private final String currency;\n" +
+        "    private final String note;\n" +
+        "\n" +
+        "    private Order(Builder b) {          // constructor PRIVATE\n" +
+        "        this.id = b.id;\n" +
+        "        this.customerId = b.customerId;\n" +
+        "        this.items = List.copyOf(b.items);      // bản sao BẤT BIẾN\n" +
+        "        this.currency = b.currency;\n" +
+        "        this.note = b.note;\n" +
+        "    }\n" +
+        "\n" +
+        "    public static Builder builder() { return new Builder(); }\n" +
+        "\n" +
+        "    public static final class Builder {\n" +
+        "        private String id;\n" +
+        "        private String customerId;\n" +
+        "        private List<Item> items = new ArrayList<>();\n" +
+        "        private String currency = \"VND\";        // giá trị MẶC ĐỊNH\n" +
+        "        private String note;\n" +
+        "\n" +
+        "        public Builder id(String id)              { this.id = id; return this; }\n" +
+        "        public Builder customerId(String c)       { this.customerId = c; return this; }\n" +
+        "        public Builder addItem(Item i)            { this.items.add(i); return this; }\n" +
+        "        public Builder currency(String c)         { this.currency = c; return this; }\n" +
+        "        public Builder note(String n)             { this.note = n; return this; }\n" +
+        "\n" +
+        "        public Order build() {\n" +
+        "            // VALIDATE TẬP TRUNG — object không bao giờ tồn tại ở trạng thái sai\n" +
+        "            if (id == null) throw new IllegalStateException(\"thiếu id\");\n" +
+        "            if (items.isEmpty()) throw new IllegalStateException(\"đơn rỗng\");\n" +
+        "            return new Order(this);\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "Order o = Order.builder().id(\"O-1\").customerId(\"C-1\")\n" +
+        "               .addItem(new Item(\"SKU-1\", 2)).note(\"giao buổi sáng\").build();\n" +
+        "\n" +
+        "// KHI NÀO DÙNG: từ ~4-5 tham số trở lên, hoặc có nhiều tham số TUỲ CHỌN,\n" +
+        "// hoặc cần object BẤT BIẾN có validate.\n" +
+        "// Lombok @Builder sinh sẵn; record + builder cũng kết hợp được.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -199,6 +509,45 @@ SS.addQuestions('design-patterns', [
       ['Chi phí', 'bùng nổ số constructor', 'ít code', 'boilerplate (hoặc Lombok @Builder)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba cách khởi tạo, hai cách có vấn đề thật",
+      code:
+        "// 1) TELESCOPING CONSTRUCTOR — chồng constructor\n" +
+        "public Pizza(int size) { this(size, false); }\n" +
+        "public Pizza(int size, boolean cheese) { this(size, cheese, false); }\n" +
+        "public Pizza(int size, boolean cheese, boolean pepperoni) { ... }\n" +
+        "new Pizza(12, true, false, true, false, true);     // tham số nào là gì?\n" +
+        "// - KHÔNG ĐỌC ĐƯỢC, và hoán đổi nhầm hai boolean thì compiler KHÔNG BÁO LỖI\n" +
+        "// - số tổ hợp bùng nổ khi thêm tuỳ chọn\n" +
+        "\n" +
+        "// 2) JAVABEANS SETTER\n" +
+        "Pizza p = new Pizza();\n" +
+        "p.setSize(12);\n" +
+        "p.setCheese(true);\n" +
+        "// - object tồn tại ở trạng thái NỬA VỜI giữa các lệnh set (nguy hiểm khi\n" +
+        "//   chia sẻ giữa thread, và khi có exception ở giữa)\n" +
+        "// - KHÔNG BẤT BIẾN được -> không thread-safe, không dùng làm key\n" +
+        "// - không validate tập trung được\n" +
+        "\n" +
+        "// 3) BUILDER — giải quyết cả hai\n" +
+        "Pizza p = Pizza.builder().size(12).cheese(true).pepperoni(true).build();\n" +
+        "// + đọc như văn xuôi, tên tham số hiện rõ\n" +
+        "// + object BẤT BIẾN và LUÔN hợp lệ (validate trong build())\n" +
+        "// + thêm tuỳ chọn mới không phá vỡ code cũ\n" +
+        "// - nhiều code hơn (Lombok @Builder giải quyết)\n" +
+        "\n" +
+        "// TRONG JAVA HIỆN ĐẠI, với ÍT tham số thì RECORD là đủ:\n" +
+        "public record Pizza(int size, boolean cheese, boolean pepperoni) {\n" +
+        "    public Pizza {                            // compact constructor: validate\n" +
+        "        if (size < 6) throw new IllegalArgumentException(\"nhỏ quá\");\n" +
+        "    }\n" +
+        "}\n" +
+        "// Record cho bất biến + equals/hashCode/toString miễn phí. Chỉ thêm builder\n" +
+        "// khi số tham số lớn hoặc có nhiều giá trị mặc định.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -227,6 +576,49 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Sao chép một mẫu có sẵn thay vì dựng từ đầu",
+      code:
+        "// DÙNG KHI: việc TẠO object tốn kém (đọc file, gọi mạng, tính toán nặng)\n" +
+        "// nhưng bạn cần nhiều bản gần giống nhau.\n" +
+        "public class ReportTemplate implements Cloneable {\n" +
+        "    private String title;\n" +
+        "    private List<Section> sections;       // dựng từ database, tốn kém\n" +
+        "    private Style style;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public ReportTemplate clone() {\n" +
+        "        try {\n" +
+        "            ReportTemplate copy = (ReportTemplate) super.clone();   // SHALLOW\n" +
+        "            // Phải DEEP COPY từng field mutable, nếu không hai bản dùng chung:\n" +
+        "            copy.sections = sections.stream().map(Section::copy).toList();\n" +
+        "            copy.style = style.copy();\n" +
+        "            return copy;\n" +
+        "        } catch (CloneNotSupportedException e) { throw new AssertionError(e); }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// TRONG JAVA HIỆN ĐẠI, TRÁNH Cloneable (thiết kế hỏng: marker interface\n" +
+        "// rỗng, clone() protected, không chạy constructor, ném checked exception).\n" +
+        "// DÙNG COPY CONSTRUCTOR hoặc STATIC FACTORY:\n" +
+        "public record ReportTemplate(String title, List<Section> sections, Style style) {\n" +
+        "    public ReportTemplate {\n" +
+        "        sections = List.copyOf(sections);            // bất biến ngay từ đầu\n" +
+        "    }\n" +
+        "    public ReportTemplate withTitle(String newTitle) {   // \"copy có sửa\"\n" +
+        "        return new ReportTemplate(newTitle, sections, style);\n" +
+        "    }\n" +
+        "}\n" +
+        "var base = loadExpensiveTemplate();\n" +
+        "var q1 = base.withTitle(\"Báo cáo Q1\");\n" +
+        "var q2 = base.withTitle(\"Báo cáo Q2\");    // không phải nạp lại từ database\n" +
+        "\n" +
+        "// LƯU Ý: object BẤT BIẾN thì KHÔNG CẦN sao chép gì cả — chỉ cần chia sẻ.\n" +
+        "// Prototype chỉ có ý nghĩa với object MUTABLE và tốn kém để tạo.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -252,6 +644,41 @@ SS.addQuestions('design-patterns', [
       ['Cân nhắc', 'chi phí tạo/huỷ >> chi phí quản lý pool', 'quản lý pool + rủi ro object "bẩn" (state cũ) lấn át'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Tái sử dụng object đắt, và vì sao hiếm khi cần tự viết",
+      code:
+        "// DÙNG KHI object có CHI PHÍ TẠO RẤT LỚN so với chi phí giữ nó sống:\n" +
+        "//  - kết nối database (bắt tay TCP + xác thực: hàng chục mili giây)\n" +
+        "//  - kết nối HTTP giữ nguyên (keep-alive)\n" +
+        "//  - thread (tạo thread là lời gọi hệ điều hành)\n" +
+        "//  - buffer lớn, đối tượng đồ hoạ nặng\n" +
+        "\n" +
+        "// TRONG THỰC TẾ: ĐỪNG tự viết. Dùng thư viện đã được kiểm chứng:\n" +
+        "HikariConfig cfg = new HikariConfig();\n" +
+        "cfg.setMaximumPoolSize(20);\n" +
+        "cfg.setMinimumIdle(5);\n" +
+        "cfg.setConnectionTimeout(1000);        // chờ lấy kết nối tối đa 1s\n" +
+        "cfg.setMaxLifetime(1_800_000);         // thay kết nối sau 30 phút\n" +
+        "cfg.setLeakDetectionThreshold(60_000); // cảnh báo kết nối không được trả về\n" +
+        "DataSource ds = new HikariDataSource(cfg);\n" +
+        "\n" +
+        "ExecutorService pool = Executors.newFixedThreadPool(10);      // pool thread\n" +
+        "\n" +
+        "// VÌ SAO ĐỪNG TỰ VIẾT — bốn thứ rất dễ sai:\n" +
+        "//  1) RÒ RỈ: object mượn mà không trả -> pool cạn dần rồi treo cả hệ thống\n" +
+        "//  2) TRẠNG THÁI BẨN: object trả về còn giữ state của lần dùng trước\n" +
+        "//     (transaction chưa commit, biến session còn sót) -> lỗi rất khó tìm\n" +
+        "//  3) KIỂM TRA SỨC KHOẺ: kết nối đã chết trong pool phải bị phát hiện\n" +
+        "//  4) đồng bộ hoá, timeout, và co giãn kích thước\n" +
+        "\n" +
+        "// KHÔNG DÙNG cho object THƯỜNG: JVM cấp phát object rất rẻ (con trỏ bump),\n" +
+        "// và GC thế hệ trẻ xử lý object chết sớm gần như miễn phí. Pool object\n" +
+        "// thường LÀM CHẬM chương trình và tăng nguy cơ bug.\n" +
+        "// Chỉ pool những gì gắn với TÀI NGUYÊN HỆ ĐIỀU HÀNH.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -278,6 +705,46 @@ SS.addQuestions('design-patterns', [
       ['Dùng cho', 'phụ thuộc bắt buộc', 'optional / thay runtime', 'gọn nhưng ẩn phụ thuộc'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Object không tự tạo phụ thuộc của mình",
+      code:
+        "// KHÔNG DÙNG DI — class tự tạo phụ thuộc -> gắn chặt, không test được\n" +
+        "public class OrderService {\n" +
+        "    private final PaymentGateway gateway = new StripeGateway();   // CỨNG\n" +
+        "}\n" +
+        "\n" +
+        "// DÙNG DI — phụ thuộc được TRUYỀN VÀO từ bên ngoài\n" +
+        "// 1) CONSTRUCTOR INJECTION — nên dùng\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "    private final PaymentGateway gateway;      // final: bất biến\n" +
+        "    private final OrderRepository repo;\n" +
+        "\n" +
+        "    public OrderService(PaymentGateway gateway, OrderRepository repo) {\n" +
+        "        this.gateway = gateway;\n" +
+        "        this.repo = repo;\n" +
+        "    }\n" +
+        "}\n" +
+        "// + phụ thuộc BẮT BUỘC và BẤT BIẾN; object không bao giờ ở trạng thái nửa vời\n" +
+        "// + test bằng new OrderService(mock1, mock2) — không cần framework\n" +
+        "// + constructor quá nhiều tham số TỰ BÁO ĐỘNG rằng class ôm quá nhiều việc\n" +
+        "\n" +
+        "// 2) SETTER INJECTION — cho phụ thuộc THẬT SỰ tuỳ chọn\n" +
+        "@Autowired(required = false)\n" +
+        "public void setMetrics(MetricsCollector m) { this.metrics = m; }\n" +
+        "\n" +
+        "// 3) FIELD INJECTION — tránh\n" +
+        "@Autowired private PaymentGateway gateway;\n" +
+        "// - không final được, test phải dùng reflection hoặc bật cả context,\n" +
+        "//   và che giấu việc class đang phụ thuộc quá nhiều thứ\n" +
+        "\n" +
+        "// DI KHÔNG CẦN FRAMEWORK — đây chỉ là một pattern:\n" +
+        "var service = new OrderService(new StripeGateway(), new JdbcOrderRepository(ds));\n" +
+        "// Framework chỉ giúp tự động hoá việc lắp ráp khi hệ thống lớn.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -305,6 +772,44 @@ SS.addQuestions('design-patterns', [
       ['Test', 'phải cấu hình locator (global state)', 'truyền mock trực tiếp'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Kéo phụ thuộc về vs được đẩy vào",
+      code:
+        "// SERVICE LOCATOR — object TỰ ĐI TÌM phụ thuộc của mình\n" +
+        "public class OrderService {\n" +
+        "    public void place(Order o) {\n" +
+        "        var gateway = ServiceLocator.get(PaymentGateway.class);   // KÉO về\n" +
+        "        gateway.charge(o);\n" +
+        "    }\n" +
+        "}\n" +
+        "// VẤN ĐỀ:\n" +
+        "//  1) PHỤ THUỘC BỊ GIẤU: chữ ký class không cho biết nó cần gì\n" +
+        "//  2) mọi class phụ thuộc vào CHÍNH SERVICE LOCATOR -> một phụ thuộc toàn cục mới\n" +
+        "//  3) lỗi thiếu bean chỉ lộ ra LÚC CHẠY, ở đúng dòng gọi get()\n" +
+        "//  4) test phải cấu hình locator toàn cục -> test làm bẩn lẫn nhau\n" +
+        "\n" +
+        "// DEPENDENCY INJECTION — phụ thuộc được ĐẨY vào\n" +
+        "public class OrderService {\n" +
+        "    private final PaymentGateway gateway;\n" +
+        "    public OrderService(PaymentGateway gateway) { this.gateway = gateway; }\n" +
+        "}\n" +
+        "// + phụ thuộc TƯỜNG MINH ngay ở chữ ký\n" +
+        "// + thiếu phụ thuộc -> lỗi LÚC KHỞI ĐỘNG (Spring) hoặc lúc BIÊN DỊCH\n" +
+        "// + test không cần hạ tầng gì\n" +
+        "\n" +
+        "// KHI NÀO SERVICE LOCATOR CÒN HỢP LÝ:\n" +
+        "//  - code cũ chưa có container DI, và refactor toàn bộ là quá tốn kém\n" +
+        "//  - plugin nạp động lúc chạy (không biết trước cần gì)\n" +
+        "//  - framework nội bộ cần tra cứu theo tên lúc chạy\n" +
+        "// Ngay cả khi đó, nên GIỚI HẠN việc tra cứu ở MỘT lớp biên, phần còn lại\n" +
+        "// của hệ thống vẫn dùng DI.\n" +
+        "\n" +
+        "// Trong Spring, ApplicationContextAware chính là service locator —\n" +
+        "// dùng nó là dấu hiệu nên xem lại thiết kế.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -335,6 +840,47 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Method tĩnh trả về instance, và năm lợi thế",
+      code:
+        "public final class Money {\n" +
+        "    private final BigDecimal amount;\n" +
+        "    private final Currency currency;\n" +
+        "\n" +
+        "    private Money(BigDecimal amount, Currency currency) { ... }   // constructor PRIVATE\n" +
+        "\n" +
+        "    // 1) CÓ TÊN — thể hiện được ý nghĩa, và tạo được nhiều \"constructor\"\n" +
+        "    //    cùng danh sách tham số (điều constructor không làm được)\n" +
+        "    public static Money vnd(long amount)  { return new Money(BigDecimal.valueOf(amount), VND); }\n" +
+        "    public static Money usd(double amount){ return new Money(BigDecimal.valueOf(amount), USD); }\n" +
+        "    public static Money zero(Currency c)  { return new Money(BigDecimal.ZERO, c); }\n" +
+        "}\n" +
+        "Money.vnd(100_000);        // rõ ràng hơn new Money(100000, Currency.getInstance(\"VND\"))\n" +
+        "\n" +
+        "// 2) KHÔNG BẮT BUỘC tạo object mới -> CACHE được\n" +
+        "public static Boolean valueOf(boolean b) { return b ? TRUE : FALSE; }   // JDK\n" +
+        "Integer.valueOf(127);      // dùng lại từ cache [-128, 127]\n" +
+        "\n" +
+        "// 3) TRẢ VỀ KIỂU CON — che giấu lớp cài đặt\n" +
+        "public static <T> List<T> of(T... elements) {          // List.of trả về\n" +
+        "    return new ImmutableCollections.ListN<>(elements); // lớp private\n" +
+        "}\n" +
+        "// Client chỉ biết List; lớp cài đặt đổi mà không ảnh hưởng ai.\n" +
+        "\n" +
+        "// 4) Kiểu trả về đổi được theo THAM SỐ\n" +
+        "public static Set<Rank> of(Rank first, Rank... rest) {\n" +
+        "    return rest.length <= 5 ? new RegularEnumSet<>(...) : new JumboEnumSet<>(...);\n" +
+        "}\n" +
+        "\n" +
+        "// 5) Lớp trả về chưa cần tồn tại lúc VIẾT method (ServiceLoader, JDBC)\n" +
+        "\n" +
+        "// NHƯỢC ĐIỂM: class không có constructor public thì không kế thừa được\n" +
+        "// (thường lại là điều tốt), và method tĩnh khó tìm hơn constructor trong\n" +
+        "// tài liệu -> đặt tên theo quy ước: of, from, valueOf, getInstance, newInstance.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -359,6 +905,51 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Lazy + thread-safe + không synchronized' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hoãn việc tạo object tới khi thật sự cần",
+      code:
+        "// LAZY INIT ĐƠN GIẢN — chỉ an toàn khi ĐƠN LUỒNG\n" +
+        "private ExpensiveResource resource;\n" +
+        "public ExpensiveResource get() {\n" +
+        "    if (resource == null) resource = new ExpensiveResource();   // RACE nếu đa luồng\n" +
+        "    return resource;\n" +
+        "}\n" +
+        "\n" +
+        "// HOLDER IDIOM — lười + thread-safe + KHÔNG tốn chi phí đồng bộ hoá\n" +
+        "public class ResourceManager {\n" +
+        "    private ResourceManager() {}\n" +
+        "    private static class Holder {\n" +
+        "        static final ExpensiveResource INSTANCE = new ExpensiveResource();\n" +
+        "    }\n" +
+        "    public static ExpensiveResource get() { return Holder.INSTANCE; }\n" +
+        "}\n" +
+        "// CƠ CHẾ: JVM chỉ NẠP class Holder khi nó được tham chiếu lần đầu, và\n" +
+        "// việc nạp class được JVM đảm bảo thread-safe. Không cần synchronized,\n" +
+        "// không cần volatile, không có chi phí ở các lần gọi sau.\n" +
+        "// Đây là cách hiện thực lazy singleton TỐT NHẤT trong Java (ngoài enum).\n" +
+        "\n" +
+        "// CHO FIELD CỦA INSTANCE (không phải static) — double-checked locking:\n" +
+        "private volatile ExpensiveResource resource;     // volatile BẮT BUỘC\n" +
+        "public ExpensiveResource get() {\n" +
+        "    ExpensiveResource r = resource;               // đọc volatile MỘT lần\n" +
+        "    if (r == null) {\n" +
+        "        synchronized (this) {\n" +
+        "            r = resource;\n" +
+        "            if (r == null) resource = r = new ExpensiveResource();\n" +
+        "        }\n" +
+        "    }\n" +
+        "    return r;\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH GỌN NHẤT trong Java hiện đại:\n" +
+        "private final Supplier<ExpensiveResource> lazy = Suppliers.memoize(ExpensiveResource::new);\n" +
+        "\n" +
+        "// KHI NÀO ĐÁNG LÀM: object thật sự ĐẮT và có thể KHÔNG BAO GIỜ dùng tới.\n" +
+        "// Ngược lại, khởi tạo sớm giúp lỗi cấu hình lộ ra lúc khởi động — thường tốt hơn.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -382,6 +973,46 @@ SS.addQuestions('design-patterns', [
       ['Thay thế', 'DI + Map được inject (Spring tự gom Map<String, Handler>)', ''],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Nhiều instance được quản lý theo khoá",
+      code:
+        "// MULTITON = Singleton mở rộng: mỗi KHOÁ một instance duy nhất.\n" +
+        "public class ConnectionRegistry {\n" +
+        "    private static final Map<String, Connection> INSTANCES = new ConcurrentHashMap<>();\n" +
+        "\n" +
+        "    public static Connection forTenant(String tenantId) {\n" +
+        "        return INSTANCES.computeIfAbsent(tenantId, ConnectionRegistry::create);\n" +
+        "    }                        // computeIfAbsent: NGUYÊN TỬ, không tạo trùng\n" +
+        "}\n" +
+        "\n" +
+        "// REGISTRY — kho tra cứu object theo khoá, thường được đăng ký lúc khởi động\n" +
+        "@Component\n" +
+        "public class HandlerRegistry {\n" +
+        "    private final Map<String, EventHandler> handlers;\n" +
+        "\n" +
+        "    // Spring tiêm MỌI EventHandler; ta lập chỉ mục theo loại sự kiện\n" +
+        "    public HandlerRegistry(List<EventHandler> all) {\n" +
+        "        this.handlers = all.stream()\n" +
+        "            .collect(toMap(EventHandler::eventType, identity()));\n" +
+        "    }\n" +
+        "    public void dispatch(Event e) {\n" +
+        "        EventHandler h = handlers.get(e.type());\n" +
+        "        if (h == null) throw new IllegalStateException(\"không có handler cho \" + e.type());\n" +
+        "        h.handle(e);\n" +
+        "    }\n" +
+        "}\n" +
+        "// -> Thêm loại sự kiện mới = thêm một @Component, KHÔNG sửa dòng nào ở đây.\n" +
+        "// Đây là cách thay thế cho switch/case dài, và tuân thủ OCP.\n" +
+        "\n" +
+        "// CẢNH BÁO: registry TĨNH mang mọi nhược điểm của trạng thái toàn cục —\n" +
+        "// khó test, rò rỉ bộ nhớ (map giữ tham chiếu mãi), và vấn đề đồng thời.\n" +
+        "// -> Ưu tiên registry là một BEAN do container quản lý (như ví dụ trên)\n" +
+        "//    thay vì Map static.\n" +
+        "// Với multiton theo tenant: nhớ có cơ chế DỌN khi tenant bị xoá.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -409,6 +1040,55 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba cơ chế tạo bean và khi nào dùng cái nào",
+      code:
+        "// 1) @Bean — factory method thông thường. Dùng cho class của THƯ VIỆN\n" +
+        "//    ngoài (không sửa được để gắn @Component).\n" +
+        "@Configuration\n" +
+        "public class AppConfig {\n" +
+        "    @Bean\n" +
+        "    public RestClient paymentClient(RestClient.Builder builder) {\n" +
+        "        return builder.baseUrl(\"https://payment\").build();\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 2) FactoryBean — bean có nhiệm vụ TẠO RA bean khác. Dùng khi việc khởi\n" +
+        "//    tạo phức tạp và cần logic, hoặc cần trả về PROXY.\n" +
+        "@Component\n" +
+        "public class PaymentGatewayFactoryBean implements FactoryBean<PaymentGateway> {\n" +
+        "    private final Environment env;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public PaymentGateway getObject() {\n" +
+        "        String provider = env.getProperty(\"payment.provider\", \"stripe\");\n" +
+        "        return switch (provider) {\n" +
+        "            case \"stripe\" -> new StripeGateway(env.getProperty(\"stripe.key\"));\n" +
+        "            case \"paypal\" -> new PaypalGateway(env.getProperty(\"paypal.key\"));\n" +
+        "            default -> throw new IllegalStateException(provider);\n" +
+        "        };\n" +
+        "    }\n" +
+        "    @Override public Class<?> getObjectType() { return PaymentGateway.class; }\n" +
+        "    @Override public boolean isSingleton() { return true; }\n" +
+        "}\n" +
+        "// LƯU Ý: getBean(\"paymentGatewayFactoryBean\") trả về SẢN PHẨM (PaymentGateway);\n" +
+        "// muốn lấy chính FactoryBean thì thêm & : getBean(\"&paymentGatewayFactoryBean\").\n" +
+        "// Đây là cơ chế Spring dùng cho Mapper của MyBatis, proxy của Spring Data...\n" +
+        "\n" +
+        "// 3) BeanFactory / ObjectProvider — lấy bean LÚC CHẠY (khi cần prototype\n" +
+        "//    hoặc quyết định theo điều kiện runtime)\n" +
+        "@Service\n" +
+        "public class TaskRunner {\n" +
+        "    private final ObjectProvider<Task> tasks;      // sạch hơn ApplicationContextAware\n" +
+        "    public void run() { Task t = tasks.getObject(); }   // instance MỚI mỗi lần\n" +
+        "}\n" +
+        "\n" +
+        "// CHỌN: mặc định @Bean. Cần logic khởi tạo phức tạp -> FactoryBean.\n" +
+        "// Cần instance mới lúc chạy -> ObjectProvider.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -435,6 +1115,65 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Object đích: mọi field final, không setter, List.copyOf. Java hiện đại: record + compact constructor' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba yếu tố kết hợp",
+      code:
+        "public final class Order {\n" +
+        "    private final String id;\n" +
+        "    private final String customerId;\n" +
+        "    private final List<Item> items;       // BẤT BIẾN\n" +
+        "    private final Money total;\n" +
+        "\n" +
+        "    private Order(Builder b) {\n" +
+        "        this.id = b.id;\n" +
+        "        this.customerId = b.customerId;\n" +
+        "        this.items = List.copyOf(b.items);            // bản sao PHÒNG THỦ\n" +
+        "        this.total = b.total;\n" +
+        "    }\n" +
+        "\n" +
+        "    public List<Item> items() { return items; }       // đã bất biến, trả thẳng được\n" +
+        "\n" +
+        "    public static Builder builder() { return new Builder(); }\n" +
+        "\n" +
+        "    public static final class Builder {\n" +
+        "        private String id;\n" +
+        "        private String customerId;\n" +
+        "        private final List<Item> items = new ArrayList<>();\n" +
+        "        private Money total;\n" +
+        "\n" +
+        "        public Builder id(String id) {\n" +
+        "            this.id = requireNonNull(id, \"id\");       // validate SỚM ở từng bước\n" +
+        "            return this;\n" +
+        "        }\n" +
+        "        public Builder addItem(Item item) {\n" +
+        "            items.add(requireNonNull(item, \"item\"));\n" +
+        "            return this;\n" +
+        "        }\n" +
+        "\n" +
+        "        public Order build() {\n" +
+        "            // VALIDATE TOÀN CỤC — những quy tắc liên quan nhiều field\n" +
+        "            List<String> errors = new ArrayList<>();\n" +
+        "            if (id == null)          errors.add(\"thiếu id\");\n" +
+        "            if (customerId == null)  errors.add(\"thiếu customerId\");\n" +
+        "            if (items.isEmpty())     errors.add(\"đơn hàng rỗng\");\n" +
+        "            if (total != null && total.isNegative()) errors.add(\"tổng tiền âm\");\n" +
+        "            if (!errors.isEmpty())\n" +
+        "                throw new IllegalStateException(\"Order không hợp lệ: \" + errors);\n" +
+        "            return new Order(this);            // chỉ tạo khi CHẮC CHẮN hợp lệ\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "// BA NGUYÊN TẮC:\n" +
+        "// 1) Validate ở CẢ HAI mức: từng bước (rẻ, báo lỗi sớm) và trong build()\n" +
+        "//    (quy tắc liên quan nhiều field).\n" +
+        "// 2) GOM lỗi rồi báo một lần — người dùng không phải sửa từng cái một.\n" +
+        "// 3) Bản sao phòng thủ cho MỌI collection/mảng, cả lúc nhận lẫn lúc trả.\n" +
+        "// Builder dùng lại được nhiều lần thì phải cẩn thận: build() hai lần với\n" +
+        "// cùng builder sẽ chia sẻ state -> hoặc copy list trong build(), hoặc cấm.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -465,6 +1204,43 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Khi pattern nhiều hơn logic nghiệp vụ",
+      code:
+        "// DẤU HIỆU 1: FACTORY chỉ có MỘT cài đặt và không có dấu hiệu sẽ có thêm\n" +
+        "public interface UserServiceFactory { UserService create(); }\n" +
+        "public class UserServiceFactoryImpl implements UserServiceFactory {\n" +
+        "    public UserService create() { return new UserServiceImpl(); }\n" +
+        "}\n" +
+        "// -> Chỉ cần: new UserServiceImpl()  (hoặc để container DI lo)\n" +
+        "\n" +
+        "// DẤU HIỆU 2: BUILDER cho object 2-3 field bắt buộc\n" +
+        "Point p = Point.builder().x(1).y(2).build();\n" +
+        "Point p = new Point(1, 2);                  // rõ hơn, ngắn hơn\n" +
+        "record Point(int x, int y) { }              // và đây là đủ\n" +
+        "\n" +
+        "// DẤU HIỆU 3: interface chỉ có MỘT implementation, đặt tên XxxImpl\n" +
+        "// -> interface tồn tại \"để test\" trong khi Mockito mock được class thường,\n" +
+        "//    hoặc \"để linh hoạt sau này\" — một dự đoán hiếm khi thành sự thật.\n" +
+        "\n" +
+        "// DẤU HIỆU 4: ABSTRACT FACTORY cho một \"họ\" chỉ có một thành viên\n" +
+        "\n" +
+        "// DẤU HIỆU 5: nhiều tầng gián tiếp mà mỗi tầng chỉ chuyển tiếp lời gọi\n" +
+        "//   Controller -> Facade -> Service -> Manager -> Helper -> Repository\n" +
+        "//   -> mỗi tầng phải TRẢ LỜI ĐƯỢC \"nó thêm giá trị gì\"; không trả lời được thì bỏ.\n" +
+        "\n" +
+        "// NGUYÊN TẮC:\n" +
+        "//  - YAGNI: thêm trừu tượng khi ĐÃ CÓ nhu cầu thật, không phải khi dự đoán\n" +
+        "//  - Quy tắc BA: xuất hiện lần thứ ba thì mới trừu tượng hoá\n" +
+        "//  - Bắt đầu bằng cách ĐƠN GIẢN NHẤT chạy được; refactor khi có áp lực thật\n" +
+        "//  - Đo bằng câu hỏi: \"bỏ lớp này đi thì code có tệ hơn không?\"\n" +
+        "\n" +
+        "// Refactor RA khỏi thiết kế đơn giản thì dễ; refactor ra khỏi trừu tượng\n" +
+        "// sai thì rất khó — đó là lý do nên bắt đầu đơn giản.",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -488,6 +1264,45 @@ SS.addQuestions('design-patterns', [
       ['Lựa chọn tốt hơn', 'DI scope singleton', 'DI scope singleton'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Nhiều instance nhưng dùng chung state",
+      code:
+        "// SINGLETON: một instance, nhiều tham chiếu tới nó.\n" +
+        "// MONOSTATE:  nhiều instance, nhưng MỌI state đều STATIC -> chúng hành xử\n" +
+        "// như thể là một.\n" +
+        "public class AppConfig {\n" +
+        "    private static String environment;         // STATIC: dùng chung\n" +
+        "    private static int maxConnections;\n" +
+        "\n" +
+        "    public String getEnvironment() { return environment; }        // KHÔNG static\n" +
+        "    public void setEnvironment(String e) { environment = e; }\n" +
+        "}\n" +
+        "AppConfig a = new AppConfig();\n" +
+        "AppConfig b = new AppConfig();\n" +
+        "a.setEnvironment(\"prod\");\n" +
+        "b.getEnvironment();          // \"prod\" — b thấy thay đổi của a\n" +
+        "\n" +
+        "// SO VỚI SINGLETON:\n" +
+        "// + client dùng như class BÌNH THƯỜNG (new được), không phải gọi getInstance()\n" +
+        "// + KẾ THỪA được, và có thể triển khai interface -> polymorphism hoạt động\n" +
+        "// + chuyển từ monostate sang instance thường chỉ cần bỏ từ khoá static\n" +
+        "\n" +
+        "// NHƯNG MANG MỌI VẤN ĐỀ CỦA TRẠNG THÁI TOÀN CỤC — và tệ hơn ở một điểm:\n" +
+        "// nó GIẤU điều đó đi. Người đọc thấy `new AppConfig()` và tưởng mình có\n" +
+        "// một object riêng, trong khi thực tế đang sửa state dùng chung.\n" +
+        "// -> Đây là lý do monostate hiếm khi được khuyến nghị.\n" +
+        "\n" +
+        "// TRONG THỰC TẾ: dùng DI với singleton scope. Nó cho bạn \"một instance\"\n" +
+        "// mà KHÔNG có trạng thái toàn cục ẩn, và test được:\n" +
+        "@Component\n" +
+        "public class AppConfig {\n" +
+        "    private final String environment;      // bất biến, tiêm từ cấu hình\n" +
+        "    public AppConfig(@Value(\"${app.env}\") String env) { this.environment = env; }\n" +
+        "}",
+    },
+  ],
 },
 {
   cat: 'Creational',
@@ -512,5 +1327,43 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba khái niệm hay bị dùng lẫn lộn",
+      code:
+        "// 1) IoC (Inversion of Control) — NGUYÊN TẮC RỘNG: quyền điều khiển luồng\n" +
+        "//    chạy bị đảo ngược, framework gọi code của bạn thay vì ngược lại.\n" +
+        "//    (\"Hollywood principle: don\u0027t call us, we\u0027ll call you\")\n" +
+        "//    DI chỉ là MỘT dạng của IoC. Các dạng khác: template method, callback,\n" +
+        "//    event listener, và toàn bộ mô hình lập trình hướng sự kiện.\n" +
+        "@EventListener                       // framework gọi bạn, không phải bạn gọi nó\n" +
+        "public void on(OrderPlaced e) { }\n" +
+        "\n" +
+        "// 2) DIP (Dependency Inversion Principle) — chữ D trong SOLID, nói về\n" +
+        "//    HƯỚNG PHỤ THUỘC ở mức thiết kế:\n" +
+        "//    \"Module cấp cao KHÔNG phụ thuộc module cấp thấp. Cả hai phụ thuộc\n" +
+        "//     vào TRỪU TƯỢNG.\"\n" +
+        "// VI PHẠM DIP:\n" +
+        "public class OrderService {                    // cấp cao\n" +
+        "    private final MySqlOrderRepository repo;   // phụ thuộc TRỰC TIẾP vào cấp thấp\n" +
+        "}\n" +
+        "// TUÂN THỦ DIP:\n" +
+        "public class OrderService {\n" +
+        "    private final OrderRepository repo;        // phụ thuộc vào TRỪU TƯỢNG\n" +
+        "}\n" +
+        "// Và quan trọng: interface OrderRepository thuộc về TẦNG DOMAIN, không\n" +
+        "// thuộc tầng hạ tầng -> hướng phụ thuộc bị \"đảo ngược\" so với thông thường.\n" +
+        "\n" +
+        "// 3) DI (Dependency Injection) — KỸ THUẬT cụ thể để cung cấp phụ thuộc\n" +
+        "public OrderService(OrderRepository repo) { this.repo = repo; }\n" +
+        "\n" +
+        "// QUAN HỆ: DIP nói NÊN phụ thuộc vào cái gì (trừu tượng).\n" +
+        "//          DI nói LÀM THẾ NÀO để đưa phụ thuộc đó vào.\n" +
+        "//          IoC là nguyên tắc bao trùm cả hai.\n" +
+        "// Dùng DI mà tiêm class cụ thể -> có DI nhưng KHÔNG có DIP.\n" +
+        "// Tự new interface trong constructor -> có DIP nhưng không có DI.",
+    },
+  ],
 },
 ]);

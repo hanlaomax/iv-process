@@ -21,6 +21,54 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Không phải row/DTO. Tập trung query logic thay vì rải SQL khắp service' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bộ sưu tập object trong bộ nhớ, che giấu việc lưu trữ",
+      code:
+        "// Ý TƯỞNG: repository giả vờ như một COLLECTION trong bộ nhớ chứa các\n" +
+        "// aggregate. Domain không biết dữ liệu nằm ở Postgres, MongoDB hay file.\n" +
+        "\n" +
+        "// INTERFACE nằm ở TẦNG DOMAIN — đây là điểm quan trọng nhất (DIP)\n" +
+        "package com.example.domain.order;\n" +
+        "public interface OrderRepository {\n" +
+        "    Optional<Order> findById(OrderId id);\n" +
+        "    List<Order> findPendingOlderThan(Duration age);   // ngôn ngữ NGHIỆP VỤ\n" +
+        "    void save(Order order);\n" +
+        "    void delete(OrderId id);\n" +
+        "}\n" +
+        "\n" +
+        "// CÀI ĐẶT nằm ở TẦNG HẠ TẦNG\n" +
+        "package com.example.infrastructure.persistence;\n" +
+        "@Repository\n" +
+        "public class JpaOrderRepository implements OrderRepository {\n" +
+        "    private final OrderJpaRepository jpa;             // Spring Data\n" +
+        "    private final OrderMapper mapper;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    public Optional<Order> findById(OrderId id) {\n" +
+        "        return jpa.findById(id.value()).map(mapper::toDomain);   // entity -> domain\n" +
+        "    }\n" +
+        "    @Override\n" +
+        "    public void save(Order order) {\n" +
+        "        jpa.save(mapper.toEntity(order));\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// BA NGUYÊN TẮC:\n" +
+        "// 1) Method dùng NGÔN NGỮ NGHIỆP VỤ, không phải ngôn ngữ truy vấn:\n" +
+        "//    findPendingOlderThan(...) chứ không phải findByStatusAndCreatedAtBefore(...)\n" +
+        "// 2) Repository làm việc với AGGREGATE ROOT, không phải với từng bảng.\n" +
+        "//    Không có OrderLineRepository — order line được lưu qua Order.\n" +
+        "// 3) KHÔNG để chi tiết hạ tầng rò rỉ ra interface: không trả về Page của\n" +
+        "//    Spring, không nhận Specification, không ném exception của JPA.\n" +
+        "\n" +
+        "// LỢI ÍCH: domain test được bằng InMemoryOrderRepository; đổi công nghệ\n" +
+        "// lưu trữ không đụng vào nghiệp vụ.\n" +
+        "// TRANH LUẬN: Spring Data JPA đã là một repository — thêm một tầng nữa có\n" +
+        "// đáng không? Đáng khi domain phức tạp và cần độc lập; không đáng với CRUD.",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -45,6 +93,56 @@ SS.addQuestions('design-patterns', [
       ['Tư duy', 'data-centric', 'domain-centric (= DAO + ngữ nghĩa domain + biên aggregate)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hai mức trừu tượng khác nhau",
+      code:
+        "// DAO — gần với DỮ LIỆU. Một DAO thường tương ứng MỘT BẢNG, và method\n" +
+        "// phản ánh thao tác trên bảng đó.\n" +
+        "public interface OrderDao {\n" +
+        "    OrderEntity selectById(long id);\n" +
+        "    List<OrderEntity> selectByStatus(String status);\n" +
+        "    int insert(OrderEntity e);\n" +
+        "    int update(OrderEntity e);\n" +
+        "    int deleteById(long id);\n" +
+        "}\n" +
+        "public interface OrderLineDao {                 // bảng riêng -> DAO riêng\n" +
+        "    List<OrderLineEntity> selectByOrderId(long orderId);\n" +
+        "}\n" +
+        "// - trả về ENTITY (phản ánh cấu trúc bảng)\n" +
+        "// - ngôn ngữ: select/insert/update/delete\n" +
+        "// - client tự ghép các DAO lại\n" +
+        "\n" +
+        "// REPOSITORY — gần với DOMAIN. Một repository cho MỘT AGGREGATE, và\n" +
+        "// aggregate có thể trải trên nhiều bảng.\n" +
+        "public interface OrderRepository {\n" +
+        "    Optional<Order> findById(OrderId id);       // trả về AGGREGATE đầy đủ\n" +
+        "    List<Order> findOverdueForCustomer(CustomerId id);\n" +
+        "    void save(Order order);                      // lưu cả order VÀ order lines\n" +
+        "}\n" +
+        "// - trả về DOMAIN OBJECT (có hành vi, có bất biến)\n" +
+        "// - ngôn ngữ NGHIỆP VỤ\n" +
+        "// - repository lo việc ghép/tách các bảng bên trong\n" +
+        "\n" +
+        "// KHÁC BIỆT CỐT LÕI:\n" +
+        "//  DAO        — trừu tượng hoá CƠ CHẾ truy cập dữ liệu\n" +
+        "//  REPOSITORY — trừu tượng hoá VIỆC LƯU TRỮ đối với domain\n" +
+        "// Repository thường DÙNG DAO bên trong:\n" +
+        "public class JpaOrderRepository implements OrderRepository {\n" +
+        "    private final OrderDao orderDao;\n" +
+        "    private final OrderLineDao lineDao;\n" +
+        "    public Optional<Order> findById(OrderId id) {\n" +
+        "        var e = orderDao.selectById(id.value());\n" +
+        "        var lines = lineDao.selectByOrderId(id.value());\n" +
+        "        return Optional.of(mapper.toDomain(e, lines));      // GHÉP thành aggregate\n" +
+        "    }\n" +
+        "}\n" +
+        "// THỰC TẾ: nhiều dự án dùng lẫn lộn hai từ. Điều quan trọng không phải\n" +
+        "// tên gọi mà là: interface có nói ngôn ngữ nghiệp vụ không, và nó có\n" +
+        "// che giấu được hạ tầng không.",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -67,6 +165,55 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'JPA Persistence Context / EntityManager / DbContext = hiện thân của pattern này' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Gom mọi thay đổi rồi ghi một lần, trong một transaction",
+      code:
+        "// Ý TƯỞNG: theo dõi mọi object bị thay đổi trong một nghiệp vụ, rồi ghi\n" +
+        "// TẤT CẢ xuống database trong MỘT transaction khi kết thúc.\n" +
+        "\n" +
+        "// TRONG JAVA, JPA/Hibernate ĐÃ CÀI SẴN pattern này: persistence context\n" +
+        "// chính là unit of work.\n" +
+        "@Transactional                        // ranh giới của unit of work\n" +
+        "public void processOrder(OrderId id) {\n" +
+        "    Order order = orderRepo.findById(id).orElseThrow();   // trở thành MANAGED\n" +
+        "    order.confirm();                                       // KHÔNG gọi save()\n" +
+        "    Customer c = customerRepo.findById(order.customerId()).orElseThrow();\n" +
+        "    c.addLoyaltyPoints(order.total());                     // KHÔNG gọi save()\n" +
+        "    // Khi transaction commit, Hibernate:\n" +
+        "    //  1) DIRTY CHECKING: so sánh snapshot lúc load với giá trị hiện tại\n" +
+        "    //  2) sinh UPDATE cho những gì THỰC SỰ đổi\n" +
+        "    //  3) sắp xếp thứ tự câu lệnh để tôn trọng khoá ngoại\n" +
+        "    //  4) gom thành batch nếu được cấu hình\n" +
+        "}\n" +
+        "\n" +
+        "// TỰ CÀI ĐẶT (khi không dùng ORM):\n" +
+        "public class UnitOfWork {\n" +
+        "    private final List<Object> newObjects = new ArrayList<>();\n" +
+        "    private final List<Object> dirtyObjects = new ArrayList<>();\n" +
+        "    private final List<Object> removedObjects = new ArrayList<>();\n" +
+        "\n" +
+        "    public void registerNew(Object o)     { newObjects.add(o); }\n" +
+        "    public void registerDirty(Object o)   { dirtyObjects.add(o); }\n" +
+        "    public void registerRemoved(Object o) { removedObjects.add(o); }\n" +
+        "\n" +
+        "    public void commit() {\n" +
+        "        try (var tx = beginTransaction()) {\n" +
+        "            newObjects.forEach(this::insert);\n" +
+        "            dirtyObjects.forEach(this::update);\n" +
+        "            removedObjects.forEach(this::delete);       // MỘT transaction\n" +
+        "            tx.commit();\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: một transaction thay vì nhiều; giảm số lần round-trip tới DB;\n" +
+        "// và đảm bảo tính nguyên tử cho cả nghiệp vụ.\n" +
+        "// LƯU Ý: đừng để unit of work quá LỚN (xử lý hàng chục nghìn object trong\n" +
+        "// một transaction) -> tốn bộ nhớ, giữ khoá lâu. Chia lô khi cần.",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -97,6 +244,53 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Object chỉ để chở dữ liệu qua ranh giới",
+      code:
+        "public record OrderResponse(\n" +
+        "    String id,\n" +
+        "    String status,\n" +
+        "    BigDecimal total,\n" +
+        "    String customerName,\n" +
+        "    List<OrderLineResponse> lines\n" +
+        ") {\n" +
+        "    public static OrderResponse from(Order order) {\n" +
+        "        return new OrderResponse(\n" +
+        "            order.id().value(),\n" +
+        "            order.status().name(),\n" +
+        "            order.total().amount(),\n" +
+        "            order.customer().name(),\n" +
+        "            order.lines().stream().map(OrderLineResponse::from).toList());\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// BỐN LÝ DO DÙNG DTO:\n" +
+        "// 1) TIẾN HOÁ ĐỘC LẬP — đổi cấu trúc domain (tách class, đổi tên field)\n" +
+        "//    mà KHÔNG phá vỡ client. Đây là lý do quan trọng nhất.\n" +
+        "// 2) BẢO MẬT — domain có field nội bộ (giá vốn, ghi chú nội bộ, cờ kỹ thuật)\n" +
+        "//    không được lộ ra ngoài. Trả entity trực tiếp là rò rỉ dữ liệu.\n" +
+        "// 3) TUẦN TỰ HOÁ — domain có value object và kiểu phức tạp mà JSON không\n" +
+        "//    diễn đạt tự nhiên; entity JPA có lazy proxy gây lỗi khi serialize.\n" +
+        "// 4) MỖI CLIENT một hình dạng: mobile cần 5 field, web cần 40.\n" +
+        "\n" +
+        "// KHI NÀO KHÔNG CẦN:\n" +
+        "//  - ứng dụng CRUD nhỏ, domain gần như trùng với API -> DTO chỉ là code lặp\n" +
+        "//  - dịch vụ nội bộ dùng chung một thư viện model (nhưng cẩn thận: đó là\n" +
+        "//    con đường tới distributed monolith)\n" +
+        "\n" +
+        "// GIẢM CODE LẶP bằng MapStruct — sinh code lúc BIÊN DỊCH, không reflection:\n" +
+        "@Mapper(componentModel = \"spring\")\n" +
+        "public interface OrderMapper {\n" +
+        "    @Mapping(source = \"customer.name\", target = \"customerName\")\n" +
+        "    OrderResponse toResponse(Order order);\n" +
+        "}\n" +
+        "\n" +
+        "// TÁCH DTO VÀO/RA: CreateOrderRequest khác OrderResponse. Dùng chung một\n" +
+        "// class cho cả hai dẫn tới field thừa và validate nhập nhằng.",
+    },
+  ],
 },
 {
   cat: 'DDD',
@@ -121,6 +315,53 @@ SS.addQuestions('design-patterns', [
       ['Ví dụ', 'Customer, Order', 'Money, Address, Email, DateRange (giải Primitive Obsession)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Định danh bằng GIÁ TRỊ vs bằng ID",
+      code:
+        "// VALUE OBJECT — không có định danh riêng; hai VO bằng nhau khi mọi\n" +
+        "// thuộc tính bằng nhau. BẤT BIẾN.\n" +
+        "public record Money(BigDecimal amount, Currency currency) {\n" +
+        "    public Money {\n" +
+        "        Objects.requireNonNull(amount);\n" +
+        "        if (amount.scale() > 2) throw new IllegalArgumentException(\"quá 2 số lẻ\");\n" +
+        "    }\n" +
+        "    public Money plus(Money other) {\n" +
+        "        requireSameCurrency(other);\n" +
+        "        return new Money(amount.add(other.amount), currency);   // object MỚI\n" +
+        "    }\n" +
+        "    public boolean isGreaterThan(Money o) { return amount.compareTo(o.amount) > 0; }\n" +
+        "}\n" +
+        "Money a = new Money(BigDecimal.TEN, VND);\n" +
+        "Money b = new Money(BigDecimal.TEN, VND);\n" +
+        "a.equals(b);           // true — cùng GIÁ TRỊ là cùng một thứ\n" +
+        "\n" +
+        "// ENTITY — có ĐỊNH DANH; hai entity bằng nhau khi cùng ID, dù thuộc tính khác.\n" +
+        "public class Order {\n" +
+        "    private final OrderId id;                 // ĐỊNH DANH\n" +
+        "    private OrderStatus status;               // thuộc tính THAY ĐỔI được\n" +
+        "\n" +
+        "    @Override public boolean equals(Object o) {\n" +
+        "        return o instanceof Order other && id.equals(other.id);   // CHỈ so ID\n" +
+        "    }\n" +
+        "    @Override public int hashCode() { return id.hashCode(); }\n" +
+        "}\n" +
+        "// Đơn hàng đổi trạng thái từ NEW sang PAID -> vẫn là ĐÚNG đơn hàng đó.\n" +
+        "\n" +
+        "// VÌ SAO VALUE OBJECT QUAN TRỌNG — nó chống \"primitive obsession\":\n" +
+        "public void transfer(String from, String to, BigDecimal amount) { }   // dễ gọi nhầm\n" +
+        "public void transfer(AccountId from, AccountId to, Money amount) { }  // compiler chặn\n" +
+        "\n" +
+        "// Và VO là nơi tự nhiên để đặt QUY TẮC NGHIỆP VỤ:\n" +
+        "//   Money không cho cộng hai loại tiền khác nhau\n" +
+        "//   Email tự validate định dạng khi tạo\n" +
+        "//   DateRange đảm bảo from <= to\n" +
+        "\n" +
+        "// TRONG JAVA: record là công cụ hoàn hảo cho value object (bất biến,\n" +
+        "// equals/hashCode theo giá trị, toString — tất cả miễn phí).",
+    },
+  ],
 },
 {
   cat: 'DDD',
@@ -151,6 +392,50 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ranh giới nhất quán và điểm vào duy nhất",
+      code:
+        "// AGGREGATE = một cụm object được coi là MỘT ĐƠN VỊ cho mục đích thay đổi dữ liệu.\n" +
+        "// AGGREGATE ROOT = entity duy nhất mà bên ngoài được phép tham chiếu tới.\n" +
+        "public class Order {                     // AGGREGATE ROOT\n" +
+        "    private final OrderId id;\n" +
+        "    private final List<OrderLine> lines = new ArrayList<>();   // nằm TRONG aggregate\n" +
+        "    private OrderStatus status;\n" +
+        "    private Money total;\n" +
+        "\n" +
+        "    // MỌI thay đổi đi qua root -> root bảo vệ được BẤT BIẾN\n" +
+        "    public void addLine(ProductId product, int quantity, Money unitPrice) {\n" +
+        "        if (status != OrderStatus.NEW)\n" +
+        "            throw new IllegalStateException(\"đơn đã chốt, không sửa được\");\n" +
+        "        if (lines.size() >= 100)\n" +
+        "            throw new IllegalStateException(\"tối đa 100 dòng\");\n" +
+        "        lines.add(new OrderLine(product, quantity, unitPrice));\n" +
+        "        recalculateTotal();                                    // giữ BẤT BIẾN\n" +
+        "    }\n" +
+        "\n" +
+        "    public List<OrderLine> lines() { return List.copyOf(lines); }   // KHÔNG cho sửa\n" +
+        "}\n" +
+        "// KHÔNG có OrderLineRepository — không ai được sửa OrderLine trực tiếp.\n" +
+        "\n" +
+        "// BỐN QUY TẮC CỦA AGGREGATE:\n" +
+        "// 1) Bên ngoài CHỈ tham chiếu tới ROOT, không tới object bên trong.\n" +
+        "// 2) Object bên trong tham chiếu ra ngoài bằng ID, KHÔNG bằng tham chiếu trực tiếp:\n" +
+        "public class Order {\n" +
+        "    private final CustomerId customerId;      // ID, KHÔNG phải Customer customer\n" +
+        "}\n" +
+        "// 3) MỘT transaction chỉ nên sửa MỘT aggregate. Cần sửa nhiều -> dùng\n" +
+        "//    domain event và nhất quán cuối cùng.\n" +
+        "// 4) Aggregate là RANH GIỚI NHẤT QUÁN: mọi bất biến bên trong nó luôn đúng\n" +
+        "//    sau mỗi transaction.\n" +
+        "\n" +
+        "// KÍCH THƯỚC AGGREGATE — quyết định thiết kế quan trọng nhất:\n" +
+        "//  quá LỚN  -> tranh chấp khoá cao, tải nhiều dữ liệu không cần\n" +
+        "//  quá NHỎ  -> không bảo vệ được bất biến, phải phối hợp nhiều aggregate\n" +
+        "// -> Nguyên tắc: nhỏ nhất có thể mà vẫn giữ được bất biến nghiệp vụ.",
+    },
+  ],
 },
 {
   cat: 'DDD',
@@ -177,6 +462,59 @@ SS.addQuestions('design-patterns', [
       { to: 4, label: 'Thêm "gửi SMS" = thêm một handler' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ghi lại \"chuyện gì đã xảy ra\" trong ngôn ngữ nghiệp vụ",
+      code:
+        "// Domain event mô tả một SỰ VIỆC ĐÃ XẢY RA, đặt tên ở THÌ QUÁ KHỨ.\n" +
+        "public record OrderPlaced(OrderId orderId, CustomerId customerId,\n" +
+        "                          Money total, Instant occurredAt) implements DomainEvent { }\n" +
+        "\n" +
+        "// AGGREGATE tự ghi nhận event của mình\n" +
+        "public class Order extends AggregateRoot {\n" +
+        "    public static Order place(CustomerId customer, List<OrderLine> lines) {\n" +
+        "        Order order = new Order(OrderId.generate(), customer, lines);\n" +
+        "        order.registerEvent(new OrderPlaced(order.id, customer,\n" +
+        "                                            order.total, Instant.now()));\n" +
+        "        return order;\n" +
+        "    }\n" +
+        "}\n" +
+        "public abstract class AggregateRoot {\n" +
+        "    private final List<DomainEvent> events = new ArrayList<>();\n" +
+        "    protected void registerEvent(DomainEvent e) { events.add(e); }\n" +
+        "    public List<DomainEvent> pullEvents() {          // lấy VÀ xoá\n" +
+        "        var copy = List.copyOf(events);\n" +
+        "        events.clear();\n" +
+        "        return copy;\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// PHÁT event khi LƯU aggregate\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "    @Transactional\n" +
+        "    public void place(PlaceOrderCommand cmd) {\n" +
+        "        Order order = Order.place(cmd.customerId(), cmd.lines());\n" +
+        "        repository.save(order);\n" +
+        "        order.pullEvents().forEach(publisher::publishEvent);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// XỬ LÝ — sau khi COMMIT, để tránh gửi mail rồi transaction lại rollback\n" +
+        "@Component\n" +
+        "public class OrderEventHandlers {\n" +
+        "    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)\n" +
+        "    public void on(OrderPlaced e) { mailer.sendConfirmation(e); }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: tách tác dụng phụ ra khỏi logic chính; thêm việc cần làm khi\n" +
+        "// có đơn hàng mà không sửa OrderService; và domain diễn đạt được điều\n" +
+        "// mà người làm nghiệp vụ nói.\n" +
+        "// CẦN ĐẢM BẢO KHÔNG MẤT event -> kết hợp với OUTBOX (ghi event vào DB\n" +
+        "// trong cùng transaction).",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -206,6 +544,54 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Quy tắc trở thành object kết hợp được",
+      code:
+        "public interface Specification<T> {\n" +
+        "    boolean isSatisfiedBy(T candidate);\n" +
+        "\n" +
+        "    default Specification<T> and(Specification<T> other) {\n" +
+        "        return c -> this.isSatisfiedBy(c) && other.isSatisfiedBy(c);\n" +
+        "    }\n" +
+        "    default Specification<T> or(Specification<T> other) {\n" +
+        "        return c -> this.isSatisfiedBy(c) || other.isSatisfiedBy(c);\n" +
+        "    }\n" +
+        "    default Specification<T> not() {\n" +
+        "        return c -> !this.isSatisfiedBy(c);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "public record CustomerIsGold() implements Specification<Order> {\n" +
+        "    public boolean isSatisfiedBy(Order o) { return o.customer().tier() == GOLD; }\n" +
+        "}\n" +
+        "public record OrderExceeds(Money threshold) implements Specification<Order> {\n" +
+        "    public boolean isSatisfiedBy(Order o) { return o.total().isGreaterThan(threshold); }\n" +
+        "}\n" +
+        "\n" +
+        "// KẾT HỢP quy tắc như ghép câu — đọc gần như tiếng Việt:\n" +
+        "Specification<Order> freeShipping =\n" +
+        "    new CustomerIsGold().or(new OrderExceeds(Money.vnd(1_000_000)));\n" +
+        "\n" +
+        "if (freeShipping.isSatisfiedBy(order)) applyFreeShipping();\n" +
+        "\n" +
+        "// BA CÔNG DỤNG CỦA CÙNG MỘT SPECIFICATION:\n" +
+        "// 1) KIỂM TRA một object (như trên)\n" +
+        "// 2) LỌC một danh sách trong bộ nhớ\n" +
+        "orders.stream().filter(freeShipping::isSatisfiedBy).toList();\n" +
+        "// 3) TRUY VẤN database — với Spring Data JPA Specification:\n" +
+        "public static Specification<OrderEntity> isGold() {\n" +
+        "    return (root, q, cb) -> cb.equal(root.get(\"customer\").get(\"tier\"), \"GOLD\");\n" +
+        "}\n" +
+        "repository.findAll(isGold().and(exceeds(threshold)), pageable);\n" +
+        "\n" +
+        "// LỢI ÍCH: quy tắc nghiệp vụ có TÊN, được test riêng, và dùng lại được ở\n" +
+        "// nhiều nơi thay vì lặp lại điều kiện if khắp code.\n" +
+        "// CẢNH BÁO: đừng lạm dụng — với điều kiện đơn giản dùng một lần thì một\n" +
+        "// câu if rõ ràng hơn nhiều so với ba class.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -233,6 +619,62 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Domain ở giữa, mọi thứ khác cắm vào qua cổng",
+      code:
+        "// DOMAIN ở TRUNG TÂM, không phụ thuộc gì bên ngoài.\n" +
+        "// PORT = interface do domain định nghĩa. ADAPTER = cài đặt cụ thể.\n" +
+        "\n" +
+        "// INBOUND PORT (driving) — cách thế giới bên ngoài GỌI VÀO domain\n" +
+        "package com.example.domain.port.in;\n" +
+        "public interface PlaceOrderUseCase {\n" +
+        "    OrderId place(PlaceOrderCommand cmd);\n" +
+        "}\n" +
+        "\n" +
+        "// OUTBOUND PORT (driven) — cách domain GỌI RA thế giới bên ngoài\n" +
+        "package com.example.domain.port.out;\n" +
+        "public interface OrderRepository { void save(Order o); }\n" +
+        "public interface PaymentPort { PaymentResult charge(Money amount, String token); }\n" +
+        "\n" +
+        "// DOMAIN — cài đặt inbound port, DÙNG outbound port. Không import\n" +
+        "// Spring, không import JPA, không import HTTP.\n" +
+        "package com.example.domain.service;\n" +
+        "public class PlaceOrderService implements PlaceOrderUseCase {\n" +
+        "    private final OrderRepository orders;      // PORT\n" +
+        "    private final PaymentPort payments;        // PORT\n" +
+        "\n" +
+        "    public OrderId place(PlaceOrderCommand cmd) {\n" +
+        "        Order order = Order.place(cmd.customerId(), cmd.lines());\n" +
+        "        payments.charge(order.total(), cmd.paymentToken());\n" +
+        "        orders.save(order);\n" +
+        "        return order.id();\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// ADAPTER VÀO — điều khiển domain\n" +
+        "package com.example.adapter.in.web;\n" +
+        "@RestController\n" +
+        "public class OrderController {\n" +
+        "    private final PlaceOrderUseCase useCase;             // chỉ biết PORT\n" +
+        "    @PostMapping(\"/orders\")\n" +
+        "    public OrderResponse create(@RequestBody CreateOrderRequest req) {\n" +
+        "        return toResponse(useCase.place(req.toCommand()));\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// ADAPTER RA — được domain điều khiển\n" +
+        "package com.example.adapter.out.persistence;\n" +
+        "@Repository\n" +
+        "public class JpaOrderAdapter implements OrderRepository { }\n" +
+        "\n" +
+        "// LỢI ÍCH: domain test được HOÀN TOÀN bằng adapter giả; đổi web sang gRPC,\n" +
+        "// đổi Postgres sang Mongo — domain không đổi một dòng.\n" +
+        "// CÁI GIÁ: nhiều file hơn, nhiều mapping hơn. Chỉ đáng khi domain THỰC SỰ\n" +
+        "// phức tạp; với CRUD thì đây là over-engineering.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -258,6 +700,57 @@ SS.addQuestions('design-patterns', [
       { name: 'Entities', tag: 'trong cùng', note: 'quy tắc nghiệp vụ doanh nghiệp, thuần, không phụ thuộc gì' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Phụ thuộc chỉ hướng VÀO TRONG",
+      code:
+        "// CÁC VÒNG, từ trong ra ngoài:\n" +
+        "//   1. Entities        — quy tắc nghiệp vụ cốt lõi (thuần Java)\n" +
+        "//   2. Use Cases       — quy tắc nghiệp vụ của ứng dụng\n" +
+        "//   3. Interface Adapters — controller, presenter, gateway\n" +
+        "//   4. Frameworks & Drivers — Spring, JPA, database, web\n" +
+        "\n" +
+        "// DEPENDENCY RULE: mã nguồn ở vòng TRONG KHÔNG BAO GIỜ biết gì về vòng NGOÀI.\n" +
+        "package com.example.domain.entity;              // VÒNG 1\n" +
+        "public class Order {                             // KHÔNG import gì ngoài JDK\n" +
+        "    private final OrderId id;\n" +
+        "    public void confirm() { if (status != NEW) throw new IllegalStateException(); }\n" +
+        "}\n" +
+        "\n" +
+        "package com.example.application.usecase;         // VÒNG 2\n" +
+        "public class PlaceOrderUseCase {\n" +
+        "    private final OrderRepository repo;          // interface ĐỊNH NGHĨA Ở ĐÂY\n" +
+        "    public OrderId execute(PlaceOrderCommand cmd) { ... }\n" +
+        "}\n" +
+        "\n" +
+        "package com.example.adapter.persistence;         // VÒNG 3-4\n" +
+        "@Repository\n" +
+        "public class JpaOrderRepository implements OrderRepository {   // cài đặt Ở NGOÀI\n" +
+        "    @PersistenceContext private EntityManager em;              // JPA chỉ ở đây\n" +
+        "}\n" +
+        "\n" +
+        "// KIỂM CHỨNG BẰNG TEST KIẾN TRÚC — nếu không, quy tắc sẽ bị vi phạm dần:\n" +
+        "@ArchTest\n" +
+        "static final ArchRule dependency_rule = layeredArchitecture().consideringAllDependencies()\n" +
+        "    .layer(\"Domain\").definedBy(\"..domain..\")\n" +
+        "    .layer(\"Application\").definedBy(\"..application..\")\n" +
+        "    .layer(\"Adapter\").definedBy(\"..adapter..\")\n" +
+        "    .whereLayer(\"Domain\").mayOnlyBeAccessedByLayers(\"Application\", \"Adapter\")\n" +
+        "    .whereLayer(\"Adapter\").mayNotBeAccessedByAnyLayer();\n" +
+        "\n" +
+        "@ArchTest\n" +
+        "static final ArchRule domain_khong_biet_framework =\n" +
+        "    noClasses().that().resideInAPackage(\"..domain..\")\n" +
+        "        .should().dependOnClassesThat()\n" +
+        "        .resideInAnyPackage(\"org.springframework..\", \"jakarta.persistence..\");\n" +
+        "\n" +
+        "// LỢI ÍCH: nghiệp vụ test được không cần Spring; framework trở thành CHI\n" +
+        "// TIẾT có thể thay; quyết định về database hoãn được tới muộn.\n" +
+        "// CÁI GIÁ: nhiều tầng và nhiều mapping. Đánh giá trung thực xem domain\n" +
+        "// của bạn có đủ phức tạp để xứng đáng hay không.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -281,6 +774,49 @@ SS.addQuestions('design-patterns', [
       ['Test domain', 'cần DB', 'mock port, không hạ tầng'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hướng của mũi tên phụ thuộc",
+      code:
+        "// LAYERED TRUYỀN THỐNG — phụ thuộc đi XUỐNG, và tầng dưới cùng là DATABASE\n" +
+        "//   Controller -> Service -> Repository -> Database\n" +
+        "package com.example.service;\n" +
+        "public class OrderService {\n" +
+        "    private final OrderRepository repo;      // interface nằm ở TẦNG PERSISTENCE\n" +
+        "}\n" +
+        "package com.example.persistence;\n" +
+        "public interface OrderRepository { }         // <- ĐIỂM MẤU CHỐT\n" +
+        "// Service phải IMPORT package persistence -> nghiệp vụ phụ thuộc hạ tầng.\n" +
+        "// Hệ quả: đổi cách lưu trữ ảnh hưởng tầng nghiệp vụ; test nghiệp vụ khó;\n" +
+        "// và database trở thành trung tâm của thiết kế.\n" +
+        "\n" +
+        "// HEXAGONAL — phụ thuộc hướng VÀO TRONG, interface nằm ở TRUNG TÂM\n" +
+        "package com.example.domain.port.out;\n" +
+        "public interface OrderRepository { }         // <- interface Ở DOMAIN\n" +
+        "package com.example.domain.service;\n" +
+        "public class OrderService {\n" +
+        "    private final OrderRepository repo;      // không import gì ngoài domain\n" +
+        "}\n" +
+        "package com.example.adapter.out;\n" +
+        "public class JpaOrderRepository implements OrderRepository { }   // hạ tầng\n" +
+        "                                                    // phụ thuộc VÀO domain\n" +
+        "\n" +
+        "// KHÁC BIỆT CỐT LÕI chỉ nằm ở MỘT ĐIỀU: interface được ĐỊNH NGHĨA Ở ĐÂU.\n" +
+        "//  - ở tầng hạ tầng  -> layered, nghiệp vụ phụ thuộc hạ tầng\n" +
+        "//  - ở tầng domain   -> hexagonal, hạ tầng phụ thuộc nghiệp vụ\n" +
+        "\n" +
+        "// HỆ QUẢ THỰC TẾ:\n" +
+        "//  Layered    — đơn giản, quen thuộc, ít file. Đủ tốt cho ứng dụng CRUD\n" +
+        "//               và cho đội mới. Rủi ro: logic nghiệp vụ trôi dần vào\n" +
+        "//               service và entity JPA, thành anemic domain model.\n" +
+        "//  Hexagonal  — domain độc lập, test nhanh, thay hạ tầng dễ. Đắt hơn về\n" +
+        "//               số file và mapping.\n" +
+        "\n" +
+        "// CHỌN THEO ĐỘ PHỨC TẠP NGHIỆP VỤ, không theo trào lưu. Ứng dụng chủ yếu\n" +
+        "// là CRUD thì layered đơn giản là lựa chọn đúng.",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -309,6 +845,54 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Điều phối, không phải chứa quy tắc nghiệp vụ",
+      code:
+        "// SERVICE LAYER ĐÚNG — nó ĐIỀU PHỐI, còn quy tắc nằm trong DOMAIN\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "    @Transactional                                  // 1) ranh giới TRANSACTION\n" +
+        "    public OrderId place(PlaceOrderCommand cmd) {\n" +
+        "        var customer = customerRepo.findById(cmd.customerId())\n" +
+        "                                   .orElseThrow(CustomerNotFound::new);\n" +
+        "\n" +
+        "        Order order = Order.place(customer, cmd.lines());   // 2) QUY TẮC ở domain\n" +
+        "        paymentPort.charge(order.total(), cmd.token());     // 3) gọi hạ tầng\n" +
+        "        orderRepo.save(order);                              // 4) lưu trữ\n" +
+        "        publisher.publishEvent(new OrderPlaced(order.id()));// 5) phát event\n" +
+        "        return order.id();\n" +
+        "    }\n" +
+        "}\n" +
+        "// Service làm: mở transaction, lấy dữ liệu, gọi domain, lưu, phát event.\n" +
+        "// Service KHÔNG làm: quyết định \"đơn hàng thế nào là hợp lệ\".\n" +
+        "\n" +
+        "// SERVICE LAYER SAI — mọi quy tắc dồn vào đây, entity thành túi dữ liệu\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "    public void place(PlaceOrderCommand cmd) {\n" +
+        "        if (cmd.lines().isEmpty()) throw new IllegalArgumentException();\n" +
+        "        BigDecimal total = BigDecimal.ZERO;\n" +
+        "        for (var l : cmd.lines()) total = total.add(l.price().multiply(l.qty()));\n" +
+        "        if (customer.getTier().equals(\"GOLD\")) total = total.multiply(0.9);\n" +
+        "        Order o = new Order();\n" +
+        "        o.setTotal(total);                     // entity chỉ có setter\n" +
+        "        o.setStatus(\"NEW\");\n" +
+        "        // -> ANEMIC DOMAIN MODEL: quy tắc bị rải rác, lặp lại ở mọi service\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// RANH GIỚI RÕ RÀNG:\n" +
+        "//  CONTROLLER — chuyển đổi HTTP <-> command/DTO, không có logic\n" +
+        "//  SERVICE    — điều phối, transaction, gọi hạ tầng\n" +
+        "//  DOMAIN     — quy tắc nghiệp vụ và bất biến\n" +
+        "//  REPOSITORY — lưu trữ\n" +
+        "\n" +
+        "// DẤU HIỆU SERVICE PHÌNH: nó dài hàng nghìn dòng, có nhiều if về quy tắc\n" +
+        "// nghiệp vụ, và entity tương ứng chỉ toàn getter/setter.",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -332,6 +916,49 @@ SS.addQuestions('design-patterns', [
       ['Hợp với', 'CRUD app (Rails AR, Eloquent)', 'rich domain / DDD (Hibernate, Doctrine)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Object tự lưu mình vs có người lưu hộ",
+      code:
+        "// ACTIVE RECORD — object CHỨA LUÔN logic truy cập dữ liệu\n" +
+        "public class User extends ActiveRecord {          // kiểu Rails, Eloquent\n" +
+        "    private String name;\n" +
+        "    public void save()   { db.execute(\"INSERT INTO users ...\"); }\n" +
+        "    public void delete() { db.execute(\"DELETE FROM users WHERE id = ?\", id); }\n" +
+        "    public static User find(long id) { ... }\n" +
+        "}\n" +
+        "User u = User.find(1);\n" +
+        "u.setName(\"An\");\n" +
+        "u.save();                                          // object TỰ lưu mình\n" +
+        "// + rất nhanh để viết, ít code, trực quan cho CRUD\n" +
+        "// - object gắn CHẶT với database -> không test được nếu không có DB\n" +
+        "// - domain model bị ép giống cấu trúc BẢNG\n" +
+        "// - vi phạm SRP: object vừa mang dữ liệu nghiệp vụ vừa biết SQL\n" +
+        "\n" +
+        "// DATA MAPPER — có một tầng RIÊNG lo việc ánh xạ\n" +
+        "public class User {                                // domain THUẦN\n" +
+        "    private final UserId id;\n" +
+        "    private String name;\n" +
+        "    public void rename(String newName) { ... }     // chỉ có nghiệp vụ\n" +
+        "}\n" +
+        "public interface UserRepository {                   // mapper lo lưu trữ\n" +
+        "    Optional<User> findById(UserId id);\n" +
+        "    void save(User user);\n" +
+        "}\n" +
+        "// + domain KHÔNG biết gì về database -> test được, đổi được\n" +
+        "// + domain model theo NGHIỆP VỤ, không theo bảng\n" +
+        "// - nhiều code hơn (mapping giữa entity và domain)\n" +
+        "\n" +
+        "// TRONG JAVA: JPA/Hibernate là DATA MAPPER (EntityManager làm việc ánh xạ).\n" +
+        "// Nhưng nhiều dự án dùng nó theo kiểu active record — nhét logic vào\n" +
+        "// @Entity và gọi repository.save() khắp nơi.\n" +
+        "\n" +
+        "// CHỌN: ứng dụng CRUD, ít quy tắc nghiệp vụ -> Active Record (hoặc JPA\n" +
+        "// entity dùng trực tiếp) là đủ và nhanh.\n" +
+        "// Domain phức tạp, nhiều quy tắc và bất biến -> Data Mapper.",
+    },
+  ],
 },
 {
   cat: 'Enterprise',
@@ -357,6 +984,63 @@ SS.addQuestions('design-patterns', [
       { to: 4, label: 'Member { Tier tier; LocalDate joinedAt; int points; } — ACL = module hoặc service riêng' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Lớp dịch bảo vệ mô hình của mình",
+      code:
+        "// ACL gồm ba phần: FACADE (interface sạch), ADAPTER (dịch), TRANSLATOR (ánh xạ).\n" +
+        "\n" +
+        "// 1) INTERFACE SẠCH — domain chỉ biết cái này\n" +
+        "package com.example.domain.port.out;\n" +
+        "public interface CustomerLookup {\n" +
+        "    Optional<Customer> findById(CustomerId id);\n" +
+        "}\n" +
+        "\n" +
+        "// 2) ADAPTER — nơi DUY NHẤT biết về hệ ngoài\n" +
+        "package com.example.adapter.out.legacy;\n" +
+        "@Component\n" +
+        "public class LegacyCustomerAdapter implements CustomerLookup {\n" +
+        "    private final LegacySoapClient client;\n" +
+        "    private final LegacyCustomerTranslator translator;\n" +
+        "\n" +
+        "    @Override\n" +
+        "    @Retryable(maxAttempts = 3)                    // ACL cũng là nơi đặt\n" +
+        "    @CircuitBreaker(name = \"legacy-crm\")           // retry/circuit breaker\n" +
+        "    public Optional<Customer> findById(CustomerId id) {\n" +
+        "        try {\n" +
+        "            LegacyCustDTO dto = client.getCust(id.value());\n" +
+        "            if (dto == null || \"9\".equals(dto.getStatCd())) return Optional.empty();\n" +
+        "            return Optional.of(translator.toDomain(dto));\n" +
+        "        } catch (LegacySoapFault e) {\n" +
+        "            throw new CustomerLookupException(e);   // đổi sang exception CỦA TA\n" +
+        "        }\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 3) TRANSLATOR — mọi sự kỳ quặc của hệ ngoài bị NHỐT ở đây\n" +
+        "@Component\n" +
+        "public class LegacyCustomerTranslator {\n" +
+        "    public Customer toDomain(LegacyCustDTO dto) {\n" +
+        "        return new Customer(\n" +
+        "            new CustomerId(dto.getCustNo()),\n" +
+        "            new PersonName(dto.getFnm(), dto.getLnm()),\n" +
+        "            LocalDate.parse(dto.getRegDt(), DateTimeFormatter.ofPattern(\"yyyyMMdd\")),\n" +
+        "            mapTier(dto.getTierCd()),                    // \"01\" -> Tier.GOLD\n" +
+        "            \"Y\".equals(dto.getActFlg()));\n" +
+        "    }\n" +
+        "    private Tier mapTier(String code) {\n" +
+        "        return switch (code) {\n" +
+        "            case \"01\" -> Tier.GOLD; case \"02\" -> Tier.SILVER; default -> Tier.STANDARD;\n" +
+        "        };\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH: thay hệ legacy chỉ cần viết adapter mới; test domain bằng\n" +
+        "// CustomerLookup giả; và mọi giả định về hệ ngoài nằm ở MỘT chỗ, có test riêng.\n" +
+        "// ACL cũng là nơi tự nhiên để đặt CACHE cho hệ ngoài chậm.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -386,6 +1070,65 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Domain chỉ import JDK",
+      code:
+        "// DOMAIN THUẦN — không có annotation của framework nào\n" +
+        "package com.example.domain.order;\n" +
+        "\n" +
+        "import java.time.Instant;                     // CHỈ import JDK\n" +
+        "import java.util.List;\n" +
+        "\n" +
+        "public class Order {\n" +
+        "    private final OrderId id;\n" +
+        "    private final CustomerId customerId;\n" +
+        "    private final List<OrderLine> lines;\n" +
+        "    private OrderStatus status;\n" +
+        "\n" +
+        "    public void confirm() {\n" +
+        "        if (status != OrderStatus.NEW)\n" +
+        "            throw new OrderCannotBeConfirmedException(id, status);\n" +
+        "        this.status = OrderStatus.CONFIRMED;\n" +
+        "    }\n" +
+        "}\n" +
+        "// KHÔNG có: @Entity, @Table, @Component, @JsonProperty, @NotNull\n" +
+        "\n" +
+        "// ENTITY PERSISTENCE là class RIÊNG ở tầng hạ tầng:\n" +
+        "package com.example.adapter.out.persistence;\n" +
+        "@Entity\n" +
+        "@Table(name = \"orders\")\n" +
+        "class OrderEntity {                            // package-private\n" +
+        "    @Id private String id;\n" +
+        "    @Column private String status;\n" +
+        "    @OneToMany(cascade = ALL) private List<OrderLineEntity> lines;\n" +
+        "}\n" +
+        "\n" +
+        "@Component\n" +
+        "class OrderPersistenceAdapter implements OrderRepository {\n" +
+        "    public void save(Order order) { jpa.save(mapper.toEntity(order)); }\n" +
+        "    public Optional<Order> findById(OrderId id) {\n" +
+        "        return jpa.findById(id.value()).map(mapper::toDomain);\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// THỰC THI BẰNG TEST, không chỉ bằng kỷ luật:\n" +
+        "@ArchTest\n" +
+        "static final ArchRule domain_thuan =\n" +
+        "    noClasses().that().resideInAPackage(\"..domain..\")\n" +
+        "        .should().dependOnClassesThat().resideInAnyPackage(\n" +
+        "            \"org.springframework..\", \"jakarta.persistence..\",\n" +
+        "            \"com.fasterxml.jackson..\", \"jakarta.validation..\");\n" +
+        "\n" +
+        "// LỢI ÍCH: test domain chạy trong MILI GIÂY (không cần Spring context);\n" +
+        "// nâng cấp framework không đụng nghiệp vụ; và domain diễn đạt được\n" +
+        "// nghiệp vụ mà không bị cấu trúc bảng chi phối.\n" +
+        "\n" +
+        "// CÁI GIÁ: phải viết mapping giữa domain và entity. Với domain đơn giản,\n" +
+        "// cái giá này KHÔNG đáng — dùng thẳng JPA entity là lựa chọn hợp lý.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -410,6 +1153,61 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Chi phí lớn — CHỈ khi đọc/ghi có yêu cầu rất khác. KHÔNG cho CRUD đơn giản' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Hai mô hình cho hai loại công việc",
+      code:
+        "// WRITE MODEL — tối ưu cho TÍNH ĐÚNG ĐẮN: chuẩn hoá, có bất biến, có aggregate\n" +
+        "@Service\n" +
+        "public class OrderCommandService {\n" +
+        "    @Transactional\n" +
+        "    public OrderId handle(PlaceOrderCommand cmd) {\n" +
+        "        Order order = Order.place(cmd.customerId(), cmd.lines());   // domain đầy đủ\n" +
+        "        repository.save(order);\n" +
+        "        publisher.publish(new OrderPlaced(order.id(), order.total()));\n" +
+        "        return order.id();\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// READ MODEL — tối ưu cho TRUY VẤN: phi chuẩn hoá, đúng hình dạng màn hình cần\n" +
+        "@Service\n" +
+        "public class OrderQueryService {\n" +
+        "    private final JdbcTemplate jdbc;            // KHÔNG qua domain, KHÔNG qua ORM\n" +
+        "\n" +
+        "    public List<OrderListItem> search(SearchCriteria c) {\n" +
+        "        return jdbc.query(\"\"\"\n" +
+        "            SELECT order_id, customer_name, total, status, item_count\n" +
+        "            FROM order_list_view\n" +
+        "            WHERE status = ? ORDER BY created_at DESC LIMIT ?\n" +
+        "            \"\"\", rowMapper, c.status(), c.limit());\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// PROJECTION — dựng read model từ event\n" +
+        "@Component\n" +
+        "public class OrderListProjection {\n" +
+        "    @EventListener\n" +
+        "    public void on(OrderPlaced e) {\n" +
+        "        jdbc.update(\"\"\"\n" +
+        "            INSERT INTO order_list_view (order_id, customer_name, total, status)\n" +
+        "            VALUES (?,?,?,?) ON CONFLICT (order_id) DO UPDATE SET status = EXCLUDED.status\n" +
+        "            \"\"\", e.orderId(), e.customerName(), e.total(), e.status());\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// BA MỨC CQRS — không phải cứ CQRS là phải làm mức cao nhất:\n" +
+        "//  1) Tách CLASS: command service và query service riêng, CÙNG database.\n" +
+        "//     Rẻ, dễ, và đã giải quyết phần lớn vấn đề.\n" +
+        "//  2) Tách MODEL: read model là bảng/view phi chuẩn hoá trong cùng DB.\n" +
+        "//  3) Tách DATABASE: read model ở kho riêng (Elasticsearch, Redis), đồng\n" +
+        "//     bộ qua event -> nhất quán cuối cùng.\n" +
+        "\n" +
+        "// KHI NÀO DÙNG: tỉ lệ đọc/ghi rất lệch, truy vấn phức tạp, hoặc cần\n" +
+        "// truy vấn xuyên nhiều aggregate/service.\n" +
+        "// KHI NÀO KHÔNG: CRUD đơn giản -> CQRS chỉ thêm phức tạp và độ trễ.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -437,6 +1235,67 @@ SS.addQuestions('design-patterns', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ranh giới giữa \"ghi dữ liệu\" và \"báo cho thế giới\"",
+      code:
+        "// VỊ TRÍ: outbox nằm ở TẦNG HẠ TẦNG, nhưng được kích hoạt bởi DOMAIN EVENT.\n" +
+        "// Domain KHÔNG biết gì về Kafka hay về bảng outbox.\n" +
+        "\n" +
+        "// 1) DOMAIN phát event (thuần)\n" +
+        "public class Order extends AggregateRoot {\n" +
+        "    public static Order place(...) {\n" +
+        "        Order o = new Order(...);\n" +
+        "        o.registerEvent(new OrderPlaced(o.id, o.total));   // domain event\n" +
+        "        return o;\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 2) APPLICATION lưu aggregate và event trong CÙNG transaction\n" +
+        "@Service\n" +
+        "public class OrderService {\n" +
+        "    @Transactional\n" +
+        "    public OrderId place(PlaceOrderCommand cmd) {\n" +
+        "        Order order = Order.place(cmd.customerId(), cmd.lines());\n" +
+        "        orderRepository.save(order);\n" +
+        "        order.pullEvents().forEach(outboxPort::append);    // PORT, không phải Kafka\n" +
+        "        return order.id();\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 3) HẠ TẦNG cài đặt outbox port\n" +
+        "@Component\n" +
+        "public class JdbcOutboxAdapter implements OutboxPort {\n" +
+        "    public void append(DomainEvent e) {\n" +
+        "        jdbc.update(\"\"\"\n" +
+        "            INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)\n" +
+        "            VALUES (?,?,?,?,?::jsonb)\n" +
+        "            \"\"\", UUID.randomUUID(), e.aggregateType(), e.aggregateId(),\n" +
+        "                 e.getClass().getSimpleName(), toJson(e));\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// 4) RELAY — tiến trình riêng, KHÔNG nằm trong luồng nghiệp vụ\n" +
+        "@Component\n" +
+        "public class OutboxRelay {\n" +
+        "    @Scheduled(fixedDelay = 500)\n" +
+        "    @Transactional\n" +
+        "    public void publish() {\n" +
+        "        outboxRepo.fetchUnpublished(100).forEach(e -> {\n" +
+        "            kafka.send(topicFor(e), e.aggregateId(), e.payload());\n" +
+        "            outboxRepo.markPublished(e.id());\n" +
+        "        });\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// TRÁCH NHIỆM RÕ RÀNG:\n" +
+        "//  Domain      — biết CHUYỆN GÌ đã xảy ra\n" +
+        "//  Application — đảm bảo dữ liệu và event cùng nguyên tử\n" +
+        "//  Infrastructure — biết event đi ĐÂU và bằng CÁCH NÀO\n" +
+        "// -> Đổi từ Kafka sang RabbitMQ chỉ đụng vào relay.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -460,6 +1319,58 @@ SS.addQuestions('design-patterns', [
       { to: 3, label: 'Projection phải idempotent (lưu "đã xử lý tới offset nào")' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Dựng lại read model từ đầu",
+      code:
+        "// Sức mạnh lớn nhất của CQRS + event: read model có thể XOÁ VÀ DỰNG LẠI\n" +
+        "// bất cứ lúc nào từ nguồn sự thật.\n" +
+        "@Component\n" +
+        "public class ProjectionRebuilder {\n" +
+        "\n" +
+        "    public void rebuild(String projectionName, Instant from) {\n" +
+        "        // 1) Tạo bảng read model MỚI (không đụng bảng đang phục vụ)\n" +
+        "        jdbc.execute(\"CREATE TABLE order_list_view_v2 (LIKE order_list_view)\");\n" +
+        "\n" +
+        "        // 2) Phát lại toàn bộ event vào projection mới\n" +
+        "        eventStore.streamFrom(from).forEach(e -> projection.applyTo(\"v2\", e));\n" +
+        "\n" +
+        "        // 3) Đổi tên nguyên tử — không có downtime\n" +
+        "        jdbc.execute(\"\"\"\n" +
+        "            BEGIN;\n" +
+        "            ALTER TABLE order_list_view RENAME TO order_list_view_old;\n" +
+        "            ALTER TABLE order_list_view_v2 RENAME TO order_list_view;\n" +
+        "            COMMIT;\n" +
+        "            \"\"\");\n" +
+        "        // 4) Xoá bảng cũ sau khi đã chắc chắn\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// VERSIONING PROJECTION — chạy SONG SONG hai phiên bản trong lúc chuyển:\n" +
+        "@Component\n" +
+        "public class OrderListProjection {\n" +
+        "    @EventListener\n" +
+        "    public void on(OrderPlaced e) {\n" +
+        "        applyV1(e);         // phiên bản đang phục vụ\n" +
+        "        applyV2(e);         // phiên bản mới, đang dựng\n" +
+        "    }\n" +
+        "}\n" +
+        "// Khi v2 đã bắt kịp và được kiểm chứng -> chuyển truy vấn sang v2, bỏ v1.\n" +
+        "\n" +
+        "// THEO DÕI TIẾN ĐỘ — bắt buộc, vì rebuild có thể mất hàng giờ:\n" +
+        "CREATE TABLE projection_checkpoint (\n" +
+        "  name TEXT PRIMARY KEY, last_event_id BIGINT, updated_at TIMESTAMPTZ\n" +
+        ");\n" +
+        "// Checkpoint cho phép tiếp tục từ chỗ dở nếu tiến trình chết.\n" +
+        "\n" +
+        "// BA ĐIỀU KIỆN để rebuild được:\n" +
+        "//  1) EVENT phải được LƯU BỀN và đọc lại được theo thứ tự\n" +
+        "//  2) PROJECTION phải IDEMPOTENT (dùng upsert, không dùng insert thuần)\n" +
+        "//  3) event phải mang ĐỦ dữ liệu (event-carried state transfer), không\n" +
+        "//     chỉ mang id — vì gọi ngược lại service khác lúc rebuild là không khả thi",
+    },
+  ],
 },
 {
   cat: 'DDD',
@@ -488,6 +1399,50 @@ SS.addQuestions('design-patterns', [
       ['Chọn khi', 'domain đơn giản / CRUD', 'domain phức tạp, nhiều invariant, sống lâu, DDD nghiêm túc'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Câu trả lời phụ thuộc độ phức tạp nghiệp vụ",
+      code:
+        "// KHÔNG TÁCH — dùng thẳng JPA entity làm domain model\n" +
+        "@Entity\n" +
+        "@Table(name = \"orders\")\n" +
+        "public class Order {\n" +
+        "    @Id private String id;\n" +
+        "    @Enumerated(STRING) private OrderStatus status;\n" +
+        "    @OneToMany(mappedBy = \"order\", cascade = ALL) private List<OrderLine> lines;\n" +
+        "\n" +
+        "    public void confirm() {                       // vẫn có hành vi nghiệp vụ\n" +
+        "        if (status != NEW) throw new IllegalStateException();\n" +
+        "        this.status = CONFIRMED;\n" +
+        "    }\n" +
+        "}\n" +
+        "// + ÍT CODE, không mapping, năng suất cao\n" +
+        "// + Hibernate lo dirty checking, lazy loading\n" +
+        "// - JPA ÁP ĐẶT ràng buộc lên thiết kế domain:\n" +
+        "//     cần constructor không tham số, không dùng được final field,\n" +
+        "//     khó dùng value object, quan hệ bị dẫn dắt bởi khoá ngoại\n" +
+        "// - lazy proxy rò rỉ ra ngoài -> LazyInitializationException ở tầng web\n" +
+        "// - domain test phải có JPA\n" +
+        "\n" +
+        "// TÁCH — hai model riêng\n" +
+        "public class Order { }                     // domain THUẦN, không annotation\n" +
+        "@Entity class OrderEntity { }              // persistence, package-private\n" +
+        "// + domain hoàn toàn tự do và test được trong mili giây\n" +
+        "// + đổi lược đồ database không ảnh hưởng domain\n" +
+        "// - PHẢI VIẾT MAPPING hai chiều, và mapping quan hệ phức tạp rất tốn công\n" +
+        "// - mất dirty checking -> phải tự quản lý cái gì đã đổi\n" +
+        "\n" +
+        "// QUYẾT ĐỊNH THEO ĐỘ PHỨC TẠP:\n" +
+        "//  CRUD, ít quy tắc          -> KHÔNG tách. Tách là over-engineering.\n" +
+        "//  Domain phức tạp, nhiều bất biến, nhiều value object -> TÁCH.\n" +
+        "//  Đang phân vân             -> bắt đầu KHÔNG tách, tách sau khi thấy đau.\n" +
+        "\n" +
+        "// GIẢI PHÁP TRUNG DUNG rất thực dụng: giữ JPA entity nhưng ĐẶT HÀNH VI\n" +
+        "// vào nó (không anemic), giấu setter, và không để entity rò ra ngoài\n" +
+        "// tầng service (luôn trả về DTO).",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -511,5 +1466,63 @@ SS.addQuestions('design-patterns', [
       ['Hợp với', 'quy trình ngắn, tách rời', 'quy trình dài, nhiều bước, theo dõi trạng thái (tiền bạc)'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Giao dịch dài, nhiều service, có bù trừ",
+      code:
+        "// ORCHESTRATION SAGA — một orchestrator giữ toàn bộ luồng và trạng thái\n" +
+        "@Service\n" +
+        "public class OrderSagaOrchestrator {\n" +
+        "    @Transactional\n" +
+        "    public void start(OrderId orderId) {\n" +
+        "        SagaState saga = sagaRepo.create(orderId, State.STARTED);   // LƯU BỀN\n" +
+        "        commandBus.send(new ReservePaymentCommand(orderId, saga.id()));\n" +
+        "    }\n" +
+        "\n" +
+        "    @EventListener\n" +
+        "    public void on(PaymentReserved e) {\n" +
+        "        sagaRepo.advance(e.sagaId(), Step.PAYMENT_DONE);\n" +
+        "        commandBus.send(new ReserveInventoryCommand(e.orderId(), e.sagaId()));\n" +
+        "    }\n" +
+        "\n" +
+        "    @EventListener\n" +
+        "    public void on(InventoryReservationFailed e) {\n" +
+        "        sagaRepo.advance(e.sagaId(), Step.COMPENSATING);\n" +
+        "        commandBus.send(new RefundPaymentCommand(e.orderId()));   // BÙ TRỪ\n" +
+        "    }\n" +
+        "\n" +
+        "    @Scheduled(fixedDelay = 60_000)\n" +
+        "    public void handleTimeouts() {                    // saga treo -> xử lý\n" +
+        "        sagaRepo.findStuck(Duration.ofMinutes(10)).forEach(this::compensate);\n" +
+        "    }\n" +
+        "}\n" +
+        "// + nhìn thấy TOÀN BỘ luồng ở một chỗ, biết saga đang ở bước nào\n" +
+        "// + xử lý timeout và bù trừ tập trung\n" +
+        "// - orchestrator là phụ thuộc chung; cần lưu trạng thái bền\n" +
+        "\n" +
+        "// CHOREOGRAPHY SAGA — không có nhạc trưởng, mỗi service nghe và phản ứng\n" +
+        "@KafkaListener(topics = \"order-placed\")\n" +
+        "public class PaymentService {\n" +
+        "    public void on(OrderPlaced e) {\n" +
+        "        try { charge(e); publish(new PaymentSucceeded(e.orderId())); }\n" +
+        "        catch (Exception ex) { publish(new PaymentFailed(e.orderId())); }\n" +
+        "    }\n" +
+        "}\n" +
+        "@KafkaListener(topics = \"payment-failed\")\n" +
+        "public class OrderService {\n" +
+        "    public void on(PaymentFailed e) { cancel(e.orderId()); }      // bù trừ\n" +
+        "}\n" +
+        "// + tách rời tối đa, không có điểm nghẽn\n" +
+        "// - luồng RẢI RÁC, khó trả lời \"đơn này đang ở đâu\"; dễ tạo vòng lặp event\n" +
+        "\n" +
+        "// BA ĐIỀU BẮT BUỘC CHO CẢ HAI:\n" +
+        "//  1) mỗi bước phải IDEMPOTENT (message sẽ tới nhiều lần)\n" +
+        "//  2) mỗi bước phải có HÀNH ĐỘNG BÙ TRỪ, và bù trừ cũng phải idempotent\n" +
+        "//  3) trạng thái saga phải LƯU BỀN để tiếp tục được sau khi tiến trình chết\n" +
+        "// Và: bù trừ KHÔNG phải rollback — tiền đã trừ rồi hoàn lại là HAI giao\n" +
+        "// dịch trong sổ sách. Nghiệp vụ phải chấp nhận điều đó.",
+    },
+  ],
 },
 ]);
