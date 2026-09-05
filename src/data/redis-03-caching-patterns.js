@@ -1,6 +1,7 @@
 SS.addQuestions('redis', [
 {
   cat: 'Pattern',
+  id: 'redis-soqfm5',
   q: 'Cache-aside (lazy loading) hoạt động thế nào? Ưu nhược điểm?',
   answer:
     'Luồng đọc: app `GET` từ Redis → **hit**: trả về; **miss**: đọc DB → `SET` vào Redis (kèm TTL) → trả về.\n\n' +
@@ -61,6 +62,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-12imem6',
   q: 'Read-through, write-through và write-behind khác cache-aside thế nào?',
   answer:
     '- **Read-through**: app luôn hỏi **cache layer**; cache tự đọc DB khi miss (logic nạp nằm trong cache/library, không phải app).\n' +
@@ -116,6 +118,7 @@ SS.addQuestions('redis', [
 {
   cat: 'Nhất quán',
   diagram: 'cache-stampede',
+  id: 'redis-1dpuk4i',
   q: 'Cache stampede (thundering herd) là gì? Cách giảm thiểu?',
   answer:
     'Khi một key hot **hết hạn**, hàng nghìn request đồng thời miss cùng lúc → tất cả cùng lao xuống DB tính lại cùng một giá trị → DB quá tải (có thể sập).\n\n' +
@@ -174,6 +177,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-1imb9m2',
   q: 'Cache penetration (đọc key không tồn tại) — xử lý thế nào?',
   answer:
     'Request liên tục hỏi key **không tồn tại trong cả cache lẫn DB** (id ngẫu nhiên, tấn công) → mọi request đều miss cache và đập vào DB.\n\n' +
@@ -236,6 +240,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-1vnhb9',
   q: 'Cache avalanche (sập cache hàng loạt) là gì?',
   answer:
     'Hai kịch bản:\n' +
@@ -298,6 +303,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-ode0m9',
   q: 'Cập nhật cache: nên xoá key hay ghi đè key sau khi update DB?',
   answer:
     '**Xoá (invalidate) thường tốt hơn ghi đè**:\n' +
@@ -351,6 +357,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-1gy6qsm',
   q: 'Vấn đề dual-write cache-DB và cách xử lý triệt để?',
   answer:
     'Update DB và invalidate cache là **hai thao tác không nguyên tử**. Lỗi giữa chúng (app crash sau khi ghi DB, trước khi xoá cache) → cache stale mãi.\n\n' +
@@ -408,6 +415,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-1ni2i5n',
   q: 'Multi-level cache (L1 local + L2 Redis) — khi nào dùng?',
   answer:
     '- **L1**: cache in-process (Caffeine, guava) — latency ns, không qua network, không tốn Redis. Nhưng: mỗi instance một bản (không nhất quán giữa các pod), tốn heap.\n' +
@@ -472,6 +480,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Rate limiting',
+  id: 'redis-1of4lvg',
   q: 'Rate limiting với Redis: fixed window, sliding window, token bucket?',
   answer:
     '- **Fixed window**: `INCR rate:{user}:{minute}` + `EXPIRE 60`. Đơn giản nhưng có "burst ở biên" — 2× limit quanh ranh giới cửa sổ.\n' +
@@ -541,6 +550,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Distributed lock',
+  id: 'redis-8tpjvb',
   q: 'Distributed lock với Redis: `SET NX`, Redlock, và fencing token?',
   answer:
     '**Lock đơn giản**: `SET lock:{res} {token} NX PX 30000`; giải phóng bằng Lua kiểm tra token.\n\n' +
@@ -605,6 +615,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-1f660z1',
   q: 'Nên cache cái gì và KHÔNG nên cache cái gì?',
   answer:
     '**Nên cache**: dữ liệu đọc nhiều-ghi ít, tính toán đắt (aggregate, join phức tạp), gọi service ngoài chậm, tương đối chấp nhận stale (profile, catalog, config, kết quả search phổ biến).\n\n' +
@@ -656,6 +667,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Rate limiting',
+  id: 'redis-zy1n99',
   q: 'Session store trong Redis — thiết kế thế nào?',
   answer:
     'Lưu session server-side, client chỉ giữ **session id** trong cookie (`Secure`, `HttpOnly`, `SameSite`).\n\n' +
@@ -722,6 +734,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-8jxc56',
   q: 'Cache warming — khi nào cần và làm thế nào?',
   answer:
     'Sau khi Redis restart / deploy / thêm node, cache trống → "cold start" → tải dồn xuống DB, latency cao cho tới khi cache ấm.\n\n' +
@@ -784,6 +797,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-yd092z',
   q: 'Negative caching là gì và rủi ro?',
   answer:
     'Cache cả kết quả "không có gì" (404, list rỗng, null) để tránh hỏi lại nguồn cho cùng một truy vấn không có kết quả.\n\n' +
@@ -850,6 +864,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Rate limiting',
+  id: 'redis-1ilclov',
   q: 'Idempotency key lưu trong Redis — thiết kế?',
   answer:
     'Client gửi `Idempotency-Key`; server:\n' +
@@ -917,6 +932,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-1cc8v0r',
   q: 'Leaderboard realtime với Sorted Set — thiết kế và xử lý quy mô lớn?',
   answer:
     'Cơ bản: `ZINCRBY leaderboard <delta> <userId>`; `ZREVRANGE leaderboard 0 9 WITHSCORES` (top 10); `ZREVRANK leaderboard <userId>` (hạng của tôi); `ZSCORE`.\n\n' +
@@ -978,6 +994,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-1wcuc1e',
   q: 'Feature flag / config cache với pub/sub invalidation?',
   answer:
     'Config/flag thay đổi hiếm nhưng đọc rất nhiều. Mẫu:\n' +
@@ -1049,6 +1066,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-amvqtw',
   q: 'Cache key design và versioning để invalidate hàng loạt?',
   answer:
     'Nhúng version vào key hoặc namespace:\n' +
@@ -1109,6 +1127,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nhất quán',
+  id: 'redis-dkuoaa',
   q: 'Hot key trong cache — phát hiện và giảm tải thế nào?',
   answer:
     'Một key được đọc với tần suất bất thường (sản phẩm viral, config toàn cục) → dồn tải vào một shard/CPU của Redis, hoặc một kết nối.\n\n' +
@@ -1170,6 +1189,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pattern',
+  id: 'redis-zj06mc',
   q: 'Stale-while-revalidate với Redis — hoạt động thế nào?',
   answer:
     'Lưu kèm mỗi giá trị một **"soft TTL"** (thời điểm nên làm mới) ngắn hơn **"hard TTL"** (thời điểm thực sự hết hạn trong Redis).\n\n' +

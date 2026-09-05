@@ -1,6 +1,7 @@
 SS.addQuestions('aws', [
 {
   cat: 'S3',
+  id: 'aws-1dbcq0r',
   q: 'S3: bucket, object, key và độ bền 11 số 9 nghĩa là gì?',
   answer:
     'S3 là object storage: **bucket** (namespace toàn cầu duy nhất) chứa **object**. Object gồm `key` (chuỗi, "đường dẫn" phẳng — không có thư mục thật), data (tới 5TB), metadata, version id.\n\n' +
@@ -49,6 +50,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-1u0z992',
   q: 'Các storage class của S3 và lifecycle policy?',
   answer:
     '- **Standard**: truy cập thường xuyên, độ trễ ms.\n' +
@@ -135,6 +137,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-1jfa1gc',
   q: 'Mô hình nhất quán (consistency) của S3 hiện nay?',
   answer:
     'Từ tháng 12/2020, S3 cung cấp **strong read-after-write consistency** cho **mọi** thao tác trên mọi region — miễn phí, tự động.\n\n' +
@@ -184,6 +187,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-9rxfrp',
   q: 'Bảo mật S3: bucket policy, Block Public Access, presigned URL?',
   answer:
     '- **Block Public Access (BPA)**: công tắc ở cấp account & bucket **chặn** mọi cấu hình khiến bucket public — nên **bật hết** trừ khi thực sự cần static website public.\n' +
@@ -242,6 +246,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-ejlafh',
   q: 'S3 versioning và bảo vệ chống xoá?',
   answer:
     'Bật **versioning**: mỗi `PUT`/`DELETE` tạo version mới thay vì ghi đè. `DELETE` chỉ đặt một **delete marker** (object "biến mất" nhưng version cũ vẫn còn); khôi phục bằng cách xoá delete marker.\n\n' +
@@ -297,6 +302,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-14j68ob',
   q: 'Các kiểu mã hoá S3: SSE-S3, SSE-KMS, SSE-C, DSSE-KMS?',
   answer:
     '- **SSE-S3** (`AES256`): AWS quản key hoàn toàn. Đơn giản, miễn phí. Mặc định cho object mới.\n' +
@@ -355,6 +361,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-mjrpon',
   q: 'Tối ưu hiệu năng S3: prefix, multipart upload, Transfer Acceleration?',
   answer:
     '- **Prefix scaling**: S3 tự scale ~3.500 PUT/COPY/POST/DELETE và ~5.500 GET/HEAD **mỗi giây mỗi prefix**. Nhiều prefix song song → throughput cộng dồn. (Không còn cần "random hash prefix" như xưa, nhưng phân tán key vẫn giúp.)\n' +
@@ -412,6 +419,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'S3',
+  id: 'aws-7ame49',
   q: 'S3 Event Notifications dùng để làm gì?',
   answer:
     'S3 phát sự kiện khi có `s3:ObjectCreated:*`, `s3:ObjectRemoved:*`, `s3:ObjectRestore:*`… tới đích: **Lambda**, **SQS**, **SNS**, hoặc **EventBridge** (nhiều tính năng lọc/định tuyến hơn).\n\n' +
@@ -484,6 +492,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'RDS',
+  id: 'aws-d5kfso',
   q: 'RDS Multi-AZ và Read Replica khác nhau thế nào?',
   answer:
     '- **Multi-AZ**: một standby **đồng bộ** ở AZ khác, **không phục vụ traffic**. Mục đích: **HA/failover** — primary chết thì standby lên (đổi DNS endpoint) trong ~60–120s, không mất dữ liệu (sync replication).\n' +
@@ -537,6 +546,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'RDS',
+  id: 'aws-nd1kyj',
   q: 'RDS backup: automated backup, snapshot và Point-in-Time Recovery?',
   answer:
     '- **Automated backups**: bật retention 1–35 ngày. RDS backup toàn bộ hàng ngày + **lưu transaction log mỗi 5 phút** → cho phép **PITR**: khôi phục về **bất kỳ thời điểm** nào trong cửa sổ retention (tạo instance mới).\n' +
@@ -593,6 +603,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Aurora',
+  id: 'aws-1lfekh8',
   q: 'Kiến trúc Aurora khác RDS truyền thống thế nào?',
   answer:
     'Aurora tách **compute** (instance chạy engine MySQL/PostgreSQL) khỏi **storage** — một tầng lưu trữ phân tán, tự mở rộng tới 128TB, sao chép **6 bản qua 3 AZ**, self-healing.\n\n' +
@@ -647,6 +658,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Aurora',
+  id: 'aws-17o0ivc',
   q: 'Aurora Serverless v2 dùng khi nào?',
   answer:
     'Aurora Serverless v2 tự động scale compute (ACU — Aurora Capacity Unit) **theo tải, từng nấc nhỏ, trong vài giây**, không gián đoạn kết nối (khác v1). Tỉ lệ 0.5–256 ACU.\n\n' +
@@ -698,6 +710,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DynamoDB',
+  id: 'aws-1r2dd1v',
   q: 'DynamoDB: partition key, sort key và giới hạn item?',
   answer:
     '- **Partition key (hash key)**: DynamoDB hash nó để chọn partition vật lý. Quyết định **phân bố dữ liệu** — key phải có cardinality cao và truy cập đều.\n' +
@@ -755,6 +768,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DynamoDB',
+  id: 'aws-1x7ckat',
   q: 'DynamoDB capacity: on-demand vs provisioned, RCU/WCU?',
   answer:
     '- **WCU**: 1 WCU = 1 ghi/giây cho item ≤ 1KB. **RCU**: 1 RCU = 1 đọc **strongly consistent**/giây cho item ≤ 4KB (hoặc 2 đọc eventually consistent).\n' +
@@ -815,6 +829,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DynamoDB',
+  id: 'aws-q9k9l',
   q: 'GSI và LSI khác nhau thế nào?',
   answer:
     '- **LSI (Local Secondary Index)**: cùng partition key, **khác sort key**. Phải tạo **lúc tạo bảng**, tối đa 5, dùng chung capacity với bảng, hỗ trợ strongly consistent read. Giới hạn 10GB item collection mỗi partition key.\n' +
@@ -869,6 +884,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DynamoDB',
+  id: 'aws-1e33qlh',
   q: 'Single-table design trong DynamoDB là gì?',
   answer:
     'Thay vì mỗi entity một bảng (như RDBMS), gom **nhiều loại entity vào một bảng**, dùng PK/SK generic (`PK`, `SK`) với giá trị mang tiền tố loại (`USER#123`, `ORDER#456`).\n\n' +
@@ -924,6 +940,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DynamoDB',
+  id: 'aws-1wcbec2',
   q: 'DynamoDB Streams và TTL dùng để làm gì?',
   answer:
     '- **Streams**: log thay đổi (INSERT/MODIFY/REMOVE) theo thứ tự per-partition-key, giữ 24 giờ. Trigger Lambda → dùng cho: cập nhật aggregate, đồng bộ sang OpenSearch/S3, audit, phát event, materialized view, replication (Global Tables dùng cơ chế này).\n' +
@@ -982,6 +999,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DynamoDB',
+  id: 'aws-zjzmfx',
   q: 'Eventually consistent vs strongly consistent read? DynamoDB transactions?',
   answer:
     '- **Eventually consistent read** (mặc định): có thể đọc trúng một replica chưa nhận bản ghi mới nhất (thường trễ < 1s). Rẻ hơn (0.5 RCU).\n' +
@@ -1039,6 +1057,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Cache',
+  id: 'aws-1iaxaf9',
   q: 'ElastiCache: Redis và Memcached — chọn cái nào?',
   answer:
     '- **Memcached**: multi-threaded, chỉ key-value string đơn giản, không persistence, không replication, sharding phía client. Cho cache thuần, đơn giản, cần nhiều core.\n' +
@@ -1096,6 +1115,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Storage',
+  id: 'aws-l3i472',
   q: 'EBS, EFS, S3 và FSx — dùng cho tình huống nào?',
   answer:
     '- **EBS**: block storage cho **một** EC2 (io2 hỗ trợ Multi-Attach hạn chế). Như ổ đĩa của server. Cho OS, DB tự quản, ứng dụng cần filesystem POSIX hiệu năng cao.\n' +

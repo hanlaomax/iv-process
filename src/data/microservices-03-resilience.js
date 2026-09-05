@@ -1,6 +1,7 @@
 SS.addQuestions('microservices', [
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-197hurn',
   q: 'Vì sao timeout là bắt buộc? Đặt bao nhiêu?',
   answer:
     'Không có timeout, một call chậm/treo giữ tài nguyên (thread, connection) vô hạn → hết pool → service không nhận request mới → **cascading failure**.\n\n' +
@@ -65,6 +66,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-192lma8',
   q: 'Retry + exponential backoff + jitter. Retry storm là gì?',
   answer:
     '**Retry**: thử lại call thất bại (chỉ với lỗi **tạm thời**: timeout, 503, connection reset — KHÔNG retry 400, 404, 401).\n\n' +
@@ -125,6 +127,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-4vg2yj',
   q: 'Circuit Breaker — 3 trạng thái và cách hoạt động?',
   answer:
     'Bọc quanh call tới một downstream. Ba trạng thái:\n' +
@@ -203,6 +206,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-mi1g30',
   q: 'Bulkhead pattern là gì?',
   answer:
     'Chia tài nguyên (thread pool, connection pool, semaphore) thành các "khoang" **cô lập** cho từng downstream/loại request — như khoang kín của tàu thuỷ.\n\n' +
@@ -273,6 +277,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1e8wi10',
   q: 'Graceful degradation và fallback — thiết kế thế nào?',
   answer:
     'Khi một phụ thuộc lỗi, thay vì fail cả request, **giảm cấp** tính năng:\n' +
@@ -346,6 +351,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-73kg0d',
   q: 'Cascading failure — cơ chế và cách phòng tránh?',
   answer:
     'Một service quá tải/chậm → caller kẹt tài nguyên chờ → caller quá tải → caller-của-caller kẹt → lan ngược lên toàn hệ thống. Thường kèm **retry storm** làm nặng thêm.\n\n' +
@@ -410,6 +416,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1cs7jcj',
   q: 'Load shedding là gì? Khác rate limiting thế nào?',
   answer:
     '**Rate limiting**: giới hạn *dựa trên quota* — mỗi client/API key được N request/giây, vượt thì 429. Đặt trước, biết trước.\n\n' +
@@ -477,6 +484,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-qry3zy',
   q: 'Backpressure trong hệ thống microservices?',
   answer:
     'Khi consumer xử lý chậm hơn producer sản xuất, thay vì để hàng đợi phình vô hạn (→ OOM) hoặc drop im lặng, hệ thống phải **báo ngược lên** để producer chậm lại.\n\n' +
@@ -542,6 +550,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1e7lcpg',
   q: 'Fail fast và fail safe — khi nào áp dụng cái nào?',
   answer:
     '**Fail fast**: phát hiện lỗi/không thể xử lý → trả lỗi **ngay**, không cố gắng. Dùng khi: request không thể hoàn thành đúng (thiếu dữ liệu bắt buộc, downstream critical chết), và tiếp tục sẽ tốn tài nguyên vô ích hoặc tạo dữ liệu sai.\n\n' +
@@ -606,6 +615,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-10xy0cu',
   q: 'Chỉ retry với idempotent operation — vì sao và làm sao?',
   answer:
     'Retry một operation **không idempotent** khi bạn không chắc nó đã chạy hay chưa → có thể **thực hiện hai lần** (charge tiền 2 lần, tạo 2 đơn).\n\n' +
@@ -673,6 +683,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-cziemq',
   q: 'Fallback cache (stale-while-error) — dùng cache cũ khi downstream lỗi?',
   answer:
     'Cache dữ liệu từ downstream với hai mốc: **fresh TTL** (còn dùng bình thường) và **stale TTL** dài hơn (được phép dùng khi downstream lỗi).\n\n' +
@@ -743,6 +754,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1epgfac',
   q: 'Client-side load balancing vs server-side — khác nhau?',
   answer:
     '**Server-side**: client gọi một địa chỉ ảo (load balancer / API gateway); LB chọn instance backend. Đơn giản cho client, nhưng LB là một hop thêm + điểm nghẽn tiềm tàng.\n\n' +
@@ -800,6 +812,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-9ceh5t',
   q: 'Phối hợp Timeout + Retry + Circuit Breaker + Fallback — thứ tự thế nào?',
   answer:
     'Xếp lớp từ trong ra ngoài (thứ tự decorator điển hình, ví dụ Resilience4j):\n\n' +
@@ -863,6 +876,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1a70sew',
   q: 'Chaos Engineering là gì và làm thế nào?',
   answer:
     'Chủ động **tiêm lỗi vào production (hoặc gần production)** một cách có kiểm soát để **xác minh** hệ thống chịu được — thay vì hy vọng.\n\n' +
@@ -950,6 +964,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-17yh8qb',
   q: 'Health check trong microservices: liveness vs readiness vs startup?',
   answer:
     '- **Liveness**: "process còn sống và có thể phục hồi không?". Fail → orchestrator **restart** pod. Chỉ fail khi deadlock/hỏng không tự thoát. KHÔNG kiểm tra downstream ở đây.\n' +
@@ -1023,6 +1038,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-xl7zmd',
   q: 'Kiểm thử khả năng chịu lỗi (fault injection) trong CI/staging?',
   answer:
     'Không cần chờ chaos ở production. Test resilience sớm hơn:\n' +
@@ -1097,6 +1113,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1ii8u7v',
   q: 'Rate limiting: các thuật toán (fixed/sliding window, token bucket) và đặt ở đâu?',
   answer:
     '- **Fixed window**: đếm request trong mỗi cửa sổ thời gian (mỗi phút). Đơn giản nhưng cho **burst gấp đôi** ở ranh giới cửa sổ.\n' +
@@ -1177,6 +1194,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-xn4w2p',
   q: 'Timeout budget và deadline propagation xuyên chuỗi call?',
   answer:
     'Thay vì mỗi service đặt timeout độc lập (thường tuỳ hứng), truyền một **hạn chót chung** cho cả request.\n\n' +
@@ -1250,6 +1268,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-1yp20ln',
   q: 'Xử lý partial failure trong API composition (một downstream lỗi)?',
   answer:
     'Composer gọi 4 service để dựng một response; service #3 timeout. Lựa chọn:\n' +
@@ -1320,6 +1339,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chịu lỗi',
+  id: 'microservices-40vgox',
   q: 'Thundering herd khi service khởi động lại / cache lạnh?',
   answer:
     'Service restart / scale-out → cache in-memory trống → mọi request đầu tiên đều miss → **đồng loạt** gọi downstream/DB → downstream quá tải.\n\n' +

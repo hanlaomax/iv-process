@@ -1,6 +1,7 @@
 SS.addQuestions('java', [
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1lnjq6e',
   q: 'Các trạng thái của một JPA entity là gì?',
   answer:
     '- **Transient (new)**: object vừa `new`, chưa liên kết với persistence context, không có id trong DB.\n' +
@@ -57,6 +58,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1h2123g',
   q: 'Persistence context (first-level cache) và dirty checking hoạt động thế nào?',
   answer:
     'Persistence context là một `Map<EntityKey, Entity>` gắn với transaction. Trong cùng transaction, `findById(1)` hai lần trả về **cùng một object** (không query lần hai) — đó là first-level cache, luôn bật, không tắt được.\n\n' +
@@ -114,6 +116,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-76dwvl',
   q: 'Lazy và eager loading? `LazyInitializationException` từ đâu ra?',
   answer:
     '`FetchType.LAZY`: quan hệ chỉ được load khi truy cập lần đầu (Hibernate dùng proxy). `EAGER`: load ngay cùng entity cha.\n\n' +
@@ -176,6 +179,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1s1vs68',
   q: 'N+1 select problem là gì và khắc phục thế nào?',
   answer:
     'Load danh sách N `Order`, rồi vòng lặp truy cập `order.getCustomer()` (lazy) → 1 query lấy list + N query lấy từng customer = **N+1** query.\n\n' +
@@ -258,6 +262,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1pw2pbs',
   q: '`@Transactional(readOnly = true)` mang lại lợi ích gì?',
   answer:
     '- Hibernate đặt `FlushMode = MANUAL` → **không dirty checking, không flush tự động** → tiết kiệm CPU và tránh UPDATE ngoài ý muốn.\n' +
@@ -311,6 +316,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-fcvcdk',
   q: 'JPQL, native query và Criteria API — chọn cái nào?',
   answer:
     '- **JPQL / `@Query`**: viết theo entity, portable giữa các DB, kiểm tra lúc khởi động. Đủ cho 90% trường hợp.\n' +
@@ -374,6 +380,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1hcl4f4',
   q: 'Optimistic locking và pessimistic locking khác nhau thế nào?',
   answer:
     '**Optimistic** (`@Version` trên field int/timestamp): không khoá gì khi đọc. Lúc UPDATE, Hibernate thêm `WHERE version = ?`; nếu 0 dòng bị ảnh hưởng (ai đó đã sửa) → `OptimisticLockException`. Giả định xung đột hiếm.\n\n' +
@@ -442,6 +449,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-hi4nt8',
   q: 'Khi nào Hibernate flush? `save()` và `saveAndFlush()` khác gì?',
   answer:
     'Flush = đồng bộ thay đổi trong persistence context xuống DB (chạy INSERT/UPDATE/DELETE), **chưa commit**.\n\n' +
@@ -499,6 +507,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1w60wyv',
   q: 'Cascade types và `orphanRemoval` — ý nghĩa và cạm bẫy?',
   answer:
     'Cascade lan truyền thao tác từ entity cha sang con: `PERSIST`, `MERGE`, `REMOVE`, `REFRESH`, `DETACH`, `ALL`.\n\n' +
@@ -560,6 +569,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-7sgfp',
   q: 'Vì sao không nên trả entity trực tiếp ra API? Dùng projection/DTO thế nào?',
   answer:
     'Trả entity gây: lộ cấu trúc DB & field nhạy cảm; `LazyInitializationException` hoặc kéo cả đồ thị quan hệ; vòng lặp vô hạn khi serialize quan hệ hai chiều; coupling API contract với schema; khó versioning.\n\n' +
@@ -624,6 +634,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring MVC',
+  id: 'java-1yj5ez4',
   q: '`@RestController` khác `@Controller` thế nào? Content negotiation là gì?',
   answer:
     '`@Controller`: giá trị trả về (String) được hiểu là **tên view** → `ViewResolver` render HTML.\n\n' +
@@ -688,6 +699,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring MVC',
+  id: 'java-1yda95g',
   q: '`@RequestParam`, `@PathVariable`, `@RequestBody` dùng khi nào?',
   answer:
     '- `@PathVariable`: lấy phần biến trong đường dẫn — định danh tài nguyên. `/users/{id}` → `@PathVariable Long id`.\n' +
@@ -755,6 +767,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring MVC',
+  id: 'java-pkvt1s',
   q: 'Filter, Interceptor và `@ControllerAdvice` khác nhau ở đâu?',
   answer:
     '- **Servlet Filter**: tầng thấp nhất, chạy trước cả `DispatcherServlet`, thao tác trên `ServletRequest/Response` thô. Dùng cho: logging request, CORS, nén, security (Spring Security là chuỗi filter), rewrite.\n' +
@@ -838,6 +851,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring MVC',
+  id: 'java-6je1wo',
   q: 'CORS là gì? Cấu hình trong Spring như thế nào?',
   answer:
     'CORS (Cross-Origin Resource Sharing): trình duyệt chặn JS gọi API khác **origin** (scheme+host+port) trừ khi server trả header cho phép (`Access-Control-Allow-Origin`…). Với request "non-simple", trình duyệt gửi **preflight** `OPTIONS` trước.\n\n' +
@@ -906,6 +920,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Security',
+  id: 'java-1pbwp6n',
   q: 'Spring Security filter chain và luồng authentication hoạt động thế nào?',
   answer:
     'Spring Security là một chuỗi **servlet filter** (`SecurityFilterChain`) đứng trước app. Các filter chính: `SecurityContextPersistenceFilter`, `UsernamePasswordAuthenticationFilter` / `BearerTokenAuthenticationFilter`, `ExceptionTranslationFilter`, `AuthorizationFilter`.\n\n' +
@@ -970,6 +985,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Security',
+  id: 'java-1hgtwl',
   q: 'Session-based authentication và token/JWT — ưu nhược điểm?',
   answer:
     '**Session (cookie)**: server lưu session state, cookie chỉ chứa session id. Thu hồi tức thì (xoá session), nhỏ gọn, tự động theo cookie. Nhược: cần session store chia sẻ khi scale (Redis), dễ dính CSRF, không tiện cho mobile/third-party.\n\n' +
@@ -1025,6 +1041,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Security',
+  id: 'java-17emnvf',
   q: 'Vì sao lưu mật khẩu phải hash bằng BCrypt/Argon2? `PasswordEncoder` là gì?',
   answer:
     'Không bao giờ lưu plaintext hay hash nhanh (MD5/SHA-256) — GPU brute-force hàng tỉ hash/giây. Cần hàm **chậm có chủ đích** và **có salt**:\n' +
@@ -1082,6 +1099,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1pb9r53',
   q: 'Keyset pagination và offset pagination — khác nhau và khi nào dùng?',
   answer:
     '**Offset** (`LIMIT 20 OFFSET 10000`): DB vẫn phải duyệt và bỏ qua 10.000 dòng → càng về trang sau càng chậm; thêm/xoá dữ liệu giữa các lần gọi gây trùng/nhảy dòng.\n\n' +
@@ -1149,6 +1167,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Data / JPA',
+  id: 'java-1ldhyvq',
   q: '`@Modifying @Query` cần lưu ý gì (flush, clear, transaction)?',
   answer:
     'Với UPDATE/DELETE bằng JPQL/native, method repository phải gắn `@Modifying` và chạy trong `@Transactional`.\n\n' +
@@ -1207,6 +1226,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Security',
+  id: 'java-fgkgoq',
   q: '`@PreAuthorize` là gì? Khi nào cần bật CSRF protection?',
   answer:
     '**Method security** (`@EnableMethodSecurity`): `@PreAuthorize("hasRole(\'ADMIN\')")`, `@PreAuthorize("#id == authentication.principal.id")` — kiểm tra quyền ngay tại method service/controller bằng SpEL, gần logic nghiệp vụ. `@PostAuthorize`, `@PreFilter`/`@PostFilter` lọc collection.\n\n' +

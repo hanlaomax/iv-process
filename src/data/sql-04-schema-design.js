@@ -1,6 +1,7 @@
 SS.addQuestions('sql', [
 {
   cat: 'Chuẩn hoá',
+  id: 'sql-uen9dq',
   q: 'Chuẩn hoá 1NF, 2NF, 3NF, BCNF — tóm tắt?',
   answer:
     '- **1NF**: mỗi ô chứa **một giá trị nguyên tử** (không mảng, không danh sách CSV trong một cột), mỗi hàng duy nhất.\n' +
@@ -67,6 +68,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Chuẩn hoá',
+  id: 'sql-1xgyvgn',
   q: 'Khi nào nên denormalize (phi chuẩn hoá)?',
   answer:
     'Cân nhắc denormalize khi:\n' +
@@ -134,6 +136,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Khoá',
+  id: 'sql-qt3r5',
   q: 'Surrogate key vs natural key? UUID vs auto-increment?',
   answer:
     '- **Natural key**: khoá từ dữ liệu thật (email, SSN, mã ISBN). Có nghĩa nhưng có thể đổi, có thể to, có thể không thật sự duy nhất/ổn định.\n' +
@@ -198,6 +201,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'sql-dcqyaa',
   q: 'Chọn kiểu dữ liệu: int vs bigint, varchar vs text, tiền tệ, timestamp?',
   answer:
     '- **Số nguyên**: `int` (±2.1 tỉ) đủ cho hầu hết đếm; nhưng **PK/FK dùng `bigint`** (một bảng "chỉ vài triệu" hôm nay có thể tràn int sau vài năm — migrate PK là ác mộng).\n' +
@@ -258,6 +262,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Quan hệ',
+  id: 'sql-12fcphf',
   q: 'Many-to-many: bảng nối (junction table) thiết kế thế nào?',
   answer:
     'Quan hệ N–N (`students` ↔ `courses`) cần **bảng nối** chứa cặp khoá:\n' +
@@ -327,6 +332,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-20aj9x',
   q: 'Soft delete vs hard delete — đánh đổi và cạm bẫy?',
   answer:
     '**Soft delete**: `deleted_at TIMESTAMPTZ` (hoặc `is_deleted`), hàng vẫn ở lại. Giữ lịch sử, "undo", audit.\n\n' +
@@ -391,6 +397,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-fiux41',
   q: 'Lưu enum: cột enum, lookup table, hay check constraint?',
   answer:
     '- **Native ENUM** (Postgres `CREATE TYPE`, MySQL `ENUM`): gọn, ràng buộc chặt, nhưng **thêm/xoá giá trị cần ALTER** (MySQL rebuild bảng; Postgres `ADD VALUE` không xoá được), không lưu metadata (label, thứ tự, active).\n' +
@@ -457,6 +464,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'JSON',
+  id: 'sql-1ve3d2j',
   q: 'Lưu JSON (JSONB) trong SQL — khi nào nên và cạm bẫy?',
   answer:
     'JSONB (Postgres) / JSON (MySQL) lưu document bán cấu trúc, query được (`->`, `->>`, `@>`, `jsonb_path_query`), index được (GIN).\n\n' +
@@ -529,6 +537,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-zcub24',
   q: 'Audit columns và temporal/history table?',
   answer:
     '- **Audit columns cơ bản**: `created_at`, `updated_at` (trigger `BEFORE UPDATE` set `now()`), `created_by`, `updated_by`.\n' +
@@ -603,6 +612,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-1w76h9k',
   q: 'Polymorphic association (một cột trỏ tới nhiều bảng) — các cách làm?',
   answer:
     'Ví dụ: `comments` có thể thuộc `posts`, `photos`, hoặc `videos`.\n\n' +
@@ -676,6 +686,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-1lue4tv',
   q: 'EAV (Entity-Attribute-Value) — ưu nhược điểm?',
   answer:
     'EAV: thay vì cột cho mỗi thuộc tính, có bảng `attributes (entity_id, attribute_name, value)` — mỗi thuộc tính là một hàng.\n\n' +
@@ -743,6 +754,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-1ls7kq9',
   q: 'Constraint (CHECK, NOT NULL, UNIQUE, FK) như "hàng rào toàn vẹn" — vì sao quan trọng?',
   answer:
     'Constraint đảm bảo dữ liệu **luôn hợp lệ** ở tầng DB, bất kể ứng dụng nào ghi (app chính, migration, script thủ công, job, DBA).\n\n' +
@@ -807,6 +819,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Phân vùng',
+  id: 'sql-jl2oh2',
   q: 'Partitioning (range/list/hash) — khi nào dùng và lợi ích?',
   answer:
     'Chia một bảng logic thành nhiều **partition** vật lý theo một khoá:\n' +
@@ -881,6 +894,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Multi-tenancy',
+  id: 'sql-1f64cy',
   q: 'Multi-tenancy: shared schema, schema-per-tenant, hay DB-per-tenant?',
   answer:
     '- **Shared schema** (`tenant_id` trên mọi bảng): rẻ nhất, dễ vận hành/migrate một lần, dễ query cross-tenant (analytics). Rủi ro: quên `WHERE tenant_id` = **rò rỉ dữ liệu**; noisy neighbor; giới hạn tuỳ biến per-tenant. Dùng **Row-Level Security** để ép cô lập.\n' +
@@ -945,6 +959,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-13x4luy',
   q: 'Chiến lược index ngay từ lúc thiết kế schema?',
   answer:
     'Index cần có sẵn khi bảng ra đời:\n' +
@@ -1014,6 +1029,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-n59uqm',
   q: 'Migration schema an toàn (backward-compatible, tránh lock lâu)?',
   answer:
     'Nguyên tắc **expand–contract**:\n' +
@@ -1081,6 +1097,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-luv8kn',
   q: 'Thiết kế schema cho dữ liệu time-series?',
   answer:
     '- **Bảng hẹp**: `(entity_id, ts, metric, value)` hoặc `(entity_id, ts, value1, value2, ...)` — tránh cột thừa.\n' +
@@ -1150,6 +1167,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Thiết kế',
+  id: 'sql-rr3fiu',
   q: 'Quy ước đặt tên (naming convention) cho bảng, cột, index?',
   answer:
     'Chọn một quy ước và **nhất quán tuyệt đối**:\n' +
@@ -1216,6 +1234,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Quan hệ',
+  id: 'sql-1pdi0b',
   q: 'Quan hệ 1–1: khi nào tách thành bảng riêng?',
   answer:
     'Một quan hệ 1–1 (`user` ↔ `user_settings`) **có thể** gộp vào một bảng. Tách khi:\n' +
@@ -1282,6 +1301,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Chuẩn hoá',
+  id: 'sql-1of80mx',
   q: 'Bảng "rộng" (nhiều cột) vs "hẹp" — cân nhắc gì?',
   answer:
     '**Bảng rộng** (50+ cột): ít JOIN, lấy hết trong một hàng. Nhưng:\n' +

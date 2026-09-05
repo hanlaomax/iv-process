@@ -1,6 +1,7 @@
 SS.addQuestions('microservices', [
 {
   cat: 'Hạ tầng',
+  id: 'microservices-1wypo2j',
   q: 'API Gateway làm gì? Khi nào cần?',
   answer:
     'Một điểm vào duy nhất cho client, đứng trước các service. Chức năng:\n' +
@@ -84,6 +85,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-1o492bn',
   q: 'Service Discovery: client-side vs server-side, các registry?',
   answer:
     'Service instance đến/đi liên tục (scale, deploy, crash) → cần cơ chế tìm "instance nào của service X đang sống ở đâu".\n\n' +
@@ -160,6 +162,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-529uwe',
   q: 'Service Mesh (Istio/Linkerd) là gì? Khi nào đáng dùng?',
   answer:
     'Một lớp hạ tầng xử lý **giao tiếp service-to-service**, cài dưới dạng **sidecar proxy** (Envoy) cạnh mỗi service. Sidecar chặn mọi traffic vào/ra và cung cấp:\n' +
@@ -249,6 +252,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-gf1bvl',
   q: 'Sidecar pattern là gì?',
   answer:
     'Chạy một **container/process phụ** cạnh service chính, trong cùng pod/host, chia sẻ vòng đời và network. Sidecar lo các chức năng phụ trợ để service chính chỉ tập trung nghiệp vụ:\n' +
@@ -336,6 +340,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-zxogxc',
   q: 'Quản lý config và secrets cho nhiều service?',
   answer:
     '**Config** (không nhạy cảm): biến môi trường, K8s **ConfigMap**, hoặc config server (Spring Cloud Config, Consul KV). Nên: config theo môi trường, hot-reload được, có version/audit, không nằm trong image.\n\n' +
@@ -426,6 +431,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-14g19qq',
   q: 'Correlation ID / Trace ID — vì sao bắt buộc trong microservices?',
   answer:
     'Một request người dùng đi qua N service, sinh ra log ở N nơi. Không có id chung → không thể ghép các mảnh log của **cùng một** request.\n\n' +
@@ -501,6 +507,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-1tpp8gi',
   q: 'Distributed tracing hoạt động thế nào? Sampling là gì?',
   answer:
     'Một **trace** = toàn bộ hành trình một request; gồm nhiều **span** (mỗi span = một đơn vị công việc: một HTTP call, một query DB, một xử lý). Span có `traceId` chung, `spanId` riêng, `parentSpanId`, thời gian bắt đầu/kết thúc, tags, events.\n\n' +
@@ -580,6 +587,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-p93c5y',
   q: 'Metrics: RED và USE method là gì?',
   answer:
     '**RED** (cho service / request-driven):\n' +
@@ -655,6 +663,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-1pry31m',
   q: 'SLI, SLO, SLA và Error Budget?',
   answer:
     '- **SLI** (Indicator): thước đo cụ thể về chất lượng dịch vụ. Ví dụ: "tỉ lệ request `/checkout` trả 2xx trong < 500ms".\n' +
@@ -729,6 +738,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Triển khai',
+  id: 'microservices-1263drg',
   q: 'Blue-green và Canary deployment cho microservices?',
   answer:
     '- **Blue-green**: dựng môi trường mới (green) song song với cũ (blue), chạy đủ N service phiên bản mới, test, rồi **chuyển toàn bộ traffic** sang green. Rollback = trỏ lại blue **tức thì**. Tốn 2x tài nguyên tạm thời.\n' +
@@ -815,6 +825,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Triển khai',
+  id: 'microservices-xgex75',
   q: 'Feature Flags và trunk-based development trong microservices?',
   answer:
     '**Feature flag**: bọc code tính năng mới trong điều kiện bật/tắt runtime (không cần deploy để bật/tắt).\n\n' +
@@ -882,6 +893,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-1qj6j9y',
   q: 'Kubernetes cơ bản cho microservices: Deployment, Service, Ingress, HPA?',
   answer:
     '- **Deployment**: khai báo "muốn N replica của image X", K8s duy trì, rolling update, rollback.\n' +
@@ -979,6 +991,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Triển khai',
+  id: 'microservices-1ugsory',
   q: 'Zero-downtime deployment và graceful shutdown cho một service?',
   answer:
     'Rolling update: K8s tạo pod mới, chờ **readiness** pass, rồi mới tắt pod cũ. Để không rớt request:\n' +
@@ -1051,6 +1064,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-7p3e4f',
   q: 'Alerting: symptom-based vs cause-based, cách tránh alert fatigue?',
   answer:
     '**Cause-based alert**: "CPU của pod X > 90%", "disk 80%". Nhiều, ồn, thường không actionable (CPU cao có thể hoàn toàn bình thường).\n\n' +
@@ -1135,6 +1149,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-wtyqn9',
   q: 'GitOps và CI/CD pipeline cho microservices?',
   answer:
     '**CI per service**: mỗi repo service có pipeline riêng — build, unit + contract test, security scan, build image, push registry. Deploy độc lập.\n\n' +
@@ -1214,6 +1229,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-1wcodds',
   q: 'Ba trụ cột observability (metrics, logs, traces) phối hợp thế nào?',
   answer:
     'Không phải chọn một — chúng bổ sung nhau, nối bằng **trace/correlation id**:\n\n' +
@@ -1294,6 +1310,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-iozn3s',
   q: 'Structured logging: log gì, mức nào, xử lý PII thế nào?',
   answer:
     '**Structured** (JSON) thay vì text tự do → parse/query/aggregate được (Loki, ELK).\n\n' +
@@ -1363,6 +1380,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Quan sát',
+  id: 'microservices-k8anan',
   q: 'Quy trình điều tra một request lỗi trong hệ microservices?',
   answer:
     '1. **Lấy định danh**: từ user/support lấy `traceId` (nên đưa vào error response & UI) hoặc thời điểm + endpoint + userId.\n' +
@@ -1426,6 +1444,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-pbdc4m',
   q: 'Chi phí và hiệu quả tài nguyên của hạ tầng microservices?',
   answer:
     'Microservices tốn hơn monolith cùng tải vì:\n' +
@@ -1491,6 +1510,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Hạ tầng',
+  id: 'microservices-gfyuye',
   q: 'mTLS và zero-trust networking cho microservices?',
   answer:
     '**Zero-trust**: không tin request chỉ vì nó ở trong mạng nội bộ ("perimeter security" không đủ — kẻ tấn công vào được một pod là đi khắp nơi).\n\n' +

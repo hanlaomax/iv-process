@@ -1,6 +1,7 @@
 SS.addQuestions('design-patterns', [
 {
   cat: 'Structural',
+  id: 'design-patterns-no8k1j',
   q: 'Adapter pattern — vấn đề và cấu trúc?',
   answer:
     'Cho phép hai interface **không tương thích** làm việc với nhau bằng một lớp trung gian **chuyển đổi** interface này sang interface kia.\n\n' +
@@ -73,6 +74,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-465855',
   q: 'Adapter, Facade, Decorator, Proxy — phân biệt (dễ nhầm)?',
   answer:
     'Cả bốn đều "bọc" một object, nhưng **mục đích khác nhau**:\n' +
@@ -146,6 +148,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-z0uk7f',
   q: 'Decorator pattern — thêm chức năng mà không sửa class gốc?',
   answer:
     'Bọc object trong một "decorator" cùng interface, decorator thêm hành vi **trước/sau** khi uỷ quyền cho object bên trong. Có thể **chồng nhiều decorator**.\n\n' +
@@ -217,6 +220,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-tys0i4',
   q: 'Proxy pattern — các loại và use case?',
   answer:
     'Một object đứng thay cho object thật, cùng interface, **kiểm soát truy cập**:\n' +
@@ -287,6 +291,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-1u9jxl0',
   q: 'JDK Dynamic Proxy và CGLIB — khác nhau, dùng khi nào?',
   answer:
     '- **JDK Dynamic Proxy**: tạo proxy **lúc runtime** implements một hoặc nhiều **interface**. `Proxy.newProxyInstance(cl, interfaces, invocationHandler)`. Chỉ hoạt động nếu target có interface. Không proxy được method không thuộc interface.\n' +
@@ -358,6 +363,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-14d6vfc',
   q: 'Facade pattern — khi nào dùng?',
   answer:
     'Cung cấp **một interface đơn giản, thống nhất** cho một hệ thống con gồm nhiều class phức tạp. Client chỉ cần biết facade, không cần hiểu các class bên trong.\n\n' +
@@ -432,6 +438,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-2te187',
   q: 'Composite pattern — cây object với xử lý đồng nhất?',
   answer:
     'Cho phép **đối xử object đơn lẻ (leaf) và nhóm object (composite) giống nhau** qua một interface chung. Composite chứa danh sách con (leaf hoặc composite khác) → cấu trúc cây.\n\n' +
@@ -513,6 +520,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-12x3vzt',
   q: 'Bridge pattern — tách abstraction khỏi implementation?',
   answer:
     'Tách một hệ phân cấp thành **hai hệ phân cấp độc lập**: "abstraction" (cái client dùng) và "implementation" (cách làm), nối với nhau bằng composition (cây cầu).\n\n' +
@@ -585,6 +593,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-1i6wu3y',
   q: 'Flyweight pattern — chia sẻ object để tiết kiệm bộ nhớ?',
   answer:
     'Khi cần **rất nhiều** object gần giống nhau, tách state thành:\n' +
@@ -654,6 +663,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-ly98h8',
   q: 'MVC, MVP, MVVM — khác nhau ở đâu?',
   answer:
     'Đều tách **Model** (dữ liệu + logic nghiệp vụ) khỏi phần hiển thị, khác ở cách nối View và logic trình bày:\n\n' +
@@ -732,6 +742,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-1qpp1ms',
   q: 'Decorator vs kế thừa (inheritance) — chọn thế nào?',
   answer:
     '**Kế thừa**: quan hệ tĩnh, quyết định lúc compile. Thêm biến thể = thêm subclass. Nhiều "trục" biến thể → bùng nổ class. Vi phạm "favor composition".\n\n' +
@@ -795,6 +806,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-4fiair',
   q: 'Proxy vs Decorator — cùng bọc object, khác gì?',
   answer:
     'Về cấu trúc code gần như giống nhau (bọc một object cùng interface, uỷ quyền). Khác ở **ý định**:\n\n' +
@@ -865,6 +877,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-fo5opd',
   q: 'Structural pattern trong thư viện Java chuẩn — ví dụ?',
   answer:
     '- **Decorator**: `java.io` — `BufferedReader`, `InputStreamReader`, `GZIPInputStream`, `LineNumberReader` bọc nhau. `Collections.synchronizedList/unmodifiableList`.\n' +
@@ -938,6 +951,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-wa9ytj',
   q: 'Facade vs API Gateway (trong microservices) — liên hệ?',
   answer:
     'API Gateway là **Facade ở cấp hệ thống phân tán**:\n' +
@@ -1007,6 +1021,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-5q1wmz',
   q: 'Marker interface là gì? Còn dùng không?',
   answer:
     'Interface **không có method** (`Serializable`, `Cloneable`, `RandomAccess`), chỉ để **đánh dấu** một class có một thuộc tính/khả năng nào đó; code khác kiểm tra bằng `instanceof`.\n\n' +
@@ -1069,6 +1084,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-78sbbl',
   q: 'Khi nào một wrapper là over-engineering thay vì Decorator/Proxy hữu ích?',
   answer:
     'Wrapper thêm một lớp gián tiếp. Nó **không đáng** khi:\n' +
@@ -1142,6 +1158,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-1dwqg9l',
   q: 'Composite + Visitor thường đi cùng nhau — vì sao?',
   answer:
     'Composite tạo **cây object** (nhiều loại nút: leaf, composite, các subtype). Khi cần **thêm nhiều thao tác mới** trên cây (in ra, tính tổng, validate, export JSON/XML) mà không muốn nhồi mọi thao tác vào các class nút:\n\n' +
@@ -1219,6 +1236,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-jw209e',
   q: 'Decorator để thêm cross-cutting concern (log, cache, retry, metric) — có phải AOP thủ công?',
   answer:
     'Đúng — chồng decorator là cách "AOP bằng tay": mỗi decorator là một **aspect** (một mối quan tâm cắt ngang) bọc quanh đối tượng.\n\n' +
@@ -1300,6 +1318,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-1t7q8j5',
   q: 'Bridge vs Adapter — dễ nhầm, phân biệt thế nào?',
   answer:
     '- **Adapter**: áp dụng **sau khi** hệ thống đã tồn tại — bạn có `X` không khớp, cần làm nó khớp với `Y`. Mục tiêu: **tương thích** với cái đã có. Thường không định trước.\n' +
@@ -1366,6 +1385,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Structural',
+  id: 'design-patterns-17sxmtd',
   q: 'Module pattern / cấu trúc package để enforce ranh giới trong monolith?',
   answer:
     'Trong một monolith/modular monolith, dùng cấu trúc package + công cụ để **enforce** ranh giới module (mỗi module ≈ bounded context):\n' +

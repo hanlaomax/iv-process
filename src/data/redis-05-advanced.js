@@ -1,6 +1,7 @@
 SS.addQuestions('redis', [
 {
   cat: 'Pub/Sub & Streams',
+  id: 'redis-ax0mwd',
   q: 'Redis Pub/Sub: cơ chế và những hạn chế cần biết?',
   answer:
     '`SUBSCRIBE channel` / `PUBLISH channel message` / `PSUBSCRIBE pattern.*`. Message được đẩy tới **mọi subscriber đang kết nối tại thời điểm publish**.\n\n' +
@@ -60,6 +61,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pub/Sub & Streams',
+  id: 'redis-jv1h66',
   q: 'Redis Streams: consumer group, `XACK`, `XPENDING`, `XCLAIM`?',
   answer:
     '`XADD stream * field value` thêm entry (id `<ms>-<seq>`). `XLEN`, `XRANGE`, `XREAD`.\n\n' +
@@ -118,6 +120,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Pub/Sub & Streams',
+  id: 'redis-ndxe83',
   q: 'Redis Streams vs Kafka — khi nào chọn cái nào?',
   answer:
     '- **Streams**: nằm trong Redis bạn đã có, latency cực thấp, đủ cho throughput vừa (hàng chục–trăm nghìn msg/s), retention giới hạn bởi RAM (dùng `MAXLEN ~`), một partition logic (không phân vùng song song thực sự trong một stream).\n' +
@@ -175,6 +178,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-1ywxlwv',
   q: 'Pipelining, MULTI/EXEC và Lua — chọn cái nào cho tình huống nào?',
   answer:
     '- **Pipelining**: gửi nhiều lệnh **độc lập** để tiết kiệm RTT. Không nguyên tử, không có logic điều kiện.\n' +
@@ -231,6 +235,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-1fg2igs',
   q: 'Lua scripting: `EVALSHA`, script cache, và quy tắc "no side effects"?',
   answer:
     '`SCRIPT LOAD` (hoặc `EVAL` lần đầu) → Redis cache script theo SHA1. Sau đó `EVALSHA <sha> ...` chỉ gửi hash (tiết kiệm băng thông). Client thường tự fallback `EVAL` nếu server trả `NOSCRIPT` (sau restart).\n\n' +
@@ -293,6 +298,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-1omzhx8',
   q: 'Redis Functions (7.0) khác Lua `EVAL` thế nào?',
   answer:
     'Redis Functions là bản kế nhiệm "chính thức" của scripting:\n' +
@@ -369,6 +375,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-1iz3ypb',
   q: 'Vì sao Redis transaction "không có rollback"?',
   answer:
     'Trong `MULTI/EXEC`, nếu một lệnh **lỗi lúc chạy** (ví dụ `INCR` trên một key kiểu list) → lệnh đó fail nhưng **các lệnh khác vẫn chạy**. Không có undo.\n\n' +
@@ -427,6 +434,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-1a325pz',
   q: 'Optimistic locking với `WATCH` (CAS) — mẫu code và khi nào dùng?',
   answer:
     '```\n' +
@@ -503,6 +511,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bảo mật',
+  id: 'redis-1tepd56',
   q: 'Redis ACL (6.0+): users và permissions?',
   answer:
     'Trước 6.0 chỉ có một mật khẩu chung (`requirepass`). ACL cho phép nhiều user với quyền hạn chế:\n' +
@@ -569,6 +578,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bảo mật',
+  id: 'redis-1yj66ag',
   q: 'Bảo mật Redis: protected mode, TLS, `rename-command`?',
   answer:
     '- **`protected-mode yes`** (mặc định): nếu Redis bind mọi interface mà không có mật khẩu → chỉ chấp nhận kết nối từ localhost. Chống expose Redis "trần" ra internet (nguyên nhân vô số vụ bị chiếm).\n' +
@@ -634,6 +644,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Client',
+  id: 'redis-an77zh',
   q: 'Client-side caching / client tracking (RESP3) là gì?',
   answer:
     'Redis 6 (RESP3) hỗ trợ **server-assisted client-side caching**: client cache giá trị trong bộ nhớ của nó; server **theo dõi** các key client đã đọc và gửi **invalidation message** khi key đó thay đổi (hoặc bị evict).\n\n' +
@@ -694,6 +705,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'redis-157zsa4',
   q: 'Redis I/O threads (`io-threads`) làm gì? Có phải Redis đã đa luồng?',
   answer:
     'Từ Redis 6, `io-threads N` cho phép nhiều thread xử lý phần **đọc/ghi socket và parse/serialize protocol** — thường là nút thắt khi có nhiều kết nối và payload lớn.\n\n' +
@@ -746,6 +758,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-r0tb1f',
   q: 'Sorted Set nâng cao: `ZRANGEBYSCORE`, `ZADD GT/LT`, `ZPOPMIN`, `ZRANGEBYLEX`?',
   answer:
     '- `ZRANGEBYSCORE key min max LIMIT offset count`: lấy phần tử trong khoảng score (dùng cho time range, priority range).\n' +
@@ -807,6 +820,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sự cố',
+  id: 'redis-uo5cct',
   q: 'Keyspace notification `expired` — vì sao không nên dựa vào cho logic quan trọng?',
   answer:
     'Vấn đề:\n' +
@@ -865,6 +879,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'redis-u25l56',
   q: 'App-level sharding vs Redis Cluster — đánh đổi?',
   answer:
     '- **App-level sharding**: app tự chọn Redis instance theo `hash(key) % N`. Kiểm soát hoàn toàn (routing, replica, config từng shard), không có ràng buộc slot/CROSSSLOT của Cluster. Nhưng: **tự làm mọi thứ** — thêm/bớt shard = resharding thủ công đau đớn, tự lo failover mỗi shard, client phức tạp.\n' +
@@ -921,6 +936,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Giám sát',
+  id: 'redis-zchrmi',
   q: 'Giám sát Redis: `INFO`, `MONITOR`, `LATENCY`, `--bigkeys`/`--hotkeys`?',
   answer:
     '- **`INFO`**: nguồn metric chính — memory, clients, stats (ops/s, hit rate, evicted), replication, persistence, keyspace.\n' +
@@ -988,6 +1004,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-ncx82m',
   q: 'Dùng List làm queue có vấn đề gì so với dedicated MQ / Streams?',
   answer:
     'List queue (`LPUSH` + `BRPOP`) đơn giản nhưng thiếu:\n' +
@@ -1050,6 +1067,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'redis-1gm3he2',
   q: 'RESP2 vs RESP3 — thay đổi gì đáng chú ý?',
   answer:
     'RESP3 (Redis 6+, opt-in qua `HELLO 3`):\n' +
@@ -1107,6 +1125,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'redis-1qrw3ut',
   q: 'Vì sao nên biết Big-O và tránh `O(N)` trên collection lớn trong Redis?',
   answer:
     'Redis thực thi lệnh **đơn luồng** → một lệnh `O(N)` với N lớn **chặn toàn bộ server** trong suốt thời gian chạy; mọi client khác treo, health check fail, có thể kích hoạt failover giả.\n\n' +
@@ -1168,6 +1187,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Client',
+  id: 'redis-1uuq3re',
   q: 'Connection pool cho Redis: cấu hình và cạm bẫy?',
   answer:
     'Redis xử lý lệnh đơn luồng nên **một connection** đã có thể đẩy throughput cao (nhất là với pipeline). Nhưng blocking command và latency mạng khiến pool vẫn cần.\n\n' +

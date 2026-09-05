@@ -1,6 +1,7 @@
 SS.addQuestions('kafka', [
 {
   cat: 'Nền tảng',
+  id: 'kafka-1y7ch7z',
   q: 'Kafka là gì? Khác message queue truyền thống (RabbitMQ) ở đâu?',
   answer:
     'Kafka là **distributed commit log** phân tán: producer *append* message vào log, consumer *đọc theo offset*. Message **không bị xoá khi đọc** — chúng tồn tại theo retention (thời gian/dung lượng).\n\n' +
@@ -52,6 +53,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-1wwtchq',
   q: 'Topic, partition và offset là gì?',
   answer:
     '**Topic**: tên logic của một luồng sự kiện (ví dụ `orders`).\n\n' +
@@ -101,6 +103,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-5ccnvc',
   q: 'Vì sao Kafka chia partition? Đánh đổi gì về thứ tự?',
   answer:
     'Partition cho phép:\n' +
@@ -146,6 +149,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-z9xsoz',
   q: 'Broker, cluster và controller là gì? KRaft khác ZooKeeper thế nào?',
   answer:
     '**Broker**: một tiến trình Kafka, lưu một tập partition (leader hoặc follower). Nhiều broker tạo thành **cluster**.\n\n' +
@@ -191,6 +195,7 @@ SS.addQuestions('kafka', [
 {
   cat: 'Nền tảng',
   diagram: 'kafka-replication',
+  id: 'kafka-163jqzt',
   q: 'Replication factor, leader/follower và ISR là gì?',
   answer:
     '**Replication factor (RF)**: mỗi partition có RF bản sao trên RF broker khác nhau. RF=3 chịu được mất 2 broker.\n\n' +
@@ -226,6 +231,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-1wbyjum',
   q: 'Producer ghi vào đâu và consumer đọc từ đâu trong một partition?',
   answer:
     'Cả read và write của một partition đều đi qua **leader** của partition đó. Producer gửi tới broker đang giữ leader; consumer fetch từ leader.\n\n' +
@@ -272,6 +278,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Lưu trữ',
+  id: 'kafka-alm5f7',
   q: 'Retention và log compaction khác nhau thế nào?',
   answer:
     '`cleanup.policy`:\n' +
@@ -322,6 +329,7 @@ SS.addQuestions('kafka', [
 {
   cat: 'Consumer group',
   diagram: 'kafka-consumer-groups',
+  id: 'kafka-1egdruj',
   q: 'Consumer group là gì? Partition được gán cho consumer thế nào?',
   answer:
     'Một **consumer group** là tập consumer cùng `group.id` chia nhau đọc các partition của topic. Mỗi partition được gán cho **đúng một** consumer trong group tại một thời điểm.\n\n' +
@@ -359,6 +367,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer group',
+  id: 'kafka-c2vjn1',
   q: 'Offset được lưu ở đâu và bởi ai?',
   answer:
     'Consumer **tự chịu trách nhiệm** commit offset "đã xử lý xong". Kafka lưu offset trong một topic nội bộ compacted: **`__consumer_offsets`** (50 partition mặc định), key = (group, topic, partition), value = offset + metadata.\n\n' +
@@ -410,6 +419,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-1mhsel9',
   q: 'Message key dùng để làm gì?',
   answer:
     'Key (tuỳ chọn) quyết định:\n' +
@@ -459,6 +469,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'kafka-bfjf3u',
   q: 'Kafka lưu trên đĩa nhưng vẫn rất nhanh — vì sao?',
   answer:
     '- **Sequential I/O**: chỉ append cuối file log → tốc độ ghi tuần tự trên HDD/SSD gần bằng RAM ngẫu nhiên, tránh seek.\n' +
@@ -510,6 +521,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Lưu trữ',
+  id: 'kafka-1ngyim1',
   q: 'Partition log được tổ chức thành segment như thế nào?',
   answer:
     'Mỗi partition là một thư mục chứa nhiều **segment file**: `.log` (dữ liệu), `.index` (offset → vị trí byte), `.timeindex` (timestamp → offset).\n\n' +
@@ -558,6 +570,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-mgcm0s',
   q: 'Kafka đảm bảo thứ tự message ở mức nào?',
   answer:
     'Chỉ **trong một partition**: message ghi trước có offset nhỏ hơn và được consumer đọc trước.\n\n' +
@@ -606,6 +619,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-1yb7666',
   q: 'High watermark và log end offset là gì?',
   answer:
     '**Log End Offset (LEO)**: offset của message kế tiếp sẽ được ghi vào một replica (cuối log của replica đó).\n\n' +
@@ -649,6 +663,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-1d1tu93',
   q: 'So sánh Kafka với AWS Kinesis và Apache Pulsar (tổng quan)?',
   answer:
     '- **Kafka**: partition-based, hệ sinh thái lớn (Connect, Streams, Schema Registry), tự vận hành hoặc managed (MSK, Confluent). Kiểm soát cao, cần vận hành.\n' +
@@ -697,6 +712,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'kafka-1xcxyo8',
   q: 'Tiered storage (KIP-405) giải quyết vấn đề gì?',
   answer:
     'Mặc định mọi dữ liệu partition nằm trên đĩa local của broker → giữ dữ liệu lâu = cần đĩa lớn, và thêm broker vào cụm phải copy nhiều dữ liệu (rebalance chậm).\n\n' +
@@ -743,6 +759,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-10bwzoy',
   q: 'Rack awareness trong Kafka là gì?',
   answer:
     'Cấu hình `broker.rack` (ví dụ = availability zone). Khi tạo/reassign partition, Kafka **phân bổ replica trải đều trên các rack** thay vì dồn vào một rack.\n\n' +
@@ -789,6 +806,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Thiết kế',
+  id: 'kafka-167d0ks',
   q: 'Nên chọn số partition cho một topic như thế nào?',
   answer:
     'Cân nhắc:\n' +
@@ -841,6 +859,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-gmgqkm',
   q: '`bootstrap.servers` là gì? Client tìm broker để đọc/ghi như thế nào?',
   answer:
     '`bootstrap.servers` là **danh sách vài broker khởi đầu** (không cần liệt kê hết cụm). Client kết nối tới một trong số đó và gửi **metadata request** → nhận về: danh sách toàn bộ broker, và với mỗi topic-partition thì **leader đang nằm ở broker nào**.\n\n' +
@@ -886,6 +905,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-1i98g6z',
   q: 'Một Kafka record gồm những thành phần nào?',
   answer:
     'Mỗi record: **key** (nullable), **value** (nullable — null = tombstone khi compact), **timestamp**, **headers** (list cặp `String → byte[]`), và metadata do broker gán: **topic, partition, offset**.\n\n' +
@@ -942,6 +962,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Nền tảng',
+  id: 'kafka-f08see',
   q: 'Những use case điển hình của Kafka?',
   answer:
     '- **Messaging / decoupling** giữa microservice (thay REST call trực tiếp).\n' +

@@ -1,6 +1,7 @@
 SS.addQuestions('aws', [
 {
   cat: 'EC2',
+  id: 'aws-hdqnpx',
   q: 'Các họ EC2 instance (instance family) và cách chọn?',
   answer:
     'Đặt tên: `m6i.xlarge` = họ `m`, thế hệ 6, biến thể `i` (Intel), kích thước `xlarge`.\n\n' +
@@ -55,6 +56,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'EC2',
+  id: 'aws-1xni6ey',
   q: 'Các mô hình giá EC2: On-Demand, Reserved, Savings Plans, Spot?',
   answer:
     '- **On-Demand**: trả theo giây, không cam kết. Cho tải không đoán được, ngắn hạn, hoặc để đo baseline.\n' +
@@ -108,6 +110,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'EC2',
+  id: 'aws-vg2k90',
   q: 'Spot instance bị thu hồi — làm sao thiết kế để chịu được?',
   answer:
     'AWS gửi **interruption notice** qua instance metadata / EventBridge, ~2 phút trước khi thu hồi.\n\n' +
@@ -185,6 +188,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'EC2',
+  id: 'aws-1donnvr',
   q: 'AMI, user data và Instance Metadata Service (IMDSv2) là gì?',
   answer:
     '- **AMI (Amazon Machine Image)**: ảnh đĩa gốc để launch instance — OS + phần mềm cài sẵn. "Golden AMI" (build bằng Packer) giúp khởi động nhanh, nhất quán.\n' +
@@ -242,6 +246,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Storage',
+  id: 'aws-1qy0i0',
   q: 'Các loại EBS volume (gp3, io2, st1, sc1) — chọn khi nào?',
   answer:
     '- **gp3** (SSD, general): baseline 3.000 IOPS / 125 MB/s, **tăng IOPS/throughput độc lập với dung lượng** (khác gp2). Mặc định cho hầu hết workload.\n' +
@@ -295,6 +300,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Storage',
+  id: 'aws-10ewpq6',
   q: 'Instance store và EBS khác nhau thế nào?',
   answer:
     '- **EBS**: volume mạng, **tồn tại độc lập** với instance — stop/start/terminate instance thì dữ liệu vẫn còn (trừ khi `DeleteOnTermination`). Snapshot được, đổi type được, di chuyển giữa instance (cùng AZ).\n' +
@@ -343,6 +349,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Storage',
+  id: 'aws-13hsqn6',
   q: 'EBS snapshot hoạt động thế nào?',
   answer:
     'Snapshot là bản sao **incremental** của volume, lưu trên S3 (do AWS quản lý, không thấy trong S3 của bạn). Lần đầu copy toàn bộ block đã dùng; lần sau chỉ copy block **thay đổi** kể từ snapshot trước.\n\n' +
@@ -396,6 +403,7 @@ SS.addQuestions('aws', [
 {
   cat: 'Auto Scaling',
   diagram: 'autoscaling',
+  id: 'aws-cnsewk',
   q: 'Auto Scaling Group: scaling policy, health check, lifecycle hook?',
   answer:
     '**Scaling policies**:\n' +
@@ -444,6 +452,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Auto Scaling',
+  id: 'aws-ya2sue',
   q: 'Launch template khác launch configuration thế nào?',
   answer:
     '**Launch configuration** (cũ): bất biến, phải tạo mới để đổi bất kỳ tham số nào, không hỗ trợ tính năng EC2 mới, chỉ dùng với ASG.\n\n' +
@@ -501,6 +510,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Load Balancing',
+  id: 'aws-fo40mr',
   q: 'ALB, NLB và GWLB khác nhau ra sao?',
   answer:
     '- **ALB (Application LB, layer 7)**: hiểu HTTP/HTTPS/gRPC/WebSocket. Routing theo **path, host, header, query, method**; target group; TLS termination; tích hợp WAF, Cognito auth. Cho web app, microservice, API.\n' +
@@ -555,6 +565,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Load Balancing',
+  id: 'aws-zjcmdl',
   q: 'ALB routing, target group và sticky session?',
   answer:
     '**Listener rule** đánh giá theo thứ tự priority: điều kiện (host/path/header…) → hành động (forward tới target group, redirect, fixed response, authenticate).\n\n' +
@@ -615,6 +626,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Lambda',
+  id: 'aws-sapl8y',
   q: 'Lambda: mô hình thực thi và cold start?',
   answer:
     'Lambda chạy code trong **execution environment** (microVM Firecracker). Vòng đời:\n' +
@@ -674,6 +686,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Lambda',
+  id: 'aws-q3acd6',
   q: 'Reserved concurrency và provisioned concurrency khác nhau?',
   answer:
     '- **Reserved concurrency**: **giới hạn trên** số instance đồng thời của một function, và **đảm bảo** phần đó cho nó (lấy từ pool chung của account). Đặt = 0 để "tắt" function. Bảo vệ downstream (DB) khỏi bị function scale quá tay, và ngăn function này ăn hết concurrency của function khác.\n' +
@@ -724,6 +737,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Lambda',
+  id: 'aws-t78mi6',
   q: 'Các giới hạn quan trọng của Lambda?',
   answer:
     '- **Timeout**: tối đa **15 phút**. Tác vụ dài hơn → Step Functions, ECS/Fargate, hoặc chia nhỏ.\n' +
@@ -784,6 +798,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Containers',
+  id: 'aws-88ijhp',
   q: 'ECS, EKS và Fargate — chọn cái nào?',
   answer:
     '- **ECS (Elastic Container Service)**: orchestrator của AWS, đơn giản, tích hợp sâu (ALB, IAM task role, CloudWatch). Ít khái niệm, vận hành nhẹ.\n' +
@@ -837,6 +852,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Containers',
+  id: 'aws-1rsgu58',
   q: 'ECS task definition, service và capacity provider?',
   answer:
     '- **Task definition**: "công thức" cho một task — container image(s), CPU/memory, port mapping, env, secrets, **task role** (quyền IAM của container), log config. Có version.\n' +
@@ -921,6 +937,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Containers',
+  id: 'aws-1as9h9s',
   q: 'ECR và quét lỗ hổng image?',
   answer:
     'ECR (Elastic Container Registry): registry Docker riêng tư, tích hợp IAM (không cần credential riêng), lifecycle policy (xoá image cũ), immutable tags, replication cross-region.\n\n' +
@@ -977,6 +994,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'EC2',
+  id: 'aws-1h01da3',
   q: 'Placement group là gì? Có mấy loại?',
   answer:
     '- **Cluster**: dồn instance vào cùng một rack/AZ → mạng độ trễ thấp, băng thông cao (tới 100 Gbps) giữa các instance. Cho HPC, tính toán phân tán chặt chẽ. Rủi ro: mất rack là mất cả nhóm.\n' +
@@ -1026,6 +1044,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'EC2',
+  id: 'aws-ajtpfe',
   q: 'Status check của EC2 và auto recovery?',
   answer:
     'EC2 có hai status check:\n' +
@@ -1084,6 +1103,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'EC2',
+  id: 'aws-1wwyys8',
   q: 'AWS Graviton (ARM) mang lại lợi ích gì? Cần lưu ý gì khi migrate?',
   answer:
     'Graviton là CPU ARM do AWS thiết kế (`m7g`, `c7g`, `r7g`…). Ưu điểm: **giá/hiệu năng tốt hơn ~20–40%** so với x86 tương đương, tiêu thụ điện thấp hơn (tốt cho pillar Sustainability).\n\n' +

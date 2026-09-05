@@ -1,6 +1,7 @@
 SS.addQuestions('redis', [
 {
   cat: 'Tổng quan',
+  id: 'redis-1u62br8',
   q: 'Redis là gì? Vì sao single-threaded mà vẫn nhanh?',
   answer:
     'Redis là in-memory data store: lưu **cấu trúc dữ liệu** (string, hash, list, set, sorted set, stream…) trong RAM, truy cập qua network với latency sub-millisecond.\n\n' +
@@ -54,6 +55,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-4zorga',
   q: 'String trong Redis dùng cho việc gì ngoài lưu text?',
   answer:
     'String là kiểu cơ bản (tối đa 512MB), thực chất là mảng byte. Use case:\n' +
@@ -116,6 +118,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-mi1y1r',
   q: 'Hash dùng khi nào? Ưu điểm so với nhiều String?',
   answer:
     'Hash = map field→value trong một key: `HSET user:1 name "An" age 30 city "HCM"`.\n\n' +
@@ -170,6 +173,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-d3626b',
   q: 'List trong Redis: cấu trúc và use case?',
   answer:
     'List là danh sách liên kết (quicklist — mảng các listpack). `LPUSH`/`RPUSH` thêm hai đầu O(1); `LRANGE` đọc theo range; `LPOP`/`RPOP`; `LLEN`.\n\n' +
@@ -229,6 +233,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-1alkt76',
   q: 'Set dùng cho việc gì? Các phép toán tập hợp?',
   answer:
     'Set = tập phần tử duy nhất, không thứ tự. `SADD`, `SREM`, `SISMEMBER` (O(1)), `SCARD`, `SMEMBERS` (cẩn thận nếu lớn), `SRANDMEMBER`, `SPOP`.\n\n' +
@@ -284,6 +289,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-el3s9y',
   q: 'Sorted Set (ZSet): cấu trúc và các use case kinh điển?',
   answer:
     'ZSet = set mà mỗi phần tử có một **score** (double); phần tử được **sắp xếp theo score**. Hiện thực bằng skiplist + hash → thêm/xoá/tra hạng O(log N).\n\n' +
@@ -336,6 +342,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-10fsq8s',
   q: 'HyperLogLog dùng để làm gì? Đánh đổi ra sao?',
   answer:
     'HyperLogLog ước lượng **số phần tử duy nhất** (cardinality) của một tập rất lớn với sai số ~0.81%, chỉ tốn **12KB** cố định mỗi key — bất kể tập có 100 hay 1 tỉ phần tử.\n\n' +
@@ -386,6 +393,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-12rgnbi',
   q: 'Redis Streams khác Pub/Sub và List như thế nào?',
   answer:
     '- **Pub/Sub**: fire-and-forget. Subscriber offline lúc publish → **mất message**. Không lưu trữ, không replay, không ack.\n' +
@@ -441,6 +449,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'TTL & key',
+  id: 'redis-1j3qe0n',
   q: 'TTL / expiration trong Redis hoạt động thế nào?',
   answer:
     'Đặt hạn: `EXPIRE key 60`, `SET key v EX 60`, `PEXPIRE` (ms), `EXPIREAT` (timestamp). Xem: `TTL`/`PTTL`. Gỡ hạn: `PERSIST`.\n\n' +
@@ -497,6 +506,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'TTL & key',
+  id: 'redis-x1z1jo',
   q: 'Vì sao không dùng `KEYS` trong production? Dùng gì thay thế?',
   answer:
     '`KEYS pattern` quét **toàn bộ keyspace** trong một lần, O(N), **chặn server** cho tới khi xong. Với hàng triệu key = treo vài giây → mọi client timeout.\n\n' +
@@ -551,6 +561,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'redis-tvassk',
   q: 'Pipelining trong Redis là gì? Khác transaction thế nào?',
   answer:
     '**Pipelining**: client gửi **nhiều lệnh liên tiếp** không chờ reply từng cái, rồi đọc tất cả reply một lượt. Giảm số lần round-trip mạng (RTT) → tăng throughput hàng chục lần cho batch lệnh nhỏ.\n\n' +
@@ -603,6 +614,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-1unxyo5',
   q: 'MULTI/EXEC và WATCH (optimistic locking) hoạt động thế nào?',
   answer:
     '`MULTI` bắt đầu ghi hàng đợi lệnh; các lệnh sau đó được **xếp hàng** (trả `QUEUED`); `EXEC` chạy **toàn bộ liên tiếp, nguyên tử** (không client nào xen vào). `DISCARD` huỷ.\n\n' +
@@ -661,6 +673,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-5x33ra',
   q: 'Lua scripting trong Redis: vì sao dùng, quy tắc gì?',
   answer:
     '`EVAL script numkeys key... arg...` chạy một script Lua **nguyên tử** trên server (như một lệnh duy nhất, không client nào xen vào). `EVALSHA` chạy theo SHA1 đã cache (client gửi script một lần).\n\n' +
@@ -740,6 +753,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-v9os1t',
   q: 'Bitmap trong Redis: use case và giới hạn?',
   answer:
     'Bitmap là String được thao tác ở mức bit: `SETBIT key offset 0|1`, `GETBIT`, `BITCOUNT` (đếm bit 1), `BITOP AND/OR/XOR/NOT`, `BITPOS`.\n\n' +
@@ -798,6 +812,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Nguyên tử',
+  id: 'redis-16n1zng',
   q: 'Vì sao `SET key value NX EX 30` là cách đúng để tạo lock?',
   answer:
     '`SET lock:x <token> NX EX 30` làm **một lệnh nguyên tử**:\n' +
@@ -862,6 +877,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Tổng quan',
+  id: 'redis-h8z0al',
   q: 'Các Redis module (RedisJSON, RediSearch, RedisBloom) làm gì?',
   answer:
     '- **RedisJSON**: lưu và thao tác document JSON native — `JSON.SET`, `JSON.GET path`, `JSON.ARRAPPEND`. Không phải serialize/deserialize cả object.\n' +
@@ -921,6 +937,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'redis-1vg4yrn',
   q: 'Redis mã hoá cấu trúc dữ liệu nhỏ như thế nào (encoding)?',
   answer:
     'Redis chọn cách lưu nội bộ theo kích thước để tiết kiệm RAM:\n' +
@@ -980,6 +997,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'redis-14g4bab',
   q: 'Redis Geo dùng để làm gì?',
   answer:
     'Geo là ZSet với score được mã hoá geohash. `GEOADD key <lon> <lat> member`, `GEOSEARCH key FROMLONLAT <lon> <lat> BYRADIUS 5 km ASC`, `GEODIST`, `GEOPOS`.\n\n' +
@@ -1033,6 +1051,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'TTL & key',
+  id: 'redis-uqf32w',
   q: 'Quy ước đặt tên key trong Redis nên như thế nào?',
   answer:
     'Không có "thư mục" thật, nhưng dùng `:` làm phân cách namespace theo quy ước:\n' +
@@ -1097,6 +1116,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Tổng quan',
+  id: 'redis-1nxmyp5',
   q: 'Độ phức tạp (Big-O) của các lệnh Redis — cái nào cần tránh?',
   answer:
     'An toàn (O(1) hoặc O(log N)): `GET/SET`, `HGET/HSET`, `INCR`, `LPUSH/RPOP`, `SADD/SISMEMBER`, `ZADD/ZRANK/ZRANGEBYSCORE` (log N + M).\n\n' +

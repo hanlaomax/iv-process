@@ -1,6 +1,7 @@
 SS.addQuestions('sql', [
 {
   cat: 'Giao dịch',
+  id: 'sql-u6i6z0',
   q: 'ACID là gì? Mỗi tính chất đảm bảo điều gì?',
   answer:
     '- **Atomicity**: transaction là "tất cả hoặc không" — commit thì mọi thay đổi được áp, rollback/lỗi thì không thay đổi nào tồn tại.\n' +
@@ -62,6 +63,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Isolation',
+  id: 'sql-rjzb6r',
   q: 'Các isolation level và anomaly mỗi level cho phép?',
   answer:
     'Theo chuẩn SQL, từ lỏng tới chặt:\n' +
@@ -124,6 +126,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Isolation',
+  id: 'sql-1owvxhz',
   q: 'Dirty read, non-repeatable read, phantom read, lost update, write skew — giải thích?',
   answer:
     '- **Dirty read**: đọc dữ liệu của transaction khác **chưa commit** (có thể bị rollback).\n' +
@@ -191,6 +194,7 @@ SS.addQuestions('sql', [
 {
   cat: 'MVCC',
   diagram: 'mvcc-snapshot',
+  id: 'sql-roa1m2',
   q: 'MVCC (Multi-Version Concurrency Control) hoạt động thế nào?',
   answer:
     'Thay vì khoá khi đọc, DB giữ **nhiều phiên bản** của mỗi hàng. Mỗi transaction thấy một **snapshot** nhất quán (các version đã commit trước khi nó bắt đầu / trước câu lệnh).\n\n' +
@@ -237,6 +241,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-13y3nm9',
   q: 'Shared lock và exclusive lock, row-level vs table-level?',
   answer:
     '- **Shared (S) lock**: nhiều transaction cùng giữ để **đọc**; chặn ghi (X).\n' +
@@ -298,6 +303,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-1j7ja3k',
   q: '`SELECT ... FOR UPDATE` và `FOR SHARE` dùng khi nào?',
   answer:
     '`FOR UPDATE`: lấy **exclusive lock** trên các hàng được chọn → không transaction nào khác sửa/khoá chúng cho tới khi bạn commit. Dùng cho pattern **đọc-rồi-ghi** cần đảm bảo giá trị không đổi giữa đọc và ghi.\n\n' +
@@ -356,6 +362,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-1a1q393',
   q: 'Deadlock trong DB: phát hiện và phòng tránh?',
   answer:
     'Deadlock: transaction A giữ lock 1 chờ lock 2; transaction B giữ lock 2 chờ lock 1.\n\n' +
@@ -418,6 +425,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-137k8ib',
   q: 'Optimistic locking với version column — hoạt động và khi nào dùng?',
   answer:
     'Thêm cột `version` (int) hoặc `updated_at`. Khi cập nhật:\n' +
@@ -480,6 +488,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Giao dịch',
+  id: 'sql-1v5ww6v',
   q: 'Vấn đề của transaction chạy quá lâu (long-running transaction)?',
   answer:
     '- **Giữ lock lâu** → transaction khác chờ/deadlock.\n' +
@@ -544,6 +553,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Giao dịch',
+  id: 'sql-dyg13q',
   q: 'Autocommit, `BEGIN/COMMIT/ROLLBACK`, `SAVEPOINT`?',
   answer:
     '- **Autocommit** (mặc định ở đa số client): mỗi câu lệnh là một transaction tự commit ngay.\n' +
@@ -606,6 +616,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Isolation',
+  id: 'sql-rhn6k9',
   q: 'Read Committed vs Repeatable Read trong thực tế (Postgres vs MySQL)?',
   answer:
     '- **Postgres default = Read Committed**: mỗi **câu lệnh** thấy snapshot mới nhất tại thời điểm nó bắt đầu. Hai `SELECT` trong một transaction có thể thấy dữ liệu khác nhau.\n' +
@@ -663,6 +674,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Isolation',
+  id: 'sql-r5yfxr',
   q: 'Serializable Snapshot Isolation (SSI) của Postgres hoạt động thế nào?',
   answer:
     'Postgres `SERIALIZABLE` không dùng lock đọc; nó chạy như snapshot isolation nhưng **theo dõi các phụ thuộc đọc-ghi** giữa transaction đồng thời. Nếu phát hiện một mẫu có thể dẫn tới kết quả không tuần tự hoá được (dangerous structure) → **abort một transaction** với `could not serialize access` (SQLSTATE 40001).\n\n' +
@@ -720,6 +732,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-1jpft90',
   q: 'Advisory lock trong Postgres dùng để làm gì?',
   answer:
     'Lock **do ứng dụng định nghĩa** (không gắn với hàng/bảng nào), khoá theo một khoá số (bigint). `pg_advisory_lock(key)` / `pg_try_advisory_lock(key)` / `pg_advisory_unlock(key)`; hoặc bản `_xact_` tự nhả khi transaction kết thúc.\n\n' +
@@ -779,6 +792,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-10f74le',
   q: 'Gap lock và next-key lock trong MySQL InnoDB?',
   answer:
     'Ở Repeatable Read, để ngăn **phantom**, InnoDB khoá không chỉ hàng khớp mà cả **khoảng trống (gap)** giữa các giá trị index.\n\n' +
@@ -836,6 +850,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Giao dịch',
+  id: 'sql-1yj0h3t',
   q: 'Chuyển tiền an toàn: dùng transaction + locking thế nào?',
   answer:
     'Vấn đề: đọc số dư, kiểm tra đủ, trừ — nếu không nguyên tử thì hai giao dịch cùng thấy đủ tiền rồi cùng trừ.\n\n' +
@@ -906,6 +921,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Giao dịch',
+  id: 'sql-18zn7p5',
   q: 'Retry logic cho serialization failure / deadlock — viết thế nào?',
   answer:
     'Ở isolation cao (Serializable, hoặc gặp deadlock), DB có thể abort transaction với mã lỗi tạm thời (Postgres `40001` serialization_failure, `40P01` deadlock; MySQL 1213).\n\n' +
@@ -976,6 +992,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Giao dịch',
+  id: 'sql-1hp3p99',
   q: 'Chạy báo cáo nặng mà không ảnh hưởng OLTP — làm thế nào?',
   answer:
     '- **`SET TRANSACTION READ ONLY`** + isolation Repeatable Read → snapshot nhất quán, DB biết không cần chuẩn bị cho ghi.\n' +
@@ -1040,6 +1057,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Giao dịch',
+  id: 'sql-6t89pa',
   q: 'Two-phase commit / distributed transaction — vì sao thường tránh?',
   answer:
     '2PC: một coordinator hỏi mọi participant "prepare?" (ghi undo/redo, khoá tài nguyên, trả "yes"), rồi "commit". \n\n' +
@@ -1100,6 +1118,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Locking',
+  id: 'sql-147c9zf',
   q: 'Hàng đợi job trong SQL với `FOR UPDATE SKIP LOCKED`?',
   answer:
     'Nhiều worker cùng lấy job từ một bảng `jobs`. Nếu dùng `SELECT ... WHERE status = \'QUEUED\' LIMIT 1 FOR UPDATE`, các worker **xếp hàng chờ nhau** trên cùng hàng đầu tiên → tuần tự hoá.\n\n' +
@@ -1178,6 +1197,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Vận hành',
+  id: 'sql-10ouusu',
   q: 'VACUUM và transaction ID wraparound trong Postgres là gì?',
   answer:
     'Postgres đánh dấu version nào hiển thị bằng **transaction id (XID)** 32-bit. XID quay vòng (wraparound) sau ~4 tỉ transaction. Nếu không "đóng băng" (freeze) các hàng cũ kịp thời, dữ liệu quá cũ có thể bị coi là "tương lai" → **mất dữ liệu / DB dừng để tự bảo vệ**.\n\n' +

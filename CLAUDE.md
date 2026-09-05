@@ -164,12 +164,22 @@ chuỗi ngắn không chứa ký tự đặc biệt là an toàn nhất.
 
 Hiện **702/702 câu đã có `demo`** (793 khối code). Thêm câu hỏi mới thì nhớ thêm demo cho nó.
 
-markdown-lite hỗ trợ: `**đậm**`, `` `code` ``, ```` ```khối``` ````, `- ` bullet, `1. ` số,
-bảng `| a | b |`. Một block phải **đồng nhất một loại** (mọi dòng đều bullet, hoặc đều bảng…);
-tách block bằng dòng trống.
+markdown-lite hỗ trợ: `## Tiêu đề` (heading, phải đứng **một mình** trong block), `**đậm**`,
+`` `code` ``, ```` ```khối``` ````, `- ` bullet, `1. ` số, bảng `| a | b |`. Một block phải
+**đồng nhất một loại** (mọi dòng đều bullet, hoặc đều bảng…); tách block bằng dòng trống.
 
 Term **in đậm** và `` `code` `` trong `answer`/`essence` là input cho `relate.mjs` — chúng sinh
 ra chip khái niệm và câu liên quan. Bôi đậm thuật ngữ có ý nghĩa, không bôi đậm tuỳ tiện.
+
+### Văn phong `answer`
+
+Câu trả lời viết theo lối **bài giảng dài**, không phải ghi chú gạch đầu dòng: mở bài nêu vì sao
+câu hỏi đáng giá và nói trước sẽ đi qua những bước nào, rồi chia mục bằng `## 1. …`, xen sơ đồ
+ASCII và code trong ```` ``` ````, kết bằng một sơ đồ tóm tắt cùng một câu chốt và một câu bắc
+cầu sang câu hỏi kế tiếp.
+
+**Tiêu đề mục bắt buộc dùng `## `, không dùng `**đậm**`** — vì `relate.mjs` lấy 6 term in
+đậm/`code` đầu tiên làm chip khái niệm, bôi đậm tiêu đề sẽ làm hỏng chip.
 
 ## Lưu ý
 

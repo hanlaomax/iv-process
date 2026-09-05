@@ -254,6 +254,9 @@ img, svg { max-width: 100%; }
 .qa-block { font-family: var(--font-read); font-size: 17px; line-height: 1.75; color: var(--ink); }
 .qa-block h4 { font-family: var(--font-ui); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; color: var(--ink-faint); }
 .qa-block > :last-child { margin-bottom: 0; }
+/* '## Tiêu đề' trong câu trả lời dài — mốc để mắt bám khi đọc lướt */
+.qa-block h5 { font-family: var(--font-ui); font-size: 15px; font-weight: 700; margin: 22px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--ink); }
+.qa-block h4 + h5, .qa-block h5:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .qa-block p { margin: 0 0 10px; max-width: var(--measure); }
 .qa-block ul, .qa-block ol { margin: 0 0 10px; padding-left: 22px; max-width: var(--measure); }
 .qa-block li { margin-bottom: 5px; }

@@ -1,6 +1,7 @@
 SS.addQuestions('design-patterns', [
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1hgitl6',
   q: 'Visitor pattern và double dispatch?',
   answer:
     'Visitor tách **thao tác** ra khỏi cấu trúc object mà nó tác động. Mỗi loại object có `accept(Visitor v)` gọi `v.visitConcreteType(this)`.\n\n' +
@@ -73,6 +74,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-e6ih4v',
   q: 'Memento pattern — lưu và khôi phục trạng thái?',
   answer:
     'Lưu một **snapshot** trạng thái nội tại của một object (originator) vào một object **memento**, để **khôi phục** sau này — **mà không lộ chi tiết nội tại** ra bên ngoài.\n\n' +
@@ -148,6 +150,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1xj095a',
   q: 'Null Object pattern — loại bỏ null check?',
   answer:
     'Thay vì trả `null` (buộc client phải `if (x != null)`), trả một object **implements cùng interface** nhưng có hành vi **"không làm gì" / trung tính**.\n\n' +
@@ -222,6 +225,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'SOLID',
+  id: 'design-patterns-rn4z2u',
   q: 'S — Single Responsibility Principle (SRP)?',
   answer:
     'Một class nên có **một lý do duy nhất để thay đổi** — tức là chịu trách nhiệm trước **một actor/stakeholder**.\n\n' +
@@ -290,6 +294,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'SOLID',
+  id: 'design-patterns-lmi1bu',
   q: 'O — Open/Closed Principle (OCP)?',
   answer:
     'Module nên **mở để mở rộng, đóng để sửa đổi**: thêm hành vi mới bằng cách **thêm code**, không **sửa code đã có** (và đã test, đã chạy production).\n\n' +
@@ -364,6 +369,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'SOLID',
+  id: 'design-patterns-1s2dn5m',
   q: 'L — Liskov Substitution Principle (LSP)?',
   answer:
     'Object của subclass phải **thay thế được** cho object của superclass **mà không phá vỡ tính đúng** của chương trình. Subtype phải tuân thủ **hợp đồng** của supertype.\n\n' +
@@ -437,6 +443,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'SOLID',
+  id: 'design-patterns-huke24',
   q: 'I — Interface Segregation Principle (ISP)?',
   answer:
     'Client **không nên bị buộc phụ thuộc vào method nó không dùng**. Chia interface "béo" thành nhiều interface nhỏ, tập trung, theo nhóm client.\n\n' +
@@ -512,6 +519,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'SOLID',
+  id: 'design-patterns-geszuf',
   q: 'D — Dependency Inversion Principle (DIP)?',
   answer:
     'a) Module cấp cao **không phụ thuộc** module cấp thấp; **cả hai** phụ thuộc **abstraction**.\n' +
@@ -580,6 +588,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-ail8e5',
   q: 'DRY — và khi "DRY" trở thành sai lầm (wrong abstraction)?',
   answer:
     '**DRY** (Don\u2019t Repeat Yourself): mỗi mẩu **kiến thức** nên có một biểu diễn duy nhất, có thẩm quyền. Tránh sửa cùng một logic ở nhiều nơi.\n\n' +
@@ -640,6 +649,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-sm0y7x',
   q: 'KISS và YAGNI — ý nghĩa và cách áp dụng?',
   answer:
     '**KISS** (Keep It Simple, Stupid): chọn giải pháp đơn giản nhất **đủ giải quyết vấn đề hiện tại**. Phức tạp phải "kiếm được chỗ đứng" (đo bằng lợi ích cụ thể).\n\n' +
@@ -704,6 +714,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-45o4eo',
   q: 'Composition over inheritance — vì sao?',
   answer:
     'Ưu tiên **ghép object** (has-a) hơn **kế thừa** (is-a) để tái dùng code và tạo biến thể.\n\n' +
@@ -776,6 +787,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-1pqr0rh',
   q: 'Law of Demeter (Principle of Least Knowledge)?',
   answer:
     'Một method chỉ nên gọi method của: **chính object đó**, **tham số của nó**, **object nó tạo ra**, **field trực tiếp** của nó. **Không** gọi method trên object trả về từ method khác ("không nói chuyện với người lạ").\n\n' +
@@ -846,6 +858,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-2aqzch',
   q: 'Tell, Don\u2019t Ask principle?',
   answer:
     'Đừng **hỏi** object về state rồi tự quyết định làm gì (ở ngoài object); thay vào đó **bảo** object làm việc — để logic + data ở cùng chỗ.\n\n' +
@@ -916,6 +929,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-m8d6ws',
   q: 'Coupling và Cohesion — hai thước đo chất lượng thiết kế?',
   answer:
     '- **Cohesion** (độ gắn kết *trong* một module): các phần của module có liên quan chặt chẽ với nhau, cùng phục vụ một mục đích không? **Cao là tốt** — module làm một việc rõ ràng.\n' +
@@ -989,6 +1003,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-9ztwoh',
   q: 'God Object, Anemic Domain Model, Spaghetti — nhận biết và sửa?',
   answer:
     '- **God Object / God Class**: một class biết/làm quá nhiều (hàng nghìn dòng, chục phụ thuộc, mọi thứ đi qua nó). Sửa: tách theo trách nhiệm (SRP), trích các nhóm method + field liên quan ra class riêng.\n' +
@@ -1064,6 +1079,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-171gi2',
   q: 'Code smell là gì? Vài smell phổ biến và ý nghĩa?',
   answer:
     'Code smell = dấu hiệu **bề mặt** gợi ý có vấn đề thiết kế sâu hơn (Fowler, *Refactoring*). Không phải bug, nhưng làm code khó thay đổi.\n\n' +
@@ -1141,6 +1157,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Tổng quan',
+  id: 'design-patterns-7rag',
   q: 'Design pattern vs anti-pattern vs idiom — phân biệt?',
   answer:
     '- **Design pattern**: giải pháp **tốt, tái sử dụng** cho một vấn đề thiết kế thường gặp trong một ngữ cảnh.\n' +
@@ -1199,6 +1216,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-6nvu7r',
   q: 'Guard clause / early return vs if lồng nhau sâu?',
   answer:
     'Thay vì lồng `if` nhiều tầng (arrow code), kiểm tra các **điều kiện loại trừ / lỗi trước** và `return`/`throw` ngay → phần thân chính nằm ở mức thụt lề thấp nhất.\n\n' +
@@ -1276,6 +1294,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Nguyên lý',
+  id: 'design-patterns-11r3gsg',
   q: 'Defensive programming: fail-fast, validate ở biên, immutability?',
   answer:
     '- **Fail fast**: kiểm tra tiền điều kiện ngay đầu method (`Objects.requireNonNull`, `if (x < 0) throw`), phát hiện lỗi tại nguồn thay vì `NullPointerException` bí ẩn 10 stack frame sau.\n' +
@@ -1353,6 +1372,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Tổng quan',
+  id: 'design-patterns-c7a14r',
   q: 'Cách chọn pattern đúng — quy trình tư duy?',
   answer:
     'Đừng bắt đầu từ "tôi nên dùng pattern nào". Bắt đầu từ:\n\n' +

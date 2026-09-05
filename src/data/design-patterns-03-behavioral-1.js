@@ -1,6 +1,7 @@
 SS.addQuestions('design-patterns', [
 {
   cat: 'Behavioral',
+  id: 'design-patterns-qsug2j',
   q: 'Strategy pattern — vấn đề và cấu trúc?',
   answer:
     'Định nghĩa một **họ thuật toán**, đóng gói mỗi cái thành class riêng, cho phép **thay đổi thuật toán độc lập** với client dùng nó.\n\n' +
@@ -69,6 +70,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1j3sosr',
   q: 'Strategy vs chuỗi if/else / switch — khi nào đáng tách?',
   answer:
     'Không phải mọi `switch` đều cần Strategy. Đáng tách khi:\n' +
@@ -135,6 +137,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1vp0jye',
   q: 'Observer pattern — cấu trúc và use case?',
   answer:
     'Một object (**subject**) duy trì danh sách các **observer** và **tự động thông báo** chúng khi state thay đổi (thường gọi method `update()`).\n\n' +
@@ -211,6 +214,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-100j1mq',
   q: 'Observer vs Pub/Sub (message bus) vs Event-driven — phân biệt?',
   answer:
     '- **Observer (GoF)**: subject **giữ trực tiếp** danh sách observer; gọi thẳng `observer.update()`. Đồng bộ, trong-process, coupling nhẹ (subject biết interface Observer).\n' +
@@ -271,6 +275,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-fzqu8m',
   q: 'Template Method pattern — khung xử lý với các bước cắm được?',
   answer:
     'Định nghĩa **bộ khung của một thuật toán** trong một method của superclass, để **một số bước cho subclass override**. Các bước bất biến nằm trong superclass, bước biến thiên là abstract.\n\n' +
@@ -337,6 +342,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1edf1n',
   q: 'Template Method vs Strategy — giống mục tiêu, khác cách?',
   answer:
     'Cả hai cho phép **thay đổi một phần hành vi**:\n\n' +
@@ -407,6 +413,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-11ur678',
   q: 'Command pattern — đóng gói yêu cầu thành object?',
   answer:
     'Biến một **yêu cầu/thao tác** thành một **object** chứa đủ thông tin để thực hiện nó (receiver + tham số + method). Tách "cái phát lệnh" khỏi "cái thực hiện lệnh".\n\n' +
@@ -478,6 +485,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-43e7wm',
   q: 'Command + undo/redo — hiện thực thế nào?',
   answer:
     'Mỗi command lưu **đủ state để tự đảo ngược**:\n' +
@@ -567,6 +575,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-xcvq9f',
   q: 'State pattern — object đổi hành vi theo trạng thái nội tại?',
   answer:
     'Cho phép một object **thay đổi hành vi khi state nội tại thay đổi** — như thể nó đổi class. Mỗi state là một class implements cùng interface; object (context) uỷ quyền hành vi cho object state hiện tại; state có thể **chuyển context sang state khác**.\n\n' +
@@ -640,6 +649,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-wu8b6r',
   q: 'State vs Strategy — cấu trúc giống hệt, khác gì?',
   answer:
     'Cùng cấu trúc (context uỷ quyền cho một object interface). Khác **ý định** và **ai điều khiển việc đổi**:\n\n' +
@@ -703,6 +713,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-lvymuk',
   q: 'Cách hiện thực một state machine — enum, State pattern, hay thư viện?',
   answer:
     '- **Enum + transition table** (đơn giản): `enum State { PENDING, PAID, SHIPPED }` + `Map<State, Set<State>>` cho phép chuyển; hoặc enum có method `next(Event)`.\n' +
@@ -769,6 +780,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1n6k3i4',
   q: 'Chain of Responsibility — chuỗi handler xử lý request?',
   answer:
     'Cho request đi qua một **chuỗi các handler**; mỗi handler quyết định **xử lý** request hay **chuyển tiếp** cho handler kế tiếp (hoặc cả hai).\n\n' +
@@ -843,6 +855,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-jmzvgy',
   q: 'Chain of Responsibility trong middleware/filter — khác gì bản GoF cổ điển?',
   answer:
     'Bản GoF cổ điển: mỗi handler xử lý **hoặc** chuyển tiếp (một trong hai) — như xử lý exception.\n\n' +
@@ -909,6 +922,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-kcdzm9',
   q: 'Iterator pattern — còn ý nghĩa gì khi mọi ngôn ngữ đã có sẵn?',
   answer:
     'Iterator cung cấp cách **duyệt tuần tự** các phần tử của một collection **mà không lộ cấu trúc bên trong** (array, linked list, tree, DB cursor…).\n\n' +
@@ -982,6 +996,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-nxbcd7',
   q: 'Mediator pattern — giảm coupling giữa nhiều object tương tác?',
   answer:
     'Khi **nhiều object tương tác chằng chịt** (mỗi cái giữ tham chiếu tới nhiều cái khác — "many-to-many"), đặt một **Mediator** ở giữa: các object chỉ nói với mediator, mediator điều phối tương tác.\n\n' +
@@ -1051,6 +1066,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-8bogmb',
   q: 'Mediator vs Observer — đều giảm coupling, khác gì?',
   answer:
     '- **Observer**: quan hệ **một-nhiều** một chiều. Subject phát, observer nghe. Subject không quan tâm observer làm gì. Dùng cho "thông báo thay đổi".\n' +
@@ -1110,6 +1126,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1vcjn50',
   q: 'Observer pattern và rủi ro memory leak (lapsed listener)?',
   answer:
     'Subject giữ **strong reference** tới observer. Nếu observer bị "bỏ quên" mà không **unsubscribe**, nó không bao giờ được GC → **memory leak** (lapsed listener problem). Còn tệ hơn: observer "chết" vẫn nhận event và xử lý sai.\n\n' +
@@ -1182,6 +1199,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-zfmj74',
   q: 'Interpreter pattern — khi nào (hiếm khi) dùng?',
   answer:
     'Định nghĩa **ngữ pháp** cho một ngôn ngữ nhỏ và một **interpreter** duyệt cây cú pháp (AST) để "thực thi" nó. Mỗi luật ngữ pháp = một class; `interpret(context)` đệ quy.\n\n' +
@@ -1259,6 +1277,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-jan3o5',
   q: 'Observer đồng bộ vs bất đồng bộ trong ứng dụng thực — chọn thế nào?',
   answer:
     '**Đồng bộ** (`notify` gọi thẳng, cùng thread, cùng transaction):\n' +
@@ -1328,6 +1347,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Behavioral',
+  id: 'design-patterns-1figbfn',
   q: 'Lambda / first-class function thay thế được pattern nào?',
   answer:
     'Trong ngôn ngữ có function là first-class (Java 8+, Kotlin, JS, Python), nhiều pattern GoF "co lại" thành một hàm:\n' +

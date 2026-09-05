@@ -1,6 +1,7 @@
 SS.addQuestions('kafka', [
 {
   cat: 'Vận hành',
+  id: 'kafka-fi9g6k',
   q: 'ISR shrink/expand và unclean leader election là gì?',
   answer:
     'Follower fetch không kịp leader trong `replica.lag.time.max.ms` → bị **loại khỏi ISR** (shrink). Bắt kịp → **thêm lại** (expand). Metric `IsrShrinksPerSec` cao = follower/broker/mạng có vấn đề.\n\n' +
@@ -47,6 +48,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-my1omf',
   q: 'Cấu hình nào quyết định độ bền dữ liệu (durability) end-to-end?',
   answer:
     'Phải khớp ở nhiều tầng:\n' +
@@ -104,6 +106,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-1v3p5e',
   q: 'Thêm broker vào cụm và partition reassignment hoạt động thế nào?',
   answer:
     'Broker mới **không** tự nhận partition cũ — chỉ nhận partition của topic tạo *sau* khi nó join.\n\n' +
@@ -159,6 +162,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-gtx76k',
   q: 'Tăng số partition của một topic có hệ quả gì?',
   answer:
     '`kafka-topics.sh --alter --partitions N` chỉ **tăng** được (không giảm).\n\n' +
@@ -209,6 +213,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-mvsb3y',
   q: '`cleanup.policy`, retention và compaction — các tham số quan trọng?',
   answer:
     '- `cleanup.policy = delete | compact | "compact,delete"`.\n' +
@@ -264,6 +269,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-1750jjl',
   q: 'Topic `__consumer_offsets` là gì và cần lưu ý gì?',
   answer:
     'Topic nội bộ compacted, 50 partition mặc định (`offsets.topic.num.partitions`), RF theo `offsets.topic.replication.factor`.\n\n' +
@@ -318,6 +324,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Giám sát',
+  id: 'kafka-1pk4ref',
   q: 'Những metric Kafka quan trọng nhất cần cảnh báo?',
   answer:
     '**Broker/cluster**:\n' +
@@ -380,6 +387,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Hệ sinh thái',
+  id: 'kafka-17so28c',
   q: 'Kafka Connect là gì? Source/sink, converter, SMT, distributed mode?',
   answer:
     'Framework tích hợp dữ liệu chạy như cụm worker riêng.\n' +
@@ -460,6 +468,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Hệ sinh thái',
+  id: 'kafka-dxgms5',
   q: 'Kafka Streams: KStream vs KTable, state store, changelog, windowing?',
   answer:
     '- **KStream**: luồng sự kiện bất tận (mỗi record là một fact độc lập).\n' +
@@ -520,6 +529,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Hệ sinh thái',
+  id: 'kafka-1oyrjf4',
   q: 'Schema Registry compatibility modes: BACKWARD, FORWARD, FULL?',
   answer:
     '- **BACKWARD** (mặc định): consumer dùng schema **mới** đọc được dữ liệu ghi bằng schema **cũ**. Cho phép: xoá field, thêm field **optional/có default**. → nâng cấp **consumer trước**.\n' +
@@ -575,6 +585,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Bảo mật',
+  id: 'kafka-roy07l',
   q: 'Bảo mật Kafka: TLS, SASL, ACL?',
   answer:
     '- **Encryption in transit**: TLS trên listener (`SSL://`), mã hoá client↔broker và broker↔broker.\n' +
@@ -644,6 +655,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-17rjxji',
   q: 'Consumer lag monitoring: công cụ và cách đặt cảnh báo?',
   answer:
     'Công cụ:\n' +
@@ -697,6 +709,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Thiết kế',
+  id: 'kafka-1tmvqwz',
   q: 'Lập kế hoạch sizing: partition/broker, throughput?',
   answer:
     'Quy tắc kinh nghiệm:\n' +
@@ -760,6 +773,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-uyj6wh',
   q: 'MirrorMaker 2 và replication đa vùng (multi-region)?',
   answer:
     'MirrorMaker 2 (dựa trên Kafka Connect) sao chép topic giữa các cụm: dữ liệu, cấu hình topic, ACL, và **offset translation** (map offset group giữa cụm nguồn và đích).\n\n' +
@@ -818,6 +832,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-1thdwvu',
   q: 'Broker chết hoặc đầy đĩa — quy trình phục hồi?',
   answer:
     '**Broker chết**: controller tự bầu leader mới từ ISR cho các partition broker đó giữ leader → gián đoạn ngắn. Khi broker quay lại, nó fetch phần thiếu để trở lại ISR. Nếu chết lâu, cân nhắc reassign partition sang broker khác.\n\n' +
@@ -871,6 +886,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-1n0dsj7',
   q: 'Rolling upgrade / restart Kafka an toàn cần lưu ý gì?',
   answer:
     '- Restart **từng broker một**, chờ nó trở lại ISR đầy đủ (`UnderReplicatedPartitions` về 0) mới làm broker tiếp theo.\n' +
@@ -928,6 +944,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-1w9x1tj',
   q: 'Client quotas trong Kafka dùng để làm gì?',
   answer:
     'Quota giới hạn tài nguyên một client/nhóm client được dùng, đặt theo `client.id`, principal (user), hoặc cả hai:\n' +
@@ -985,6 +1002,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-10uqkze',
   q: 'Preferred leader election và cân bằng leadership?',
   answer:
     'Mỗi partition có một **preferred leader** — replica đầu tiên trong danh sách assignment. Sau khi broker chết rồi hồi, leadership có thể dồn lệch (broker vừa hồi giữ toàn follower).\n\n' +
@@ -1056,6 +1074,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-1cn8xlj',
   q: 'Các công cụ CLI Kafka hay dùng khi vận hành/debug?',
   answer:
     '- `kafka-topics.sh`: tạo/xoá/mô tả topic, tăng partition, xem replica & ISR.\n' +
@@ -1123,6 +1142,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Vận hành',
+  id: 'kafka-opuu36',
   q: 'Kafka trên Kubernetes: nên tự vận hành hay dùng managed?',
   answer:
     '**Self-managed trên K8s** (Strimzi operator): Strimzi quản lý broker (StatefulSet), KRaft/ZK, rolling update, cert, user/topic dưới dạng CRD. Linh hoạt, chạy được đa cloud, nhưng team phải hiểu Kafka sâu (đĩa, rebalance, tuning).\n\n' +

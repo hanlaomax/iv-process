@@ -1,6 +1,7 @@
 SS.addQuestions('redis', [
 {
   cat: 'Persistence',
+  id: 'redis-bkmr5j',
   q: 'RDB snapshot hoạt động thế nào? `SAVE` vs `BGSAVE`?',
   answer:
     'RDB là **ảnh chụp toàn bộ dataset** tại một thời điểm, ghi ra file `dump.rdb` (nén, compact).\n\n' +
@@ -57,6 +58,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Persistence',
+  id: 'redis-ozylpy',
   q: 'AOF là gì? `appendfsync` có mấy mức?',
   answer:
     'AOF (Append Only File): ghi **mọi lệnh ghi** vào file log; khôi phục = chạy lại log.\n\n' +
@@ -112,6 +114,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Persistence',
+  id: 'redis-syifly',
   q: 'RDB và AOF — dùng cái nào? Có kết hợp được không?',
   answer:
     '- **RDB**: file nhỏ, khôi phục nhanh, tốt cho backup/DR. Nhược: mất dữ liệu giữa hai snapshot (có thể vài phút).\n' +
@@ -165,6 +168,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Persistence',
+  id: 'redis-11w1932',
   q: 'Redis có phải là một database bền vững (durable) không?',
   answer:
     'Redis **không** cho đảm bảo durability mạnh như một RDBMS:\n' +
@@ -223,6 +227,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-36f6jc',
   q: '`maxmemory` và các eviction policy?',
   answer:
     'Khi RAM dùng đạt `maxmemory`, Redis áp `maxmemory-policy`:\n' +
@@ -280,6 +285,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-1xfxae1',
   q: 'LRU và LFU khác nhau thế nào? Khi nào chọn LFU?',
   answer:
     '- **LRU (Least Recently Used)**: evict key **lâu nhất chưa được truy cập**. Vấn đề: một lần scan/quét lớn kéo nhiều key "một lần dùng" vào, đẩy key nóng thật sự ra.\n' +
@@ -331,6 +337,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-1shogo3',
   q: 'Memory fragmentation trong Redis là gì?',
   answer:
     '`mem_fragmentation_ratio` = `used_memory_rss` (RAM OS cấp) / `used_memory` (Redis nghĩ mình dùng).\n\n' +
@@ -387,6 +394,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-g0b0yl',
   q: 'Big keys và hot keys — vấn đề và cách phát hiện?',
   answer:
     '**Big key**: một key chứa quá nhiều dữ liệu (hash/set/list/zset hàng triệu phần tử, hoặc string vài chục MB). Hại: lệnh O(N) trên nó chặn server; migrate slot trong Cluster chặn; `DEL` gây latency spike.\n\n' +
@@ -443,6 +451,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Persistence',
+  id: 'redis-5nm6qg',
   q: 'Copy-on-write khi fork và latency spike lúc save?',
   answer:
     'Khi `BGSAVE`/`BGREWRITEAOF`, Redis `fork()`. Tiến trình con chia sẻ trang bộ nhớ với cha (COW). Khi cha **ghi** vào một trang, OS **nhân bản trang đó** cho cha → dataset ghi nhiều = tốn thêm RAM và tốn thời gian copy trang.\n\n' +
@@ -495,6 +504,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-120blce',
   q: 'Các trường quan trọng trong `INFO memory`?',
   answer:
     '- `used_memory`: Redis nghĩ mình dùng (data + overhead nội bộ).\n' +
@@ -557,6 +567,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Latency',
+  id: 'redis-a64u9r',
   q: 'Những nguồn gây latency trong Redis và cách chẩn đoán?',
   answer:
     'Nguồn phổ biến:\n' +
@@ -620,6 +631,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Persistence',
+  id: 'redis-1od1sv2',
   q: 'Persistence tương tác với replication như thế nào?',
   answer:
     'Khi replica kết nối master lần đầu (hoặc cần full resync), master chạy `BGSAVE` tạo RDB, gửi cho replica, rồi stream các lệnh ghi tiếp theo từ **replication backlog buffer**.\n\n' +
@@ -673,6 +685,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Latency',
+  id: 'redis-1q2j0m7',
   q: 'SLOWLOG là gì và dùng thế nào?',
   answer:
     'SLOWLOG ghi lại các lệnh có **thời gian thực thi** (không tính I/O mạng) vượt `slowlog-log-slower-than` (micro giây, mặc định 10000 = 10ms). Giữ tối đa `slowlog-max-len` entry (128).\n\n' +
@@ -729,6 +742,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sự kiện',
+  id: 'redis-1hqv0iq',
   q: 'Keyspace notifications trong Redis là gì? Lưu ý gì?',
   answer:
     'Bật `notify-keyspace-events` (ví dụ `Ex` cho expired events, `KEA` cho tất cả). Redis publish message pub/sub khi có sự kiện trên key: `__keyspace@0__:mykey` (sự kiện gì trên key này) và `__keyevent@0__:expired` (key nào vừa expired).\n\n' +
@@ -786,6 +800,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-1uvjwyf',
   q: 'Client output buffer limit và slow consumer pub/sub?',
   answer:
     'Redis giữ một **output buffer** cho mỗi client (dữ liệu chờ gửi ra socket). Nếu client đọc chậm hơn tốc độ Redis gửi (đặc biệt pub/sub subscriber chậm, hoặc replica lag), buffer phình → tốn RAM.\n\n' +
@@ -839,6 +854,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Persistence',
+  id: 'redis-ln7sk8',
   q: 'Khi nào nên tắt persistence hoàn toàn?',
   answer:
     'Tắt cả RDB (`save ""`) và AOF (`appendonly no`) khi:\n' +
@@ -897,6 +913,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Latency',
+  id: 'redis-10ixka1',
   q: 'Vì sao Redis bị swap là thảm hoạ, và phòng tránh thế nào?',
   answer:
     'Redis giả định **mọi truy cập là RAM** (ns–µs). Nếu OS swap trang của Redis ra đĩa, một lệnh chạm trang đó phải chờ đọc đĩa (ms) — **trong lúc đó main thread bị chặn**, mọi client treo.\n\n' +
@@ -957,6 +974,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-vlw5dz',
   q: 'Ước lượng bộ nhớ Redis cần cho một dataset?',
   answer:
     'Không chỉ là tổng kích thước value:\n' +
@@ -1021,6 +1039,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Bộ nhớ',
+  id: 'redis-scijz0',
   q: '`DEL` và `UNLINK` khác nhau? Lazy freeing là gì?',
   answer:
     '`DEL key`: giải phóng bộ nhớ của key **đồng bộ** trên main thread. Với key lớn (hash/set 10M phần tử) → giải phóng từng phần tử mất hàng trăm ms → **chặn** server.\n\n' +
@@ -1072,6 +1091,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sự kiện',
+  id: 'redis-yxpmdv',
   q: 'Blocking commands (`BLPOP`, `BRPOPLPUSH`, `WAIT`) hoạt động thế nào?',
   answer:
     '`BLPOP key timeout`: nếu list rỗng, **client bị block** (không phải server) tới khi có phần tử được `LPUSH`/`RPUSH` vào, hoặc hết timeout. Nhiều client chờ → phục vụ theo thứ tự FIFO.\n\n' +

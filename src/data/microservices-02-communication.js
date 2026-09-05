@@ -1,6 +1,7 @@
 SS.addQuestions('microservices', [
 {
   cat: 'Giao tiếp',
+  id: 'microservices-1c5ugb',
   q: 'Giao tiếp đồng bộ và bất đồng bộ — khi nào dùng cái nào?',
   answer:
     '**Đồng bộ** (REST/gRPC, request–response): caller chờ kết quả. Dùng khi: cần dữ liệu *ngay* để tiếp tục (query), thao tác đọc, luồng đơn giản. Nhược: **temporal coupling** — callee phải sống và nhanh, lỗi lan theo chuỗi.\n\n' +
@@ -64,6 +65,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-gr7tuc',
   q: 'REST và gRPC — so sánh, chọn khi nào?',
   answer:
     '| | REST/JSON | gRPC |\n' +
@@ -140,6 +142,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-ti8wuz',
   q: 'Chọn message broker: Kafka, RabbitMQ hay SQS/SNS?',
   answer:
     '- **Kafka**: log phân tán, throughput cực cao, lưu trữ + replay, ordering per-partition, nhiều consumer group đọc độc lập. Cho event streaming, event sourcing, data pipeline. Vận hành nặng (hoặc dùng managed).\n' +
@@ -213,6 +216,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Event-driven',
+  id: 'microservices-1qz47vm',
   q: 'Event notification, event-carried state transfer, event sourcing — khác nhau?',
   answer:
     '- **Event notification**: event chỉ mang id + loại ("Order 123 đã đổi trạng thái"). Consumer phải **gọi lại** provider để lấy chi tiết. Nhẹ, nhưng tăng coupling đồng bộ.\n' +
@@ -278,6 +282,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Event-driven',
+  id: 'microservices-dh5w2i',
   q: 'Choreography và Orchestration khác nhau thế nào?',
   answer:
     '**Choreography**: không có "nhạc trưởng". Mỗi service lắng nghe event và tự quyết định phản ứng + phát event tiếp theo. Luồng nghiệp vụ "nổi lên" từ tương tác.\n' +
@@ -356,6 +361,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Saga',
+  id: 'microservices-1bqarp0',
   q: 'Saga pattern hoạt động thế nào? Compensating transaction là gì?',
   answer:
     'Saga chia một "transaction nghiệp vụ" xuyên nhiều service thành chuỗi **local transaction**. Mỗi bước commit cục bộ; nếu một bước fail, chạy các **compensating transaction** (hành động bù trừ) để hoàn tác các bước đã thành công.\n\n' +
@@ -435,6 +441,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-clvarq',
   q: 'Transactional Outbox — publish event đáng tin khi ghi DB?',
   answer:
     'Vấn đề **dual write**: cần ghi DB (tạo đơn) VÀ publish event (`OrderPlaced`). Không có transaction chung → ghi DB xong mà publish fail (hoặc ngược lại) → không nhất quán.\n\n' +
@@ -514,6 +521,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-2gqr1a',
   q: 'API Composition — truy vấn dữ liệu xuyên nhiều service?',
   answer:
     'Không có JOIN xuyên service. Để trả một view cần data từ nhiều service:\n\n' +
@@ -578,6 +586,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-15ojl52',
   q: 'Backends for Frontends (BFF) pattern là gì?',
   answer:
     'Thay vì một API Gateway chung cho mọi client, tạo **một backend riêng cho mỗi loại frontend** (web, iOS, Android, đối tác).\n\n' +
@@ -650,6 +659,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-134lhg6',
   q: 'Idempotency ở biên API — thiết kế thế nào?',
   answer:
     'Client gửi header `Idempotency-Key: <uuid>` cho request không an toàn (POST tạo tài nguyên, thanh toán). Server:\n' +
@@ -717,6 +727,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Event-driven',
+  id: 'microservices-1uuch15',
   q: 'Message ordering giữa các service — đảm bảo thế nào?',
   answer:
     'Ordering toàn cục thường không cần và rất đắt. Cần ordering **theo một thực thể** (mọi event của order X theo đúng thứ tự).\n\n' +
@@ -780,6 +791,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Event-driven',
+  id: 'microservices-122z4cb',
   q: 'Dead Letter Queue (DLQ) và xử lý poison message?',
   answer:
     'Một message không xử lý được (dữ liệu sai schema, bug logic, downstream lỗi vĩnh viễn) sẽ bị retry vô hạn → **chặn** cả queue/partition.\n\n' +
@@ -848,6 +860,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Testing',
+  id: 'microservices-1k8nbdy',
   q: 'Contract testing (consumer-driven contracts / Pact) là gì?',
   answer:
     'Vấn đề: provider đổi API làm hỏng consumer, nhưng e2e test đủ N service thì chậm và giòn.\n\n' +
@@ -923,6 +936,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Event-driven',
+  id: 'microservices-c9jts3',
   q: 'Tương thích schema của event (backward/forward compatibility)?',
   answer:
     'Event được lưu lâu và nhiều consumer đọc → schema phải tiến hoá an toàn.\n\n' +
@@ -987,6 +1001,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-1vj4dy2',
   q: 'Chuỗi call đồng bộ sâu gây vấn đề gì? Giảm thế nào?',
   answer:
     'Request A→B→C→D đồng bộ:\n' +
@@ -1056,6 +1071,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-115yz45',
   q: 'gRPC deadline/timeout propagation trong chuỗi call?',
   answer:
     'gRPC có khái niệm **deadline** (không phải timeout cục bộ): client đặt "request này phải xong trước thời điểm T". Deadline được **truyền tự động** qua metadata xuống các call con.\n\n' +
@@ -1120,6 +1136,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-3o2p15',
   q: 'Webhook giữa các service / với bên thứ ba — thiết kế đáng tin?',
   answer:
     'Webhook = provider gọi HTTP tới URL do consumer đăng ký khi có sự kiện. Vấn đề: consumer có thể down, chậm, trả lỗi.\n\n' +
@@ -1202,6 +1219,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Event-driven',
+  id: 'microservices-1tifekc',
   q: 'Request/reply qua message broker — khi nào và làm thế nào?',
   answer:
     'Đôi khi cần "gửi yêu cầu qua queue nhưng vẫn chờ kết quả" (để có buffer, load leveling, không cần service kia có endpoint HTTP).\n\n' +
@@ -1274,6 +1292,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-1ch4sbd',
   q: 'GraphQL Federation cho microservices?',
   answer:
     'Mỗi service expose một **subgraph** GraphQL (phần schema nó sở hữu, với `@key` cho entity). Một **gateway** (Apollo Router) hợp nhất thành một **supergraph** duy nhất.\n\n' +
@@ -1354,6 +1373,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-1bpr1aw',
   q: 'Inbox pattern (bổ sung cho Outbox) — khử trùng lặp phía consumer?',
   answer:
     'Outbox đảm bảo event được **publish** đáng tin (at-least-once). Consumer có thể nhận **trùng** (redelivery, rebalance).\n\n' +
@@ -1426,6 +1446,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-gdp9t8',
   q: 'Service-to-service authentication — xác thực giữa các service?',
   answer:
     'Service gọi service cũng cần chứng minh danh tính, không chỉ user.\n\n' +

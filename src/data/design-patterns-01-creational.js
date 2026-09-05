@@ -1,6 +1,7 @@
 SS.addQuestions('design-patterns', [
 {
   cat: 'Tổng quan',
+  id: 'design-patterns-yi81jn',
   q: 'Design pattern là gì? GoF phân loại thành mấy nhóm? Khi nào KHÔNG nên dùng?',
   answer:
     '**Design pattern** = giải pháp tái sử dụng cho một vấn đề thiết kế thường gặp trong một ngữ cảnh nhất định. Không phải code copy-paste mà là **khuôn mẫu tư duy** + từ vựng chung để giao tiếp.\n\n' +
@@ -66,6 +67,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-vehalk',
   q: 'Singleton — cách hiện thực đúng (thread-safe) trong Java?',
   answer:
     'Mục tiêu: đúng **một** instance, truy cập toàn cục.\n\n' +
@@ -136,6 +138,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-2azobc',
   q: 'Vì sao Singleton bị coi là anti-pattern? Dependency Injection thay thế thế nào?',
   answer:
     'Vấn đề của Singleton "cổ điển" (`getInstance()` gọi khắp nơi):\n' +
@@ -204,6 +207,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-ut3hyq',
   q: 'Factory Method pattern — vấn đề nó giải quyết và cấu trúc?',
   answer:
     'Định nghĩa một **method để tạo object**, nhưng để **lớp con quyết định** class cụ thể nào được tạo. Client làm việc với interface/abstract, không `new` class cụ thể.\n\n' +
@@ -268,6 +272,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-18r7xpb',
   q: 'Abstract Factory — khác Factory Method thế nào?',
   answer:
     '**Abstract Factory**: cung cấp interface để tạo **cả một họ object liên quan** mà không chỉ định class cụ thể. Mỗi "concrete factory" tạo ra một họ nhất quán.\n\n' +
@@ -337,6 +342,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-16ysapf',
   q: 'Simple Factory, Factory Method, Abstract Factory — phân biệt nhanh?',
   answer:
     '- **Simple Factory** (không phải GoF, chỉ là idiom): một class/method với `switch/if` trả về object theo tham số. `ShapeFactory.create("circle")`. Đơn giản, nhưng thêm loại phải sửa factory (vi phạm OCP).\n' +
@@ -405,6 +411,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-n3czm1',
   q: 'Builder pattern — khi nào dùng, cấu trúc thế nào?',
   answer:
     'Tách việc **xây dựng** một object phức tạp khỏi **biểu diễn** của nó, cho phép tạo từng bước và tái dùng quy trình.\n\n' +
@@ -487,6 +494,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-9gfvkr',
   q: 'Builder vs telescoping constructor vs JavaBeans setter?',
   answer:
     '- **Telescoping constructor**: `C(a)`, `C(a,b)`, `C(a,b,c)`… Người đọc phải đếm tham số; dễ truyền nhầm thứ tự (hai `int` liền nhau); bùng nổ số constructor.\n' +
@@ -551,6 +559,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-1brj75y',
   q: 'Prototype pattern — tạo object bằng cách sao chép?',
   answer:
     'Tạo object mới bằng cách **clone một prototype** có sẵn thay vì `new` + cấu hình lại từ đầu.\n\n' +
@@ -622,6 +631,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-1ac33mb',
   q: 'Object Pool pattern — khi nào thực sự cần?',
   answer:
     'Giữ sẵn một **tập object đã khởi tạo**, cho mượn (acquire) và trả lại (release) thay vì tạo/huỷ liên tục.\n\n' +
@@ -682,6 +692,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-t3cqnx',
   q: 'Dependency Injection là pattern gì? Các kiểu inject?',
   answer:
     'DI là kỹ thuật hiện thực **Inversion of Control** cho việc lấy phụ thuộc: object **không tự tạo/tìm** phụ thuộc mà **nhận từ bên ngoài**.\n\n' +
@@ -748,6 +759,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-h4t773',
   q: 'Service Locator vs Dependency Injection?',
   answer:
     '**Service Locator**: một registry trung tâm; class **tự hỏi** locator để lấy phụ thuộc: `Db db = ServiceLocator.get(Db.class)`.\n\n' +
@@ -813,6 +825,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-9z942b',
   q: 'Static factory method (Effective Java) — ưu điểm so với constructor?',
   answer:
     'Một `public static` method trả về instance của class, thay cho (hoặc bổ sung) constructor.\n\n' +
@@ -884,6 +897,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-y16f2t',
   q: 'Lazy initialization và initialization-on-demand holder idiom?',
   answer:
     '**Lazy init**: chỉ tạo object khi lần đầu cần → tiết kiệm nếu có thể không bao giờ cần, hoặc dời chi phí khởi động.\n\n' +
@@ -953,6 +967,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-a6i33k',
   q: 'Registry / Multiton pattern là gì?',
   answer:
     '- **Multiton**: như Singleton nhưng có **một tập instance được đặt tên/khoá**, mỗi khoá đúng một instance. `Currency.getInstance("USD")` luôn trả cùng object.\n' +
@@ -1016,6 +1031,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-ppw25a',
   q: 'Creational pattern trong Spring: BeanFactory, FactoryBean, @Bean?',
   answer:
     '- **`ApplicationContext` / `BeanFactory`**: chính là một **factory + registry + DI container** khổng lồ. Bạn khai báo bean, nó lo tạo, wiring, scope, vòng đời.\n' +
@@ -1092,6 +1108,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-hfz44z',
   q: 'Fluent Builder + validation + immutable — hiện thực đúng?',
   answer:
     'Mục tiêu: API dễ đọc, object cuối **bất biến**, **luôn hợp lệ**.\n\n' +
@@ -1177,6 +1194,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-ucs5aj',
   q: 'Dấu hiệu lạm dụng creational pattern (over-engineering)?',
   answer:
     '- Một `Factory` chỉ có `return new X()` — không thêm giá trị gì so với `new X()`.\n' +
@@ -1244,6 +1262,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-104lg4a',
   q: 'Monostate pattern — "Singleton mà không phải Singleton"?',
   answer:
     'Monostate: nhiều instance của class được tạo bình thường (`new`), nhưng **tất cả chia sẻ chung state** vì các field là `static`. Hành vi giống Singleton (một state chung) nhưng không kiểm soát số instance.\n\n' +
@@ -1306,6 +1325,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Creational',
+  id: 'design-patterns-1yvro1s',
   q: 'Phân biệt IoC, Dependency Inversion (DIP), và Dependency Injection?',
   answer:
     '- **IoC (Inversion of Control)**: nguyên tắc rộng — framework/container điều khiển luồng, gọi code của bạn ("Hollywood principle"). Bao gồm cả template method, event, DI, lifecycle callbacks.\n' +

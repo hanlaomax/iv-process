@@ -1,6 +1,7 @@
 SS.addQuestions('kafka', [
 {
   cat: 'Consumer',
+  id: 'kafka-329pm6',
   q: 'Vòng lặp poll của consumer hoạt động thế nào? `max.poll.records`, `max.poll.interval.ms`?',
   answer:
     'Consumer chạy vòng lặp: `poll(timeout)` → nhận tối đa `max.poll.records` record (mặc định 500) → xử lý → commit offset → lặp lại.\n\n' +
@@ -52,6 +53,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Rebalancing',
+  id: 'kafka-8btube',
   q: 'Consumer group rebalancing là gì? Khi nào bị trigger?',
   answer:
     'Rebalance = phân bổ lại partition cho các consumer trong group. Do **group coordinator** (một broker) điều phối.\n\n' +
@@ -110,6 +112,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Rebalancing',
+  id: 'kafka-az21as',
   q: 'Eager rebalancing và cooperative (incremental) rebalancing khác nhau thế nào?',
   answer:
     '**Eager** (`RangeAssignor`, `RoundRobinAssignor`): mọi consumer **revoke tất cả** partition, rebalance, rồi nhận lại phân bổ mới. Toàn group dừng xử lý trong suốt quá trình.\n\n' +
@@ -157,6 +160,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Rebalancing',
+  id: 'kafka-1a7hvmc',
   q: 'Các chiến lược gán partition (partition assignment strategy)?',
   answer:
     '- **RangeAssignor** (mặc định cũ): với mỗi topic, chia partition liên tiếp cho consumer theo thứ tự. Dễ lệch tải khi nhiều topic ít partition.\n' +
@@ -206,6 +210,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Offset',
+  id: 'kafka-rox1og',
   q: 'Commit offset: auto-commit và manual commit (`commitSync`/`commitAsync`)?',
   answer:
     '- **Auto** (`enable.auto.commit=true`): consumer tự commit offset của lô *đã poll* theo `auto.commit.interval.ms` (5s). Đơn giản nhưng có thể commit **trước khi xử lý xong** → mất message khi crash; hoặc xử lý xong nhưng chưa tới kỳ commit → xử lý lại khi rebalance.\n' +
@@ -269,6 +274,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Offset',
+  id: 'kafka-1b83tfx',
   q: '`auto.offset.reset` = earliest / latest / none nghĩa là gì?',
   answer:
     'Áp dụng khi consumer **không có offset đã commit** cho một partition (group mới, hoặc offset cũ đã bị xoá do retention):\n' +
@@ -320,6 +326,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-1gnfdmy',
   q: 'Consumer lag là gì? Đo và xử lý thế nào?',
   answer:
     '**Lag** của một partition = `log-end-offset` (message mới nhất) − `committed-offset` (consumer đã xử lý tới). Tổng lag của group = tổng các partition.\n\n' +
@@ -371,6 +378,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-1gtb3bj',
   q: '`session.timeout.ms` và `heartbeat.interval.ms` liên quan thế nào?',
   answer:
     'Consumer chạy một **heartbeat thread** riêng gửi tín hiệu "còn sống" tới group coordinator mỗi `heartbeat.interval.ms` (mặc định 3s).\n\n' +
@@ -420,6 +428,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Rebalancing',
+  id: 'kafka-1o9jph3',
   q: 'Static membership (`group.instance.id`) giải quyết vấn đề gì?',
   answer:
     'Bình thường, consumer restart = rời group + join lại = 2 lần rebalance, và có thể nhận partition khác.\n\n' +
@@ -469,6 +478,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-1xx6xtl',
   q: 'Consumer có thể nhận message trùng không? Xử lý thế nào?',
   answer:
     'Có — mô hình mặc định là **at-least-once**. Trùng lặp xảy ra khi consumer xử lý xong nhưng crash/rebalance **trước khi commit** offset → lô đó chạy lại.\n\n' +
@@ -529,6 +539,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Rebalancing',
+  id: 'kafka-yztbn4',
   q: '`ConsumerRebalanceListener` dùng để làm gì?',
   answer:
     'Callback gắn khi `subscribe(topics, listener)`:\n' +
@@ -589,6 +600,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-yvgh9',
   q: 'Khi nào dùng `pause()` / `resume()` và `seek()`?',
   answer:
     '`pause(partitions)`: ngừng nhận record từ partition đó ở các `poll()` tiếp theo (nhưng vẫn heartbeat, vẫn giữ partition). `resume()` để tiếp tục. Dùng khi: hạ nguồn (DB, API) đang quá tải → backpressure; hoặc đang xử lý bất đồng bộ một lô lớn.\n\n' +
@@ -645,6 +657,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-s9okdw',
   q: 'KafkaConsumer có thread-safe không? Mô hình đa luồng nào phổ biến?',
   answer:
     '`KafkaConsumer` **KHÔNG** thread-safe (trừ `wakeup()`). Một consumer instance chỉ được dùng bởi **một thread**.\n\n' +
@@ -702,6 +715,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-1to62gw',
   q: '`fetch.min.bytes` và `fetch.max.wait.ms` điều chỉnh gì?',
   answer:
     'Điều khiển cách consumer kéo dữ liệu từ broker:\n' +
@@ -751,6 +765,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-h9cra2',
   q: 'Xử lý message lỗi (processing failure): retry topic và DLQ?',
   answer:
     'Không nên block vòng lặp poll để retry vô hạn một message xấu (chặn cả partition).\n\n' +
@@ -817,6 +832,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-k781z',
   q: '`isolation.level=read_committed` làm gì?',
   answer:
     'Mặc định `read_uncommitted`: consumer thấy **mọi** message, kể cả của transaction chưa commit hoặc đã abort.\n\n' +
@@ -863,6 +879,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-mffhfv',
   q: 'Vì sao số partition đặt trần cho khả năng scale consumer?',
   answer:
     'Trong một consumer group, mỗi partition được gán cho **đúng một** consumer. Nếu group có nhiều consumer hơn số partition, các consumer thừa **không nhận partition nào** → ngồi không (chỉ là dự phòng nóng khi có consumer khác chết).\n\n' +
@@ -910,6 +927,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-sn8sf2',
   q: 'Đọc một compacted topic từ đầu có gì khác biệt?',
   answer:
     'Compacted topic giữ **bản mới nhất cho mỗi key** (cộng thêm phần "tail" gần đây chưa nén, có thể còn nhiều bản của cùng key).\n\n' +
@@ -964,6 +982,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-1eaqk95',
   q: 'Follower fetching (`client.rack`) giúp gì cho consumer đa vùng?',
   answer:
     'Mặc định consumer luôn đọc từ **leader** partition, dù leader nằm ở AZ/region khác → tốn phí truyền dữ liệu cross-AZ và thêm latency.\n\n' +
@@ -1010,6 +1029,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Consumer',
+  id: 'kafka-7b3be7',
   q: 'Khi nào nên dùng plain consumer, Kafka Streams, hay Kafka Connect?',
   answer:
     '- **Plain consumer (client API)**: kiểm soát tối đa, logic tuỳ ý, tích hợp vào service hiện có. Bạn tự lo threading, offset, retry, state.\n' +

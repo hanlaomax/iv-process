@@ -1,6 +1,7 @@
 SS.addQuestions('redis', [
 {
   cat: 'Replication',
+  id: 'redis-1v5u178',
   q: 'Replication trong Redis hoạt động thế nào? Có đảm bảo gì?',
   answer:
     'Một master, N replica. Replica gửi `REPLCONF` / `PSYNC`; master gửi RDB snapshot rồi **stream các lệnh ghi** tiếp theo (replication stream).\n\n' +
@@ -54,6 +55,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Replication',
+  id: 'redis-13hcjba',
   q: 'Full resync và partial resync khác nhau thế nào?',
   answer:
     'Master giữ một **replication backlog** (buffer vòng, `repl-backlog-size`, mặc định 1MB) chứa các lệnh gần nhất, và mỗi replica có một **replication offset**.\n\n' +
@@ -106,6 +108,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sentinel',
+  id: 'redis-1gi111n',
   q: 'Redis Sentinel làm gì? Quorum là gì?',
   answer:
     'Sentinel là các tiến trình giám sát (thường 3+, số lẻ) cho một cụm master-replica:\n' +
@@ -166,6 +169,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sentinel',
+  id: 'redis-swbhpg',
   q: 'Quy trình failover của Sentinel diễn ra thế nào?',
   answer:
     '1. Một Sentinel không nhận phản hồi từ master trong `down-after-milliseconds` → đánh dấu **SDOWN** (subjectively down).\n' +
@@ -229,6 +233,7 @@ SS.addQuestions('redis', [
 {
   cat: 'Cluster',
   diagram: 'redis-cluster-slots',
+  id: 'redis-130mop2',
   q: 'Redis Cluster: 16384 hash slot và sharding?',
   answer:
     'Cluster chia keyspace thành **16384 slot**. `slot = CRC16(key) % 16384`. Mỗi master node sở hữu một dải slot; key thuộc slot nào thì nằm ở node đó.\n\n' +
@@ -271,6 +276,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-m7smn0',
   q: 'MOVED và ASK redirect khác nhau thế nào?',
   answer:
     '- **MOVED `<slot> <ip:port>`**: slot đã **thuộc hẳn** node khác. Client cập nhật bản đồ slot của mình và gửi lại tới node đúng. Xảy ra sau reshard.\n' +
@@ -323,6 +329,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-t2dmvp',
   q: 'Multi-key operation trong Cluster và hash tag `{}`?',
   answer:
     'Lệnh đa key (`MGET`, `SINTER`, `MULTI` với nhiều key, Lua với nhiều `KEYS`) chỉ hoạt động nếu **tất cả key thuộc cùng một slot** — nếu không → `CROSSSLOT` error.\n\n' +
@@ -374,6 +381,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-jsnuw0',
   q: 'Reshard / slot migration trong Cluster diễn ra thế nào?',
   answer:
     'Thêm node → chạy `redis-cli --cluster reshard`. Với mỗi slot chuyển:\n' +
@@ -433,6 +441,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-ezxmht',
   q: 'Redis Cluster vs Sentinel — chọn cái nào?',
   answer:
     '- **Sentinel**: một master giữ **toàn bộ** dataset + replica; Sentinel lo failover. Dùng khi: dataset **vừa với RAM một node**, chỉ cần HA + scale đọc, muốn đơn giản, cần thao tác đa key tự do.\n' +
@@ -486,6 +495,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Replication',
+  id: 'redis-7jnifk',
   q: '`min-replicas-to-write` bảo vệ dữ liệu thế nào?',
   answer:
     '`min-replicas-to-write N` + `min-replicas-max-lag M`: master **từ chối ghi** nếu có ít hơn N replica kết nối với lag ≤ M giây.\n\n' +
@@ -538,6 +548,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sự cố',
+  id: 'redis-smt9sg',
   q: 'Split-brain trong Redis (Sentinel/Cluster) và hậu quả?',
   answer:
     'Phân vùng mạng chia cụm: minority side vẫn có master cũ (client phía đó ghi vào), majority side promote master mới (client phía kia ghi vào). Khi mạng liền lại → master cũ bị hạ xuống replica và **đồng bộ theo master mới** → **mọi write vào master cũ trong lúc phân vùng bị mất**.\n\n' +
@@ -592,6 +603,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Client',
+  id: 'redis-n7b1mw',
   q: 'Client cần xử lý gì khi Redis failover?',
   answer:
     '- **Cluster-aware / Sentinel-aware client**: tự lấy topology, cập nhật khi `MOVED` / khi Sentinel báo master đổi.\n' +
@@ -664,6 +676,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Replication',
+  id: 'redis-vqlwi6',
   q: '`WAIT` command làm gì và giới hạn?',
   answer:
     '`WAIT numreplicas timeout`: block client tới khi các lệnh ghi **trước đó** của connection này được **ack bởi ít nhất `numreplicas` replica**, hoặc hết `timeout` (ms). Trả về số replica đã ack.\n\n' +
@@ -716,6 +729,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Scale',
+  id: 'redis-1fal9b0',
   q: 'Scale Redis: vertical, read replica, hay cluster?',
   answer:
     '1. **Vertical** (node lớn hơn): đơn giản nhất; giới hạn bởi RAM/CPU máy lớn nhất. Redis đơn luồng nên CPU nhanh hơn > nhiều core.\n' +
@@ -773,6 +787,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Managed',
+  id: 'redis-1nfyieq',
   q: 'Các mode của managed Redis (ElastiCache/MemoryDB) và khác biệt?',
   answer:
     '- **ElastiCache for Redis — cluster mode disabled**: một shard (1 primary + tối đa 5 replica). Như Sentinel setup managed.\n' +
@@ -834,6 +849,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Sự cố',
+  id: 'redis-47ak4s',
   q: 'Nhất quán dữ liệu trong cửa sổ failover — mất bao nhiêu?',
   answer:
     'Vì replication async, khi master chết đột ngột:\n' +
@@ -890,6 +906,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-1dguaep',
   q: 'Pipeline và transaction trong Cluster bị giới hạn thế nào?',
   answer:
     '- **Pipeline**: gửi được nhiều lệnh, nhưng client cluster phải **nhóm theo node** (mỗi node một pipeline) và ghép kết quả. Lệnh chạm key ở node khác nhau không thể trong một pipeline gửi tới một node.\n' +
@@ -949,6 +966,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-bv99aw',
   q: 'Redis Cluster failover tự động hoạt động thế nào (không cần Sentinel)?',
   answer:
     'Mỗi node cluster giao tiếp qua **gossip protocol** (cổng cluster bus). Node phát hiện master không phản hồi trong `cluster-node-timeout` → đánh dấu `PFAIL`; nếu **đa số master** đồng ý → `FAIL`.\n\n' +
@@ -1008,6 +1026,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Cluster',
+  id: 'redis-13mnphl',
   q: '`cluster-require-full-coverage` và `replica-priority` dùng để làm gì?',
   answer:
     '`cluster-require-full-coverage`:\n' +
@@ -1058,6 +1077,7 @@ SS.addQuestions('redis', [
 },
 {
   cat: 'Managed',
+  id: 'redis-bfi964',
   q: 'Triển khai Redis multi-AZ cần cân nhắc gì?',
   answer:
     '- **Replica ở AZ khác master** → mất một AZ vẫn còn bản dự phòng.\n' +

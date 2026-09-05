@@ -1,6 +1,7 @@
 SS.addQuestions('microservices', [
 {
   cat: 'Dữ liệu',
+  id: 'microservices-1clpab1',
   q: 'CQRS là gì? Khi nào dùng trong microservices?',
   answer:
     '**CQRS** (Command Query Responsibility Segregation): tách **model ghi** (command — thay đổi state) khỏi **model đọc** (query — trả dữ liệu).\n\n' +
@@ -69,6 +70,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-1fic5k7',
   q: 'Event Sourcing là gì? Ưu và nhược điểm?',
   answer:
     'Thay vì lưu **trạng thái hiện tại**, lưu **chuỗi event** (mọi thay đổi) là nguồn sự thật. State hiện tại = fold/replay các event. Có thể chụp **snapshot** định kỳ để replay nhanh.\n\n' +
@@ -144,6 +146,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-s9d3pf',
   q: 'Shared database giữa các service — vì sao là anti-pattern?',
   answer:
     'Nhiều service đọc/ghi chung một database (hoặc cùng bảng).\n\n' +
@@ -213,6 +216,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-1l06zfs',
   q: 'Anti-Corruption Layer (ACL) khi tích hợp với hệ legacy?',
   answer:
     'Khi service mới phải tích hợp với hệ thống cũ (legacy monolith, hệ đối tác) có mô hình domain xấu/khác biệt, đừng để mô hình đó "rò rỉ" vào service mới.\n\n' +
@@ -282,6 +286,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-l4li88',
   q: 'Tách một bảng ra service riêng — migrate dữ liệu thế nào?',
   answer:
     'Không "cắt" một phát. Các bước (mở rộng của strangler):\n' +
@@ -345,6 +350,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Bảo mật',
+  id: 'microservices-1fgeomm',
   q: 'Token propagation: khi service A gọi B thay mặt user?',
   answer:
     'Request người dùng vào gateway với một access token (JWT/OAuth2). Khi service A cần gọi service B để hoàn thành request đó, B cần biết cả "user nào" và "service nào" đang gọi.\n\n' +
@@ -413,6 +419,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Bảo mật',
+  id: 'microservices-fj37el',
   q: 'Authorization tập trung (OPA) vs phân tán trong từng service?',
   answer:
     '**Trong từng service**: mỗi service tự chứa logic "ai được làm gì". Gần domain, không có điểm nghẽn, nhưng logic phân quyền rải rác, khó audit toàn cục, dễ lệch.\n\n' +
@@ -502,6 +509,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Bảo mật',
+  id: 'microservices-s0n601',
   q: 'API Gateway auth vs per-service auth — chia trách nhiệm thế nào?',
   answer:
     '**Ở Gateway** (edge):\n' +
@@ -568,6 +576,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Testing',
+  id: 'microservices-1a0xo65',
   q: 'Kim tự tháp kiểm thử cho microservices gồm những tầng nào?',
   answer:
     'Từ nhiều & rẻ (dưới) lên ít & đắt (trên):\n' +
@@ -638,6 +647,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Testing',
+  id: 'microservices-14jar2p',
   q: 'Consumer-Driven Contract testing — quy trình chi tiết?',
   answer:
     '1. **Consumer** viết test dùng thư viện Pact: định nghĩa interaction ("given order 1 exists, when GET /orders/1, then response is {...}"). Test chạy với mock provider → sinh file **pact** (JSON contract).\n' +
@@ -713,6 +723,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-11sw39k',
   q: 'Materialized view / read replica để phục vụ query xuyên service?',
   answer:
     'Query cần data từ nhiều service, chạy thường xuyên, cần nhanh → dựng sẵn thay vì gọi lúc chạy.\n\n' +
@@ -801,6 +812,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-12rxs9p',
   q: 'Multi-tenancy trong microservices: các mô hình cô lập dữ liệu?',
   answer:
     '- **Shared schema** (`tenant_id` mọi bảng): rẻ nhất, một migration; rủi ro rò rỉ nếu quên `WHERE tenant_id` (dùng Row-Level Security để ép); noisy neighbor.\n' +
@@ -875,6 +887,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Bảo mật',
+  id: 'microservices-z91jak',
   q: 'Xoá dữ liệu người dùng (GDPR "right to be forgotten") xuyên nhiều service?',
   answer:
     'Dữ liệu một user nằm rải ở nhiều service (order, payment, support, analytics, event log, backup). Xoá thật ở mọi nơi rất khó.\n\n' +
@@ -948,6 +961,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-108mtlb',
   q: 'Distributed caching giữa các service — nhất quán thế nào?',
   answer:
     'Nhiều service (hoặc nhiều instance) cache cùng loại dữ liệu → khi nguồn đổi, các bản cache bị stale.\n\n' +
@@ -1019,6 +1033,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Bảo mật',
+  id: 'microservices-bxgea4',
   q: 'Secrets rotation và không có secret nào trong code/image?',
   answer:
     'Nguyên tắc:\n' +
@@ -1102,6 +1117,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Testing',
+  id: 'microservices-16mblzl',
   q: 'Quản lý dữ liệu test khi test xuyên nhiều service?',
   answer:
     'Thách thức: một luồng e2e cần dữ liệu nhất quán ở DB của nhiều service (customer tồn tại ở customer-service, sản phẩm ở catalog-service, tồn kho ở inventory-service).\n\n' +
@@ -1175,6 +1191,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-1cb5pye',
   q: 'DTO vs domain model ở ranh giới service — vì sao tách?',
   answer:
     '**Domain model**: các entity/aggregate bên trong service, chứa logic nghiệp vụ, invariant, có thể phức tạp và thay đổi thường xuyên.\n\n' +
@@ -1253,6 +1270,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-zn7a4m',
   q: 'Outbox relay: polling publisher vs CDC (Debezium) — đánh đổi?',
   answer:
     'Cả hai đọc bảng `outbox` (ghi cùng transaction với dữ liệu nghiệp vụ) và publish lên broker.\n\n' +
@@ -1337,6 +1355,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-1r3riig',
   q: 'Tích hợp giữa các bounded context: Shared Kernel, Customer/Supplier, Published Language?',
   answer:
     'Các kiểu quan hệ giữa bounded context (DDD Context Mapping):\n' +
@@ -1405,6 +1424,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-1mhxz0f',
   q: 'Data ownership — vì sao "không service nào đọc trực tiếp DB của service khác"?',
   answer:
     'Mỗi mẩu dữ liệu có **đúng một service sở hữu** — service đó là nguồn sự thật, chịu trách nhiệm tính đúng, và là nơi duy nhất ghi.\n\n' +

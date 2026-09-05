@@ -35,7 +35,8 @@ SS.addQuestions = (topic, arr) => {
   const list = (SS.q[topic] = SS.q[topic] || []);
   for (const item of arr) {
     item.topic = topic;
-    item.id = topic + '-' + hash(item.q);
+    /* id ghim sẵn trong dữ liệu được ưu tiên — nhờ vậy sửa text `q` không làm hỏng permalink */
+    item.id = item.id || topic + '-' + hash(item.q);
     list.push(item);
   }
 };

@@ -1,6 +1,7 @@
 SS.addQuestions('microservices', [
 {
   cat: 'Nền tảng',
+  id: 'microservices-pxr21h',
   q: 'Microservices là gì? Khác kiến trúc monolith ở đâu?',
   answer:
     '**Monolith**: toàn bộ ứng dụng là một đơn vị build/deploy duy nhất, dùng chung một codebase, một database, một process.\n\n' +
@@ -77,6 +78,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-1i74n22',
   q: 'Khi nào KHÔNG nên dùng microservices?',
   answer:
     'Tránh microservices khi:\n' +
@@ -132,6 +134,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-1yfkza7',
   q: 'Bounded Context (DDD) là gì và vai trò khi phân rã service?',
   answer:
     '**Bounded Context** là ranh giới trong đó một mô hình domain (thuật ngữ, quy tắc, dữ liệu) **nhất quán và có nghĩa duy nhất**. Cùng một từ có thể mang nghĩa khác ở context khác.\n\n' +
@@ -197,6 +200,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Phân rã',
+  id: 'microservices-18kdxoc',
   q: 'Chia service theo tiêu chí nào? Vì sao không chia theo entity/layer?',
   answer:
     'Nên chia theo **business capability** / **subdomain** — một nhóm chức năng phục vụ một mục tiêu nghiệp vụ (đặt hàng, thanh toán, giao vận, catalog).\n\n' +
@@ -256,6 +260,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Phân rã',
+  id: 'microservices-1d343a5',
   q: '"Micro" nghĩa là gì? Service nên to hay nhỏ?',
   answer:
     '"Micro" **không** phải "ít dòng code". Kích thước hợp lý được đo bằng:\n' +
@@ -316,6 +321,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Anti-pattern',
+  id: 'microservices-1qw458g',
   q: 'Distributed monolith là gì? Dấu hiệu nhận biết?',
   answer:
     'Distributed monolith = hệ thống có nhiều service nhưng **coupling chặt** như monolith, cộng thêm mọi nhược điểm của phân tán.\n\n' +
@@ -382,6 +388,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-9fsf2v',
   q: 'Database per service — vì sao bắt buộc? Thách thức gì?',
   answer:
     'Mỗi service sở hữu database riêng, **không service nào truy cập DB của service khác** (chỉ qua API/event).\n\n' +
@@ -453,6 +460,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Dữ liệu',
+  id: 'microservices-1lw1mmo',
   q: 'Nhất quán dữ liệu giữa các service khi không có distributed transaction?',
   answer:
     'Chấp nhận **eventual consistency**: sau một thao tác, các service sẽ đồng bộ trạng thái *trong một khoảng thời gian ngắn*, không phải tức thì.\n\n' +
@@ -520,6 +528,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-12ykp8j',
   q: 'Conway\u2019s Law ảnh hưởng thế nào tới kiến trúc microservices?',
   answer:
     '**Conway\u2019s Law**: "hệ thống phần mềm phản chiếu cấu trúc giao tiếp của tổ chức xây ra nó".\n\n' +
@@ -580,6 +589,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Chuyển đổi',
+  id: 'microservices-9tlc9d',
   q: 'Strangler Fig pattern để migrate monolith sang microservices?',
   answer:
     'Không viết lại từ đầu ("big bang rewrite" hầu như luôn thất bại). Thay vào đó **bóp nghẹt dần** monolith:\n\n' +
@@ -652,6 +662,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-17oreg3',
   q: 'Chi phí ẩn của microservices là gì?',
   answer:
     '- **Vận hành**: N pipeline CI/CD, N dashboard, N alert, on-call cho N service.\n' +
@@ -720,6 +731,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-a6rge2',
   q: 'Modular Monolith là gì? Khi nào chọn thay vì microservices?',
   answer:
     'Một deployable duy nhất, nhưng bên trong chia thành **module có ranh giới rõ**: mỗi module có API công khai, không truy cập nội bộ module khác, lý tưởng là schema/bảng riêng trong cùng DB.\n\n' +
@@ -784,6 +796,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Phân rã',
+  id: 'microservices-95xqqw',
   q: 'Polyglot (mỗi service một công nghệ) — lợi và hại?',
   answer:
     'Microservices cho phép mỗi service chọn ngôn ngữ/DB/framework phù hợp nhất.\n\n' +
@@ -849,6 +862,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-935v8u',
   q: 'API contract-first design nghĩa là gì và vì sao quan trọng?',
   answer:
     'Định nghĩa **hợp đồng API trước** (OpenAPI/Protobuf/AsyncAPI schema), review và thống nhất giữa provider và consumer, rồi mới code cả hai phía song song.\n\n' +
@@ -936,6 +950,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Giao tiếp',
+  id: 'microservices-mt4fxo',
   q: 'Versioning service và API — các chiến lược?',
   answer:
     '- **Backward-compatible evolution** (ưu tiên): chỉ **thêm** field optional, không xoá/đổi nghĩa field cũ, không đổi kiểu → consumer cũ vẫn chạy. Áp dụng cho ~90% thay đổi.\n' +
@@ -1008,6 +1023,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-39bo23',
   q: 'Nguyên tắc 12-Factor App liên quan gì tới microservices?',
   answer:
     '12-Factor là bộ nguyên tắc để app "cloud-native", rất phù hợp microservices. Các điểm quan trọng:\n' +
@@ -1092,6 +1108,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-1syeq92',
   q: '"You build it, you run it" và service ownership nghĩa là gì?',
   answer:
     'Team viết service cũng chịu trách nhiệm **vận hành nó trong production**: on-call, xử lý sự cố, monitoring, capacity, cost.\n\n' +
@@ -1167,6 +1184,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Anti-pattern',
+  id: 'microservices-19uakyf',
   q: 'Các anti-pattern phổ biến khi mới bắt đầu microservices?',
   answer:
     '- **Tách quá sớm / quá nhỏ**: chưa hiểu domain đã chia 15 service → distributed monolith.\n' +
@@ -1236,6 +1254,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Phân rã',
+  id: 'microservices-ckvr3l',
   q: 'Làm sao biết ranh giới service đã đúng?',
   answer:
     'Các tín hiệu của ranh giới **tốt**:\n' +
@@ -1298,6 +1317,7 @@ SS.addQuestions('microservices', [
 },
 {
   cat: 'Nền tảng',
+  id: 'microservices-fg9wby',
   q: 'Microservices ảnh hưởng thế nào tới tổ chức và quy trình phát triển?',
   answer:
     'Cần thay đổi kèm theo, không chỉ code:\n' +

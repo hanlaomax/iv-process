@@ -1,6 +1,7 @@
 SS.addQuestions('java', [
 {
   cat: 'JVM & Memory',
+  id: 'java-7vugx8',
   q: 'JVM có những vùng bộ nhớ nào (runtime data areas)?',
   answer:
     '- **Heap**: nơi chứa mọi object và mảng, chia sẻ giữa các thread, do GC quản lý. Gồm Young (Eden + 2 Survivor) và Old gen.\n' +
@@ -65,6 +66,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'JVM & Memory',
+  id: 'java-5iyh9b',
   q: 'Stack và heap khác nhau thế nào về vòng đời và tốc độ?',
   answer:
     '**Stack**: cấp phát/thu hồi theo LIFO khi vào/ra method — cực nhanh, không cần GC. Kích thước nhỏ, cố định. Chứa primitive cục bộ và **reference** tới object.\n\n' +
@@ -112,6 +114,7 @@ SS.addQuestions('java', [
 {
   cat: 'JVM & Memory',
   diagram: 'gc-generational',
+  id: 'java-1dh4nce',
   q: 'Garbage Collection hoạt động thế nào? Generational GC là gì?',
   answer:
     'GC xác định object "rác" bằng **reachability**: bắt đầu từ GC roots (biến static, biến cục bộ trên stack, JNI ref…), object nào không đến được coi là rác.\n\n' +
@@ -159,6 +162,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'JVM & Memory',
+  id: 'java-14ty985',
   q: 'Các GC collector phổ biến (Serial, Parallel, G1, ZGC) — chọn khi nào?',
   answer:
     '- **Serial GC**: một thread, stop-the-world. Phù hợp app nhỏ, heap < ~100MB, môi trường 1 CPU.\n' +
@@ -208,6 +212,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'JVM & Memory',
+  id: 'java-1dnnwt8',
   q: 'Có GC rồi vẫn bị memory leak — vì sao? Các dạng thường gặp?',
   answer:
     'GC chỉ thu hồi object **không còn reachable**. Leak trong Java = giữ reference tới object không còn cần → GC không dám xoá.\n\n' +
@@ -288,6 +293,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'JVM & Memory',
+  id: 'java-pf2wiu',
   q: 'Phân biệt các loại `OutOfMemoryError`.',
   answer:
     '- **Java heap space**: heap thật sự đầy (leak, cache lớn, hoặc `-Xmx` quá nhỏ so với tải).\n' +
@@ -340,6 +346,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-1hp3mkt',
   q: 'Vòng đời của một Thread? `start()` khác `run()` thế nào?',
   answer:
     'Trạng thái: `NEW` → `RUNNABLE` (đang chạy hoặc sẵn sàng) → `BLOCKED` (chờ monitor lock) / `WAITING` / `TIMED_WAITING` (chờ `wait`, `join`, `sleep`, `park`) → `TERMINATED`.\n\n' +
@@ -390,6 +397,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-100kl3k',
   q: '`Runnable`, `Callable` và `Future` khác nhau ra sao?',
   answer:
     '`Runnable`: `void run()`, không trả về, không ném checked exception.\n\n' +
@@ -445,6 +453,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-qj147c',
   q: '`synchronized` hoạt động thế nào? Object lock vs class lock, reentrancy?',
   answer:
     '`synchronized` dùng **monitor** gắn với một object. Chỉ một thread giữ monitor tại một thời điểm; thread khác vào `BLOCKED`.\n\n' +
@@ -500,6 +509,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-atjixx',
   q: '`volatile` đảm bảo gì và KHÔNG đảm bảo gì?',
   answer:
     '`volatile` đảm bảo:\n' +
@@ -552,6 +562,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-kmi9s3',
   q: 'Java Memory Model và quan hệ happens-before là gì?',
   answer:
     'JMM định nghĩa khi nào một ghi của thread này **chắc chắn nhìn thấy** bởi thread khác. Không có quan hệ happens-before thì compiler/CPU được tự do reorder và cache → thread khác có thể thấy giá trị cũ.\n\n' +
@@ -604,6 +615,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-neln9h',
   q: 'Vì sao `wait()`/`notify()` phải gọi trong khối `synchronized`? Vì sao dùng `while` chứ không `if`?',
   answer:
     '`wait()`/`notify()` thao tác trên monitor của object, nên thread gọi **phải đang giữ** monitor đó — nếu không sẽ `IllegalMonitorStateException`. `wait()` nhả monitor và chờ; khi được `notify` nó phải **giành lại** monitor mới chạy tiếp.\n\n' +
@@ -666,6 +678,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-vbpq5w',
   q: 'Deadlock: 4 điều kiện cần và cách phòng tránh?',
   answer:
     'Deadlock xảy ra khi đủ 4 điều kiện Coffman: **mutual exclusion**, **hold and wait**, **no preemption**, **circular wait**.\n\n' +
@@ -733,6 +746,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-6zhk94',
   q: '`ThreadLocal` dùng để làm gì? Vì sao dễ rò rỉ bộ nhớ với thread pool?',
   answer:
     '`ThreadLocal<T>` cho mỗi thread một bản sao biến riêng, truy cập không cần đồng bộ. Dùng để mang context xuyên suốt lời gọi mà không truyền tham số: user hiện tại (Spring Security), transaction/EntityManager, `SimpleDateFormat` (không thread-safe), traceId.\n\n' +
@@ -788,6 +802,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-1mfvhuz',
   q: 'Thread pool (`ThreadPoolExecutor`): các tham số và rejection policy?',
   answer:
     'Tham số cốt lõi: `corePoolSize`, `maximumPoolSize`, `keepAliveTime`, `workQueue`, `threadFactory`, `handler`.\n\n' +
@@ -843,6 +858,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-12wtkys',
   q: 'Cách chọn kích thước thread pool cho tác vụ CPU-bound và IO-bound?',
   answer:
     '**CPU-bound** (tính toán thuần): số thread ≈ số nhân (`Runtime.getRuntime().availableProcessors()`), hoặc +1 để bù cache miss. Thêm thread chỉ tăng context switch, không tăng thông lượng.\n\n' +
@@ -891,6 +907,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-1l0u0d4',
   q: '`CompletableFuture`: compose, combine và xử lý exception thế nào?',
   answer:
     'Tạo: `supplyAsync(() -> ..., executor)`.\n\n' +
@@ -948,6 +965,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-1t40o97',
   q: 'CAS là gì? `AtomicInteger` hoạt động thế nào và ABA problem?',
   answer:
     '**CAS (Compare-And-Swap)**: lệnh CPU nguyên tử — "nếu ô nhớ đang là giá trị kỳ vọng thì đặt giá trị mới, trả về thành công/thất bại". Là nền tảng đồng bộ **lock-free**.\n\n' +
@@ -1001,6 +1019,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-5bhrjj',
   q: '`Thread.sleep()` và `Object.wait()` khác nhau thế nào?',
   answer:
     '`Thread.sleep(ms)`: method static, tạm dừng thread **hiện tại**, **không nhả** monitor nào đang giữ. Dùng để trì hoãn theo thời gian.\n\n' +
@@ -1054,6 +1073,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Concurrency',
+  id: 'java-afnek4',
   q: '`ReentrantLock` khác `synchronized` ở điểm nào?',
   answer:
     '`ReentrantLock` (explicit lock) cho thêm:\n' +

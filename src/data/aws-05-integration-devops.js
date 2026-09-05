@@ -1,6 +1,7 @@
 SS.addQuestions('aws', [
 {
   cat: 'Messaging',
+  id: 'aws-h96qnt',
   q: 'SQS Standard và FIFO khác nhau? Visibility timeout và DLQ?',
   answer:
     '- **Standard**: throughput gần như vô hạn, **at-least-once** (có thể trùng), **best-effort ordering** (không đảm bảo thứ tự).\n' +
@@ -56,6 +57,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Messaging',
+  id: 'aws-1qyrmu2',
   q: 'SQS long polling và message retention?',
   answer:
     '- **Short polling** (mặc định, `WaitTimeSeconds=0`): trả về ngay, có thể rỗng dù có message (chỉ hỏi một tập server) → tốn request rỗng, tăng chi phí và latency.\n' +
@@ -108,6 +110,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Messaging',
+  id: 'aws-28ycl6',
   q: 'SNS: pub/sub, fanout và filter policy?',
   answer:
     'SNS là pub/sub: publisher gửi tới **topic**, SNS đẩy tới mọi **subscriber** (SQS, Lambda, HTTP/S, email, SMS, Kinesis Firehose).\n\n' +
@@ -172,6 +175,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Messaging',
+  id: 'aws-1j1opa5',
   q: 'EventBridge khác SNS thế nào? Khi nào dùng?',
   answer:
     'EventBridge là **event bus** hướng tới kiến trúc event-driven doanh nghiệp:\n' +
@@ -242,6 +246,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Streaming',
+  id: 'aws-1v2jmbl',
   q: 'Kinesis Data Streams, Firehose và Managed Service for Flink khác nhau?',
   answer:
     '- **Data Streams**: log realtime có **shard**, retention 1–365 ngày, consumer đọc theo offset, **replay được**, latency ~200ms. Bạn quản lý consumer (KCL/Lambda). Giống Kafka thu nhỏ.\n' +
@@ -298,6 +303,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Streaming',
+  id: 'aws-wdab1p',
   q: 'Kinesis: shard, partition key và resharding?',
   answer:
     'Mỗi **shard**: ghi 1 MB/s hoặc 1.000 records/s; đọc 2 MB/s (shared) hoặc 2 MB/s/consumer (enhanced fan-out).\n\n' +
@@ -354,6 +360,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Orchestration',
+  id: 'aws-y8hvgu',
   q: 'Step Functions: state machine, Standard vs Express?',
   answer:
     'Step Functions điều phối workflow bằng **state machine** (JSON/ASL): các state `Task`, `Choice`, `Parallel`, `Map`, `Wait`, `Retry`/`Catch`. Tích hợp trực tiếp 200+ dịch vụ AWS (không cần Lambda "keo").\n\n' +
@@ -439,6 +446,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Observability',
+  id: 'aws-3vci4l',
   q: 'CloudWatch: metrics, alarms, Logs và Logs Insights?',
   answer:
     '- **Metrics**: time-series (namespace/dimension). AWS phát sẵn nhiều; bạn `PutMetricData` custom hoặc dùng **EMF** (Embedded Metric Format — log JSON có cấu trúc, CloudWatch tự trích metric).\n' +
@@ -503,6 +511,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Observability',
+  id: 'aws-1exlq7z',
   q: 'AWS X-Ray / distributed tracing giải quyết vấn đề gì?',
   answer:
     'Trong hệ microservice, một request đi qua API Gateway → Lambda → DynamoDB → SQS → Lambda khác. Khi chậm/lỗi, log rời rạc không cho biết **khâu nào**.\n\n' +
@@ -561,6 +570,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IaC',
+  id: 'aws-1gkgd6p',
   q: 'CloudFormation: stack, change set, drift, nested/StackSets?',
   answer:
     '- **Stack**: tập tài nguyên quản lý cùng nhau từ một template. Xoá stack = xoá tài nguyên (trừ `DeletionPolicy: Retain`).\n' +
@@ -643,6 +653,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IaC',
+  id: 'aws-x1moor',
   q: 'CloudFormation, CDK và Terraform — so sánh?',
   answer:
     '- **CloudFormation**: native AWS, YAML/JSON khai báo, không cần state file (AWS giữ), rollback tự động, chỉ AWS.\n' +
@@ -697,6 +708,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'CI/CD',
+  id: 'aws-12b3tqh',
   q: 'CodePipeline, CodeBuild, CodeDeploy — vai trò mỗi cái?',
   answer:
     '- **CodePipeline**: orchestrator — định nghĩa các **stage** (Source → Build → Test → Deploy → Approve) và luồng giữa chúng, trigger theo commit.\n' +
@@ -768,6 +780,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'CI/CD',
+  id: 'aws-130bmr7',
   q: 'Chiến lược triển khai trên AWS: rolling, blue/green, canary?',
   answer:
     '- **Rolling**: thay dần từng batch instance/task. Ít tài nguyên thừa, nhưng trong lúc deploy chạy lẫn 2 version; rollback = rolling ngược (chậm).\n' +
@@ -828,6 +841,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Vận hành',
+  id: 'aws-vwdpq8',
   q: 'AWS Systems Manager (SSM): Session Manager, Run Command, Parameter Store?',
   answer:
     '- **Session Manager**: shell vào EC2/on-prem **không cần SSH/bastion/port 22 mở** — qua SSM agent + IAM, có log & audit toàn bộ phiên.\n' +
@@ -888,6 +902,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Chi phí',
+  id: 'aws-pxks6y',
   q: 'Các chiến lược tối ưu chi phí AWS chính?',
   answer:
     '- **Right-sizing**: dùng Compute Optimizer / CloudWatch để phát hiện instance quá khổ.\n' +
@@ -954,6 +969,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Vận hành',
+  id: 'aws-69teoi',
   q: 'Auto scaling cho Lambda, DynamoDB, ECS hoạt động thế nào?',
   answer:
     '- **Lambda**: tự scale theo số invoke đồng thời (burst 500–3000 tuỳ region, rồi +500/phút), tới account concurrency limit. Reserved/provisioned concurrency để kiểm soát.\n' +
@@ -1012,6 +1028,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Tuân thủ',
+  id: 'aws-pyma0d',
   q: 'AWS Config rules và conformance pack dùng để làm gì?',
   answer:
     'Config rule đánh giá cấu hình tài nguyên liên tục và đánh dấu **COMPLIANT / NON_COMPLIANT**:\n' +
@@ -1074,6 +1091,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Độ tin cậy',
+  id: 'aws-1aqpax6',
   q: 'Các chiến lược Disaster Recovery trên AWS (theo RTO/RPO)?',
   answer:
     'Từ rẻ/chậm tới đắt/nhanh:\n' +
@@ -1136,6 +1154,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Messaging',
+  id: 'aws-1x4t8l',
   q: 'SQS + Lambda: partial batch failure và batching xử lý thế nào?',
   answer:
     'Lambda poll SQS theo lô (`batchSize` tới 10.000 cho standard, cửa sổ `maxBatchingWindow`). Mặc định: nếu **function ném lỗi**, **cả lô** quay lại queue → message đã xử lý thành công bị xử lý lại.\n\n' +
@@ -1192,6 +1211,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Observability',
+  id: 'aws-1iy8akn',
   q: 'Metrics, logs và traces — vai trò mỗi loại trong observability trên AWS?',
   answer:
     '- **Metrics** (CloudWatch): số liệu tổng hợp theo thời gian — rẻ để lưu lâu, tốt cho dashboard, alarm, xu hướng ("có vấn đề không?").\n' +

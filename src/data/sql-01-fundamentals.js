@@ -2,6 +2,7 @@ SS.addQuestions('sql', [
 {
   cat: 'JOIN',
   diagram: 'sql-joins',
+  id: 'sql-1r7uh9y',
   q: 'Các loại JOIN (INNER, LEFT/RIGHT, FULL, CROSS, SELF) khác nhau thế nào?',
   answer:
     '- **INNER JOIN**: chỉ giữ hàng có khớp ở **cả hai** bảng.\n' +
@@ -70,6 +71,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'JOIN',
+  id: 'sql-1odpr9p',
   q: 'LEFT JOIN mà đặt điều kiện bảng phải ở `WHERE` vs ở `ON` — khác gì?',
   answer:
     'Điều kiện ở **`ON`**: áp dụng **khi ghép** — hàng bảng trái không khớp vẫn được giữ (với NULL bên phải).\n\n' +
@@ -142,6 +144,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-1i8sqkg',
   q: 'Thứ tự xử lý logic của một câu SELECT?',
   answer:
     'Thứ tự **logic** (không phải thứ tự viết):\n' +
@@ -203,6 +206,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-d9lh7i',
   q: '`WHERE` và `HAVING` khác nhau thế nào?',
   answer:
     '`WHERE` lọc **hàng riêng lẻ** trước khi gom nhóm — không dùng được hàm aggregate.\n\n' +
@@ -276,6 +280,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Subquery',
+  id: 'sql-1dcvu8o',
   q: 'Correlated subquery vs non-correlated? `IN` vs `EXISTS` vs `JOIN`?',
   answer:
     '- **Non-correlated**: subquery chạy **một lần**, độc lập với hàng ngoài. `WHERE id IN (SELECT ...)`.\n' +
@@ -352,6 +357,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'NULL',
+  id: 'sql-42l2xv',
   q: 'Logic ba giá trị (three-valued logic) và các bẫy NULL?',
   answer:
     'SQL có `TRUE`, `FALSE`, `UNKNOWN`. Bất kỳ so sánh nào với `NULL` cho `UNKNOWN`:\n' +
@@ -419,6 +425,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-1vg7zr',
   q: '`DISTINCT` và `GROUP BY` — khác nhau và khi nào dùng cái nào?',
   answer:
     '`SELECT DISTINCT a, b FROM t` và `SELECT a, b FROM t GROUP BY a, b` cho **cùng kết quả** (các tổ hợp duy nhất) và thường cùng plan.\n\n' +
@@ -487,6 +494,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tập hợp',
+  id: 'sql-upsg4z',
   q: '`UNION` vs `UNION ALL`, `INTERSECT`, `EXCEPT`?',
   answer:
     '- **`UNION`**: gộp hai tập kết quả và **loại trùng** (thêm bước sort/hash distinct — tốn kém).\n' +
@@ -546,6 +554,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-jce3ah',
   q: 'Conditional aggregation (aggregate + CASE / FILTER)?',
   answer:
     'Đếm/tổng có điều kiện trong **một** lần quét, thay vì nhiều subquery:\n' +
@@ -623,6 +632,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'DML',
+  id: 'sql-1f35rr2',
   q: 'Upsert: `INSERT ... ON CONFLICT` / `MERGE` hoạt động thế nào?',
   answer:
     '"Insert nếu chưa có, update nếu đã có" — nguyên tử ở mức câu lệnh.\n\n' +
@@ -682,6 +692,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'DDL',
+  id: 'sql-1dlydly',
   q: 'Khoá ngoại (foreign key) và referential actions (CASCADE, SET NULL, RESTRICT)?',
   answer:
     'FK đảm bảo giá trị cột con **phải tồn tại** ở bảng cha (referential integrity). Khi hàng cha bị xoá/sửa key:\n' +
@@ -745,6 +756,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'DML',
+  id: 'sql-1parr4w',
   q: '`DELETE`, `TRUNCATE`, `DROP` khác nhau thế nào?',
   answer:
     '- **`DELETE FROM t WHERE ...`**: DML, xoá từng hàng, ghi log từng hàng (WAL/redo), kích hoạt trigger, có thể rollback, giữ nguyên bảng + cấu trúc. Chậm cho bảng lớn, để lại "xác" cần vacuum (Postgres).\n' +
@@ -801,6 +813,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'DDL',
+  id: 'sql-pp3g44',
   q: 'Primary key, UNIQUE và NOT NULL — vai trò mỗi ràng buộc?',
   answer:
     '- **NOT NULL**: cột bắt buộc có giá trị.\n' +
@@ -861,6 +874,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-1aix3m',
   q: '`CASE` expression dùng để làm gì? `COALESCE` vs `CASE`?',
   answer:
     '`CASE` là biểu thức điều kiện, dùng ở `SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, aggregate:\n' +
@@ -922,6 +936,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-1eeo2zn',
   q: 'Semi-join, anti-join và "tìm hàng không có cặp khớp"?',
   answer:
     '- **Semi-join**: "có tồn tại ít nhất một hàng khớp bên kia" — trả về hàng bảng trái, không nhân bản. Viết bằng `EXISTS` hoặc `IN`.\n' +
@@ -996,6 +1011,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'sql-99xaw9',
   q: 'Ép kiểu ngầm (implicit coercion) gây bug và mất index như thế nào?',
   answer:
     'Khi so sánh hai kiểu khác nhau, DB ép một bên. Hậu quả:\n' +
@@ -1050,6 +1066,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-1hbcbum',
   q: '`LIMIT` / `OFFSET` cho phân trang — hoạt động và hạn chế?',
   answer:
     '`ORDER BY x LIMIT 20 OFFSET 10000`: DB phải **tạo ra và bỏ đi** 10.000 hàng đầu trước khi trả 20 hàng → càng trang sau càng chậm (O(offset)).\n\n' +
@@ -1104,6 +1121,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'DDL',
+  id: 'sql-ybs5ff',
   q: 'DDL, DML, DCL, TCL là gì?',
   answer:
     '- **DDL (Data Definition)**: `CREATE`, `ALTER`, `DROP`, `TRUNCATE` — định nghĩa cấu trúc. Nhiều DB **auto-commit** DDL (không rollback được — trừ Postgres có DDL transactional).\n' +
@@ -1170,6 +1188,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Kiểu dữ liệu',
+  id: 'sql-hc6xnm',
   q: 'Số học ngày tháng cơ bản (date arithmetic) và múi giờ?',
   answer:
     '- Trừ hai ngày → khoảng (`interval` trong Postgres, số ngày trong MySQL `DATEDIFF`).\n' +
@@ -1237,6 +1256,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Truy vấn',
+  id: 'sql-gaw88d',
   q: '`GROUP BY` semantics: cột nào được phép trong SELECT?',
   answer:
     'Chuẩn SQL: mọi cột trong `SELECT` (không nằm trong aggregate) **phải** xuất hiện trong `GROUP BY` — vì mỗi nhóm chỉ trả một hàng, cột không gom thì "chọn giá trị nào?".\n\n' +

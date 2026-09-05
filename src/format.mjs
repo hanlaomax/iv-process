@@ -31,6 +31,10 @@ export function fmt(text) {
         .filter((b) => b.trim() !== '')
         .map((block) => {
           const lines = block.split(/\n/);
+          /* '## Tiêu đề' -> heading nhỏ chia mục cho câu trả lời dài.
+             Cố ý KHÔNG dùng **đậm** làm tiêu đề vì relate.mjs lấy term in đậm làm chip khái niệm. */
+          if (lines.length === 1 && /^#{2,3}\s+/.test(lines[0]))
+            return '<h5>' + inline(lines[0].replace(/^#{2,3}\s+/, '')) + '</h5>';
           if (lines.length >= 2 && lines.every((l) => /^\s*\|.*\|\s*$/.test(l))) {
             const rows = lines
               .map((l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()))
@@ -71,6 +75,7 @@ export function boldTerms(text) {
 export function plain(text) {
   return String(text)
     .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^#{2,3}\s+/gm, '')
     .replace(/[`*|]/g, '')
     .replace(/\s*\n\s*/g, ' ')
     .replace(/\s{2,}/g, ' ')

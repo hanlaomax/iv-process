@@ -1,6 +1,7 @@
 SS.addQuestions('kafka', [
 {
   cat: 'Producer',
+  id: 'kafka-1ueur2z',
   q: '`acks` = 0 / 1 / all có ý nghĩa gì?',
   answer:
     '- **acks=0**: producer không chờ xác nhận, "bắn và quên". Throughput cao nhất, mất message nếu leader chưa nhận. Dùng cho metrics/log chấp nhận mất.\n' +
@@ -48,6 +49,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-85c78a',
   q: '`min.insync.replicas` tương tác với `acks=all` như thế nào?',
   answer:
     '`min.insync.replicas` (cấu hình ở **topic/broker**) là số replica tối thiểu phải nằm trong ISR để một lần ghi `acks=all` được chấp nhận.\n\n' +
@@ -95,6 +97,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-3eqkz7',
   q: 'Idempotent producer là gì? Nó chống loại trùng lặp nào?',
   answer:
     'Bật `enable.idempotence=true` (mặc định từ Kafka 3.0). Producer được cấp một **PID (producer id)** và gắn **sequence number** tăng dần cho mỗi (partition). Broker nhớ sequence cuối cùng đã nhận cho mỗi (PID, partition).\n\n' +
@@ -143,6 +146,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-o0r1cv',
   q: '`linger.ms` và `batch.size` ảnh hưởng gì tới throughput?',
   answer:
     'Producer gom message theo (topic, partition) vào **batch**. Gửi khi: batch đầy `batch.size` (byte), HOẶC đã chờ `linger.ms`.\n\n' +
@@ -191,6 +195,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-1ofiufq',
   q: 'Các thuật toán nén (compression.type) — chọn cái nào?',
   answer:
     'Nén áp dụng trên **cả batch** (nhiều message) → tỉ lệ nén tốt hơn nén từng message.\n' +
@@ -242,6 +247,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-19pzddt',
   q: 'Partitioner mặc định hoạt động thế nào? Khi nào viết custom?',
   answer:
     '- **Có key**: `partition = murmur2(key) % numPartitions` → cùng key luôn cùng partition (miễn số partition không đổi).\n' +
@@ -294,6 +300,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-1pdieaq',
   q: '`buffer.memory`, `max.block.ms` và backpressure ở producer?',
   answer:
     'Producer `send()` là **bất đồng bộ**: message được đưa vào **buffer** (`buffer.memory`, mặc định 32MB) và một I/O thread nền gửi đi.\n\n' +
@@ -341,6 +348,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-1tmcp4i',
   q: '`retries`, `delivery.timeout.ms` và `max.in.flight` ảnh hưởng thứ tự thế nào?',
   answer:
     '- `retries` (mặc định `Integer.MAX_VALUE`): số lần thử lại lỗi tạm thời.\n' +
@@ -384,6 +392,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-grvwvj',
   q: 'KafkaProducer có thread-safe không? Nên tạo bao nhiêu instance?',
   answer:
     '`KafkaProducer` **thread-safe** và được thiết kế để **dùng chung giữa nhiều thread**. Tạo một instance (hoặc một pool nhỏ) cho toàn ứng dụng và tái sử dụng.\n\n' +
@@ -438,6 +447,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-hditaw',
   q: 'Xử lý lỗi gửi message thế nào (callback, exception)?',
   answer:
     '`producer.send(record, (metadata, exception) -> { ... })` — callback chạy trên I/O thread khi có kết quả.\n\n' +
@@ -501,6 +511,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-wl6191',
   q: 'Producer transactions (`transactional.id`) dùng để làm gì?',
   answer:
     'Bật `enable.idempotence=true` + đặt `transactional.id` (ổn định cho mỗi instance logic). Cho phép:\n' +
@@ -558,6 +569,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Serialization',
+  id: 'kafka-1jerow4',
   q: 'Schema Registry là gì? Avro, JSON Schema, Protobuf khác nhau thế nào?',
   answer:
     'Message trong Kafka chỉ là byte. **Schema Registry** (Confluent/Apicurio) lưu schema tập trung, gán **schema id**; producer serialize theo schema và nhúng id vào message, consumer lấy schema theo id để deserialize.\n\n' +
@@ -607,6 +619,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-u7hoc4',
   q: 'Message headers trong Kafka dùng để làm gì?',
   answer:
     'Ngoài key và value, mỗi record có **headers** — danh sách cặp `(String, byte[])`. Không ảnh hưởng partitioning hay compaction.\n\n' +
@@ -663,6 +676,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-2yk1k9',
   q: 'Xử lý message quá lớn (large message) thế nào?',
   answer:
     'Giới hạn liên quan: `message.max.bytes` (broker), `max.request.size` (producer, mặc định 1MB), `max.partition.fetch.bytes` / `fetch.max.bytes` (consumer). Message vượt → `RecordTooLargeException`.\n\n' +
@@ -715,6 +729,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-zx22q9',
   q: 'Những metric quan trọng của producer cần theo dõi?',
   answer:
     '- `record-error-rate` / `record-retry-rate`: lỗi và retry tăng → broker/mạng có vấn đề.\n' +
@@ -769,6 +784,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-19qyura',
   q: 'Producer nên xử lý thế nào khi cụm Kafka tạm thời không khả dụng?',
   answer:
     'Mặc định producer khá bền: retry lỗi tạm thời tới `delivery.timeout.ms`, buffer giữ message, `send()` block khi buffer đầy tới `max.block.ms`.\n\n' +
@@ -822,6 +838,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-z5ixbq',
   q: 'Gửi message tới một partition cụ thể — nên hay không?',
   answer:
     '`new ProducerRecord<>(topic, partitionNumber, key, value)` chỉ định partition trực tiếp, bỏ qua partitioner.\n\n' +
@@ -869,6 +886,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-nrfonp',
   q: 'Tinh chỉnh producer cho throughput cao gồm những gì?',
   answer:
     '- `batch.size` lớn hơn (64–256KB) + `linger.ms` 10–100ms → batch to.\n' +
@@ -929,6 +947,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-13s26gm',
   q: '`flush()` và `close()` của producer — khi nào gọi, khác nhau gì?',
   answer:
     '`flush()`: chặn cho tới khi **mọi record đang trong buffer** được gửi và ack (hoặc fail). Producer vẫn dùng tiếp được sau đó. Dùng khi cần "đảm bảo mọi thứ đã đi" tại một checkpoint.\n\n' +
@@ -982,6 +1001,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Producer',
+  id: 'kafka-1aeny5b',
   q: 'Điều gì xảy ra khi producer gửi message với key = null?',
   answer:
     'Key null hợp lệ. Hệ quả:\n' +

@@ -1,6 +1,7 @@
 SS.addQuestions('aws', [
 {
   cat: 'Hạ tầng toàn cầu',
+  id: 'aws-1ipg2zz',
   q: 'Region, Availability Zone và Edge Location khác nhau thế nào?',
   answer:
     '- **Region**: một vùng địa lý (ví dụ `ap-southeast-1` Singapore), độc lập về mặt vận hành và dữ liệu. Bạn chọn region theo độ trễ tới người dùng, yêu cầu tuân thủ (data residency), giá, và tính khả dụng của dịch vụ.\n' +
@@ -50,6 +51,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-163gkmf',
   q: 'IAM user, group, role và policy là gì?',
   answer:
     '- **Policy**: tài liệu JSON định nghĩa quyền — `Effect` (Allow/Deny), `Action`, `Resource`, `Condition`.\n' +
@@ -119,6 +121,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-m6hrj',
   q: 'Khi nào dùng IAM Role thay vì IAM User?',
   answer:
     'Dùng **Role** khi:\n' +
@@ -185,6 +188,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-187x5i1',
   q: 'Logic đánh giá quyền của IAM (policy evaluation)?',
   answer:
     'Khi một principal gọi API, AWS gộp mọi policy áp dụng (identity-based, resource-based, permission boundary, SCP, session policy) và đánh giá:\n' +
@@ -262,6 +266,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-1pt1d7q',
   q: 'STS và AssumeRole hoạt động thế nào?',
   answer:
     'STS (Security Token Service) cấp **credential tạm thời**: access key id + secret + **session token**, có thời hạn (15 phút–12 giờ).\n\n' +
@@ -318,6 +323,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-1wy3jf2',
   q: 'Identity-based policy và resource-based policy khác nhau thế nào?',
   answer:
     '- **Identity-based**: gắn vào user/group/role. Nói "danh tính này được làm gì, ở đâu".\n' +
@@ -384,6 +390,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-1fxefsi',
   q: 'Permission boundary dùng để làm gì?',
   answer:
     'Permission boundary là một **managed policy** gắn vào user/role, đặt **trần quyền tối đa** mà identity đó có thể có — dù identity policy cấp rộng hơn.\n\n' +
@@ -444,6 +451,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Organizations',
+  id: 'aws-yv2egx',
   q: 'AWS Organizations và SCP là gì?',
   answer:
     '**AWS Organizations**: quản lý nhiều AWS account tập trung, gộp billing, tổ chức account thành cây **OU (Organizational Unit)**.\n\n' +
@@ -513,6 +521,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Bảo mật',
+  id: 'aws-2zcr56',
   q: 'Shared Responsibility Model của AWS nói gì?',
   answer:
     'AWS chịu trách nhiệm **security OF the cloud**: hạ tầng vật lý, phần cứng, mạng nền, virtualization, và với dịch vụ managed thì cả patching OS/engine.\n\n' +
@@ -565,6 +574,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Well-Architected',
+  id: 'aws-6mholu',
   q: 'Well-Architected Framework có những trụ cột nào?',
   answer:
     'Sáu trụ cột:\n' +
@@ -626,6 +636,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Bảo mật',
+  id: 'aws-1q7oo90',
   q: 'KMS và envelope encryption hoạt động thế nào?',
   answer:
     'KMS quản lý **CMK (Customer Master Key)** — key gốc không bao giờ rời KMS.\n\n' +
@@ -679,6 +690,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Bảo mật',
+  id: 'aws-gt5vhy',
   q: 'Secrets Manager và SSM Parameter Store — chọn cái nào?',
   answer:
     '- **Parameter Store** (SSM): lưu config & secret, phân cấp theo path, `String`/`StringList`/`SecureString` (mã hoá KMS). **Standard tier miễn phí**, không tự xoay vòng.\n' +
@@ -731,6 +743,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Quan sát & tuân thủ',
+  id: 'aws-1nrt0lq',
   q: 'CloudTrail, CloudWatch và AWS Config khác nhau thế nào?',
   answer:
     '- **CloudTrail**: nhật ký **API call** — ai gọi API gì, khi nào, từ IP nào. Dùng cho audit bảo mật, điều tra sự cố ("ai xoá bucket này?").\n' +
@@ -783,6 +796,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'IAM',
+  id: 'aws-16wheh0',
   q: 'Chuỗi tìm credential (credential provider chain) của AWS SDK/CLI?',
   answer:
     'SDK tìm credential theo thứ tự (rút gọn):\n' +
@@ -839,6 +853,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Hạ tầng toàn cầu',
+  id: 'aws-1ogycxd',
   q: 'Global service và regional service — phân biệt và ví dụ?',
   answer:
     'Hầu hết dịch vụ là **regional**: tài nguyên tồn tại trong một region, endpoint có tên region (`ec2.ap-southeast-1.amazonaws.com`), dữ liệu không tự rời region.\n\n' +
@@ -890,6 +905,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Bảo mật',
+  id: 'aws-2dglth',
   q: 'Bảo vệ root account như thế nào?',
   answer:
     '- **Bật MFA** cho root (ưu tiên hardware key).\n' +
@@ -952,6 +968,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Vận hành',
+  id: 'aws-12dupj9',
   q: 'Service quotas (limits) là gì và xử lý thế nào?',
   answer:
     'Mỗi dịch vụ có quota mặc định theo account/region: số VPC, số EC2 vCPU theo family, Lambda concurrent executions, số rule EventBridge...\n\n' +
@@ -1008,6 +1025,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Organizations',
+  id: 'aws-10n5zy5',
   q: 'Chiến lược multi-account (landing zone) mang lại lợi ích gì?',
   answer:
     'Thay vì một account khổng lồ, tách theo ranh giới: theo môi trường (prod/staging/dev), theo team/sản phẩm, theo chức năng (security, logging, shared services).\n\n' +
@@ -1070,6 +1088,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Vận hành',
+  id: 'aws-1b83l6e',
   q: 'Tag trên AWS dùng để làm gì? Cost allocation tag?',
   answer:
     'Tag là cặp key-value gắn vào tài nguyên. Dùng cho:\n' +
@@ -1130,6 +1149,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Bảo mật',
+  id: 'aws-1dwbkyb',
   q: 'IRSA (IAM Roles for Service Accounts) trên EKS là gì?',
   answer:
     'Trước IRSA, pod trên EKS dùng chung **instance role của node** → mọi pod có cùng quyền (quá rộng).\n\n' +

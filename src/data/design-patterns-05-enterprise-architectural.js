@@ -1,6 +1,7 @@
 SS.addQuestions('design-patterns', [
 {
   cat: 'Enterprise',
+  id: 'design-patterns-1j3t7dx',
   q: 'Repository pattern — vấn đề và cách hiện thực?',
   answer:
     'Repository là một **abstraction giống collection** cho việc truy cập aggregate/entity, che giấu chi tiết lưu trữ (SQL, ORM, NoSQL, HTTP).\n\n' +
@@ -72,6 +73,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-h3xijz',
   q: 'Repository vs DAO — khác nhau thế nào?',
   answer:
     '- **DAO (Data Access Object)**: gần với **bảng/nguồn dữ liệu**. Method theo thao tác dữ liệu: `insert`, `update`, `delete`, `selectById`, `selectAll`. Thường trả về row/record/DTO. Tư duy data-centric.\n' +
@@ -146,6 +148,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-1u9qn6o',
   q: 'Unit of Work pattern là gì?',
   answer:
     'Theo dõi mọi object bị **thay đổi** trong một transaction nghiệp vụ (new/dirty/removed), rồi **flush** tất cả xuống DB trong **một transaction** khi commit — thay vì mỗi thay đổi ghi ngay.\n\n' +
@@ -217,6 +220,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-1hovo92',
   q: 'DTO pattern — khi nào và vì sao?',
   answer:
     'DTO (Data Transfer Object): object **phẳng, không hành vi**, chỉ để **truyền dữ liệu qua một ranh giới** (API response/request, giữa các tầng, giữa service, giao diện remote).\n\n' +
@@ -294,6 +298,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'DDD',
+  id: 'design-patterns-m00ac3',
   q: 'Value Object là gì? Khác Entity thế nào?',
   answer:
     '- **Entity**: có **định danh** (id) xuyên suốt vòng đời; hai entity "bằng nhau" nếu **cùng id** dù thuộc tính khác. Có thể thay đổi (mutable). Ví dụ: `Customer`, `Order`.\n' +
@@ -365,6 +370,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'DDD',
+  id: 'design-patterns-14znx1y',
   q: 'Aggregate và Aggregate Root là gì?',
   answer:
     '**Aggregate**: một **cụm** entity + value object được đối xử như **một đơn vị** cho thay đổi dữ liệu, có **ranh giới nhất quán** (consistency boundary).\n\n' +
@@ -439,6 +445,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'DDD',
+  id: 'design-patterns-o5snnn',
   q: 'Domain Events — pattern và cách dùng?',
   answer:
     'Một **domain event** ghi lại "điều gì đó có ý nghĩa nghiệp vụ đã xảy ra" (`OrderPlaced`, `PaymentReceived`, `SubscriptionCancelled`) — quá khứ, bất biến.\n\n' +
@@ -518,6 +525,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-13u5wnn',
   q: 'Specification pattern — đóng gói business rule thành object?',
   answer:
     'Đóng gói một **điều kiện nghiệp vụ** (predicate) thành một object có thể **kết hợp** (`and`, `or`, `not`) và tái dùng.\n\n' +
@@ -595,6 +603,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-uc8och',
   q: 'Ports & Adapters (Hexagonal Architecture) là gì?',
   answer:
     'Đặt **domain/application logic ở trung tâm**, hoàn toàn không biết gì về công nghệ bên ngoài (DB, HTTP, message queue, UI).\n\n' +
@@ -678,6 +687,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-q7fi2x',
   q: 'Clean Architecture / Onion Architecture — Dependency Rule?',
   answer:
     'Các vòng đồng tâm, phụ thuộc **chỉ hướng vào trong**:\n' +
@@ -754,6 +764,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-1sgltpm',
   q: 'Layered architecture truyền thống vs Hexagonal — khác biệt cốt lõi?',
   answer:
     '**Layered (N-tier)**: `Presentation → Application → Domain → Infrastructure`, phụ thuộc **từ trên xuống**. Vấn đề: **Domain phụ thuộc Infrastructure** (repository implementation, ORM) → domain dính công nghệ; đổi DB ảnh hưởng domain; test domain cần DB.\n\n' +
@@ -820,6 +831,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-8kytuy',
   q: 'Service Layer pattern — vai trò và ranh giới?',
   answer:
     'Một tầng định nghĩa **ranh giới của ứng dụng** và tập **use case/operation** mà nó cung cấp cho client (controller, message handler, batch job). Mỗi method service layer = một **giao dịch nghiệp vụ** hoàn chỉnh.\n\n' +
@@ -896,6 +908,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-18bpg3a',
   q: 'Active Record vs Data Mapper?',
   answer:
     '- **Active Record**: object **vừa mang dữ liệu vừa biết cách tự lưu**: `user.save()`, `User.find(1)`, `user.delete()`. Object khớp 1-1 với row bảng. Đơn giản, ít code, tốt cho CRUD. Nhược: domain object coupling với DB; khó test; khó tách domain model khỏi schema; logic persistence lẫn logic nghiệp vụ. (Rails ActiveRecord, Eloquent).\n\n' +
@@ -962,6 +975,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Enterprise',
+  id: 'design-patterns-157mr5n',
   q: 'Anti-Corruption Layer (ACL) — pattern chi tiết?',
   answer:
     'Khi tích hợp với hệ thống/context có mô hình **khác biệt hoặc kém chất lượng** (legacy, đối tác, một bounded context khác), đặt một lớp **dịch thuật** ở biên để mô hình xấu đó **không rò rỉ** vào domain sạch của bạn.\n\n' +
@@ -1044,6 +1058,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-rcg9nu',
   q: 'Làm sao giữ domain layer "thuần" (không phụ thuộc framework)?',
   answer:
     '- **Không annotation framework trong domain**: không `@Entity`, `@Component`, `@JsonProperty` trên domain object (dùng mapping riêng ở tầng infra, hoặc JPA XML mapping, hoặc entity riêng ≠ domain object).\n' +
@@ -1132,6 +1147,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-1dqolfg',
   q: 'CQRS như một pattern kiến trúc — tách read và write model?',
   answer:
     'Tách hoàn toàn:\n' +
@@ -1211,6 +1227,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-spjcgc',
   q: 'Transactional Outbox như một pattern kiến trúc — vị trí và trách nhiệm?',
   answer:
     'Giải quyết **dual write** (ghi DB + publish event không nguyên tử) ở tầng kiến trúc:\n\n' +
@@ -1299,6 +1316,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-ykai1x',
   q: 'CQRS: rebuild read model / versioning projection khi logic thay đổi?',
   answer:
     'Read model được dựng từ event bằng **projection** (handler cập nhật view khi có event). Khi bạn phát hiện bug projection, hoặc cần thêm cột/view mới:\n\n' +
@@ -1374,6 +1392,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'DDD',
+  id: 'design-patterns-1o8ufrs',
   q: 'Có nên tách domain model khỏi persistence model (JPA entity) không?',
   answer:
     '**Gộp** (domain object = JPA entity, có `@Entity` trên aggregate):\n' +
@@ -1446,6 +1465,7 @@ SS.addQuestions('design-patterns', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'design-patterns-1851f7g',
   q: 'Saga như một pattern kiến trúc — orchestration vs choreography saga?',
   answer:
     'Saga điều phối một transaction nghiệp vụ xuyên nhiều aggregate/service bằng chuỗi local transaction + compensation.\n\n' +

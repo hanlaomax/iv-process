@@ -1,16 +1,20 @@
 SS.addQuestions('java', [
 {
   cat: 'Java Core & OOP',
+  id: 'java-sb2w3j',
   q: 'JDK, JRE và JVM khác nhau như thế nào?',
   answer:
-    '`JVM` (Java Virtual Machine) là máy ảo thực thi bytecode: nạp class, verify, JIT-compile sang mã máy, quản lý bộ nhớ và GC. JVM là đặc tả (spec), có nhiều hiện thực (HotSpot, OpenJ9).\n\n' +
-    '`JRE` (Java Runtime Environment) = JVM + thư viện chuẩn (rt.jar / module java.base…) + file cấu hình. Đủ để **chạy** ứng dụng Java, không biên dịch được.\n\n' +
-    '`JDK` (Java Development Kit) = JRE + công cụ phát triển: `javac` (compiler), `jar`, `javadoc`, `jdb`, `jlink`, `jshell`… Đủ để **viết, biên dịch và chạy**.\n\n' +
-    'Từ Java 11, Oracle bỏ gói JRE riêng — bạn tải JDK và tự tạo runtime tối giản bằng `jlink`.',
+    '`JVM` (Java Virtual Machine) là máy ảo thực thi bytecode: nó nạp class, verify, JIT-compile sang mã máy, đồng thời quản lý bộ nhớ và GC. Bản thân JVM chỉ là một đặc tả (spec) và có nhiều hiện thực khác nhau như HotSpot hay OpenJ9.\n' +
+    '\n' +
+    '`JRE` (Java Runtime Environment) gồm JVM cộng thư viện chuẩn (rt.jar / module java.base…) và các file cấu hình. Chừng đó đủ để **chạy** một ứng dụng Java, nhưng không biên dịch được.\n' +
+    '\n' +
+    '`JDK` (Java Development Kit) là JRE cộng thêm bộ công cụ phát triển: `javac` (compiler), `jar`, `javadoc`, `jdb`, `jlink`, `jshell`… Có JDK là đủ để **viết, biên dịch và chạy**.\n' +
+    '\n' +
+    'Từ Java 11, Oracle không phát hành gói JRE riêng nữa — bạn tải JDK rồi tự cắt một runtime tối giản bằng `jlink`.',
   essence:
-    'Quan hệ bao nhau: JDK ⊃ JRE ⊃ JVM. JVM cho tính "write once run anywhere" vì bytecode độc lập nền tảng, chỉ JVM là phụ thuộc OS/CPU.',
+    'Ba thứ lồng trong nhau: JDK chứa JRE, JRE chứa JVM. JVM là thứ tạo nên tính "write once run anywhere", vì bytecode không phụ thuộc nền tảng còn phần phụ thuộc OS/CPU đã được JVM gánh hết.',
   example:
-    'Trên CI bạn cần `eclipse-temurin:17-jdk` để `mvn package`. Nhưng image production chỉ cần runtime: dùng `jlink` tạo custom JRE ~40MB chứa đúng module ứng dụng dùng, rồi copy vào `distroless` image — nhỏ hơn nhiều so với đóng gói cả JDK.',
+    'Trên CI bạn cần `eclipse-temurin:17-jdk` để chạy `mvn package`. Nhưng image production chỉ cần phần runtime, nên hãy dùng `jlink` tạo một custom JRE khoảng 40MB chứa đúng những module ứng dụng dùng, rồi copy vào image `distroless` — nhẹ hơn rất nhiều so với đóng gói cả JDK.',
   viz: {
     type: 'layers',
     title: 'JDK ⊃ JRE ⊃ JVM',
@@ -57,19 +61,23 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Phân biệt `==` và `equals()`. Hợp đồng giữa `equals()` và `hashCode()` là gì?',
+  id: 'java-10mtiyy',
+  q: '`==` và `equals()` khác nhau ở đâu, và giữa `equals()` với `hashCode()` có hợp đồng gì?',
   answer:
-    '`==` so sánh **giá trị của biến**: với kiểu nguyên thuỷ là so sánh giá trị, với object là so sánh **địa chỉ tham chiếu** (có cùng trỏ tới một object trên heap không).\n\n' +
-    '`equals()` là method, mặc định trong `Object` cũng chỉ so sánh tham chiếu, nhưng được override để so sánh **giá trị logic** (ví dụ `String`, `Integer`, các entity).\n\n' +
-    'Hợp đồng bắt buộc:\n' +
+    '`==` so sánh **giá trị của biến**: với kiểu nguyên thuỷ đó là so sánh giá trị, còn với object đó là so sánh **địa chỉ tham chiếu** — tức là hỏi xem hai biến có cùng trỏ tới một object trên heap hay không.\n' +
+    '\n' +
+    '`equals()` là một method. Bản mặc định trong `Object` cũng chỉ so sánh tham chiếu, nhưng nó được sinh ra để các class override lại mà so sánh **giá trị logic**, như `String`, `Integer` hay các entity vẫn làm.\n' +
+    '\n' +
+    'Hợp đồng bắt buộc giữa hai method này gồm:\n' +
     '- Nếu `a.equals(b)` thì `a.hashCode() == b.hashCode()`.\n' +
-    '- Ngược lại không bắt buộc: hai object khác nhau có thể trùng hashCode (hash collision).\n' +
-    '- `equals` phải phản xạ, đối xứng, bắc cầu, nhất quán.\n\n' +
-    'Vi phạm hợp đồng khiến `HashMap`, `HashSet` hoạt động sai: put vào rồi `get`/`contains` trả về null/false vì tìm nhầm bucket.',
+    '- Chiều ngược lại không bắt buộc: hai object khác nhau vẫn có thể trùng hashCode (hash collision).\n' +
+    '- `equals` phải phản xạ, đối xứng, bắc cầu và nhất quán.\n' +
+    '\n' +
+    'Vi phạm hợp đồng sẽ khiến `HashMap` và `HashSet` hoạt động sai: bạn put vào rồi `get`/`contains` lại trả về null hoặc false, vì nó tìm nhầm bucket.',
   essence:
-    'Cấu trúc dữ liệu băm định vị phần tử qua `hashCode()` (chọn bucket) rồi mới dùng `equals()` (so trong bucket). Hai bước phải nhất quán, nên override thì override cả cặp.',
+    'Các cấu trúc dữ liệu băm định vị phần tử qua `hashCode()` để chọn bucket, rồi mới dùng `equals()` để so trong bucket đó. Hai bước phải nhất quán với nhau, nên đã override một cái thì phải override cả cặp.',
   example:
-    'Một `class Money {currency, amount}` chỉ override `equals` mà quên `hashCode`. Khi làm key trong `Map<Money, Integer>`, hai object `Money("USD",10)` được coi là khác nhau → đếm số lượng sai. Sửa bằng `Objects.hash(currency, amount)` và `Objects.equals(...)` trong `equals`.',
+    'Giả sử `class Money {currency, amount}` chỉ override `equals` mà quên `hashCode`. Khi dùng làm key trong `Map<Money, Integer>`, hai object `Money("USD",10)` bị coi là khác nhau nên số lượng đếm ra sai. Cách sửa là dùng `Objects.hash(currency, amount)` cho `hashCode` và `Objects.equals(...)` bên trong `equals`.',
   viz: {
     type: 'compare',
     cols: ['==', 'equals()'],
@@ -133,16 +141,20 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Vì sao `String` là immutable? Nêu String pool và StringBuilder vs StringBuffer.',
+  id: 'java-15pc62z',
+  q: 'Vì sao `String` là immutable, và điều đó liên quan gì tới String pool, `StringBuilder` và `StringBuffer`?',
   answer:
-    '`String` immutable: nội dung (`byte[] value`) là `final`, không có setter, mọi thao tác "sửa" đều tạo object mới.\n\n' +
-    'Lợi ích: an toàn khi chia sẻ giữa nhiều thread; dùng làm key trong `HashMap` an toàn (hashCode không đổi, còn được cache); an toàn cho tham số nhạy cảm (class name, URL, đường dẫn) tránh bị đổi sau kiểm tra; cho phép **String pool** — literal được intern và tái sử dụng để tiết kiệm bộ nhớ.\n\n' +
-    '`new String("a")` tạo object mới trên heap, khác với literal `"a"` nằm trong pool; `.intern()` đưa về pool.\n\n' +
-    'Nối chuỗi trong vòng lặp nên dùng `StringBuilder` (không đồng bộ, nhanh) thay vì `+` (tạo nhiều object trung gian). `StringBuffer` là bản `synchronized` của `StringBuilder`, chỉ cần khi nhiều thread cùng ghi một buffer — hiếm gặp.',
+    '`String` là immutable vì nội dung của nó (`byte[] value`) được khai báo `final`, class không có setter nào, và mọi thao tác trông như "sửa" thực chất đều tạo ra object mới.\n' +
+    '\n' +
+    'Cách thiết kế này đem lại nhiều lợi ích: chuỗi an toàn khi chia sẻ giữa nhiều thread; dùng làm key trong `HashMap` rất an toàn vì hashCode không đổi và còn được cache; các tham số nhạy cảm như class name, URL hay đường dẫn không thể bị đổi sau khi đã kiểm tra; và nó mở đường cho **String pool**, nơi các literal được intern rồi tái sử dụng để tiết kiệm bộ nhớ.\n' +
+    '\n' +
+    'Lưu ý `new String("a")` tạo một object mới trên heap, khác với literal `"a"` vốn nằm sẵn trong pool; muốn đưa về pool thì gọi `.intern()`.\n' +
+    '\n' +
+    'Khi nối chuỗi trong vòng lặp, hãy dùng `StringBuilder` (không đồng bộ nên nhanh) thay cho toán tử `+`, vì `+` tạo ra rất nhiều object trung gian. `StringBuffer` là bản `synchronized` của `StringBuilder`, chỉ cần đến khi nhiều thread cùng ghi vào một buffer — trường hợp hiếm gặp trong thực tế.',
   essence:
-    'Immutability đổi lấy an toàn và khả năng chia sẻ/cache bằng chi phí tạo object mới khi biến đổi. StringBuilder là "String có thể sửa" cục bộ trong một thread.',
+    'Immutability đánh đổi chi phí tạo object mới mỗi lần biến đổi để lấy sự an toàn và khả năng chia sẻ, cache. `StringBuilder` chính là phần bù: một "String sửa được" dùng cục bộ trong một thread.',
   example:
-    'Ghép 10.000 dòng log: `s += line` tạo ~10.000 String và mảng char trung gian → O(n²). Đổi sang `StringBuilder` với `append` → O(n), giảm rõ rệt GC pressure. Trong microservice xử lý batch, đây là điểm tối ưu hay bị bỏ sót.',
+    'Khi ghép 10.000 dòng log, cách viết `s += line` sinh ra khoảng 10.000 String cùng chừng ấy mảng char trung gian, tức là O(n²). Đổi sang `StringBuilder` với `append` thì còn O(n) và giảm hẳn GC pressure. Trong các microservice xử lý batch, đây là điểm tối ưu rất hay bị bỏ sót.',
   viz: {
     type: 'compare',
     cols: ['String', 'StringBuilder', 'StringBuffer'],
@@ -201,15 +213,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Phân biệt `final`, `finally` và `finalize()`.',
+  id: 'java-3xqfag',
+  q: '`final`, `finally` và `finalize()` khác nhau thế nào?',
   answer:
-    '`final` là từ khoá: biến `final` gán một lần; method `final` không override được; class `final` không kế thừa được (ví dụ `String`). Giúp bất biến, an toàn thread và tối ưu inline.\n\n' +
-    '`finally` là khối đi kèm `try/catch`, **luôn chạy** dù có exception hay `return` (trừ `System.exit`, JVM crash, deadlock). Dùng để dọn tài nguyên.\n\n' +
-    '`finalize()` là method của `Object` được GC gọi trước khi thu hồi object. Đã **deprecated từ Java 9**, bị bỏ dần: thời điểm gọi không xác định, có thể không bao giờ chạy, làm chậm GC, dễ gây resurrection bug.',
+    '`final` là một từ khoá: biến `final` chỉ gán được một lần, method `final` không override được, còn class `final` thì không kế thừa được — `String` là ví dụ. Nó giúp giữ tính bất biến, an toàn thread và tạo điều kiện cho compiler tối ưu inline.\n' +
+    '\n' +
+    '`finally` là khối đi kèm `try/catch` và **luôn chạy**, bất kể có exception hay `return`, trừ khi gặp `System.exit`, JVM crash hoặc deadlock. Vai trò của nó là dọn tài nguyên.\n' +
+    '\n' +
+    '`finalize()` là method của `Object`, được GC gọi trước khi thu hồi object. Nó đã **deprecated từ Java 9** và đang bị loại bỏ dần, vì thời điểm gọi không xác định, có thể không bao giờ chạy, làm chậm GC và dễ sinh resurrection bug.',
   essence:
-    'Ba thứ chỉ giống tên. Cơ chế dọn tài nguyên hiện đại là try-with-resources (`AutoCloseable`) và `java.lang.ref.Cleaner`, không phải `finalize`.',
+    'Ba thứ này chỉ giống nhau ở cái tên. Cơ chế dọn tài nguyên hiện đại là try-with-resources (`AutoCloseable`) và `java.lang.ref.Cleaner`, chứ không phải `finalize`.',
   example:
-    'Code cũ đóng `Connection` trong `finalize()` → connection pool cạn kiệt vì GC chạy trễ. Sửa: `try (Connection c = ds.getConnection()) { ... }` đảm bảo `close()` gọi ngay khi rời block, kể cả khi ném exception.',
+    'Có những đoạn code cũ đóng `Connection` ngay trong `finalize()`, và hậu quả là connection pool cạn kiệt vì GC chạy quá trễ. Cách sửa là `try (Connection c = ds.getConnection()) { ... }`, nhờ đó `close()` được gọi ngay khi rời khỏi block, kể cả khi có exception ném ra.',
   viz: {
     type: 'compare',
     cols: ['final', 'finally', 'finalize()'],
@@ -256,15 +271,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Overloading và Overriding khác nhau ra sao? Static vs dynamic dispatch?',
+  id: 'java-ls9e9k',
+  q: 'Overloading và Overriding khác nhau ra sao, và mỗi loại được phân giải bằng static hay dynamic dispatch?',
   answer:
-    '**Overloading** (nạp chồng): cùng tên method, khác danh sách tham số, trong cùng class hoặc kế thừa. Được phân giải lúc **biên dịch** dựa trên kiểu tĩnh của tham số → *static dispatch*.\n\n' +
-    '**Overriding** (ghi đè): lớp con định nghĩa lại method cùng chữ ký của lớp cha. Được phân giải lúc **chạy** dựa trên kiểu thực của object → *dynamic dispatch* (virtual method table).\n\n' +
-    'Quy tắc override: chữ ký giống hệt; kiểu trả về covariant được; không thu hẹp access modifier; không ném checked exception rộng hơn; dùng `@Override` để compiler bắt lỗi.',
+    '**Overloading** (nạp chồng) là nhiều method trùng tên nhưng khác danh sách tham số, nằm trong cùng một class hoặc trong quan hệ kế thừa. Compiler phân giải chúng ngay lúc **biên dịch**, dựa trên kiểu tĩnh của tham số — đây là *static dispatch*.\n' +
+    '\n' +
+    '**Overriding** (ghi đè) là khi lớp con định nghĩa lại method có cùng chữ ký của lớp cha. Việc chọn phiên bản nào diễn ra lúc **chạy**, dựa trên kiểu thực của object — đây là *dynamic dispatch*, thực hiện qua virtual method table.\n' +
+    '\n' +
+    'Khi override, bạn phải giữ chữ ký giống hệt; kiểu trả về được phép covariant; không được thu hẹp access modifier; không được ném checked exception rộng hơn; và nên đánh dấu `@Override` để compiler bắt lỗi giúp.',
   essence:
-    'Overloading là "chọn method nào" do compiler quyết theo kiểu khai báo. Overriding là "phiên bản nào của method" do JVM quyết theo object thật — nền tảng của đa hình.',
+    'Overloading trả lời câu hỏi "gọi method nào" và do compiler quyết dựa trên kiểu khai báo. Overriding trả lời "chạy phiên bản nào của method đó" và do JVM quyết dựa trên object thật — đây chính là nền tảng của đa hình.',
   example:
-    'Bug kinh điển: `List<Integer> l; l.remove(1)` gọi `remove(int index)` (overload) chứ không phải `remove(Object)` → xoá nhầm phần tử vị trí 1. Muốn xoá giá trị 1 phải `l.remove(Integer.valueOf(1))`. Đây là overloading resolution lúc compile.',
+    'Có một bug kinh điển: với `List<Integer> l`, lời gọi `l.remove(1)` thực ra chạy `remove(int index)` (overload) chứ không phải `remove(Object)`, nên nó xoá nhầm phần tử ở vị trí 1. Muốn xoá giá trị 1 thì phải viết `l.remove(Integer.valueOf(1))`. Đây đúng là overloading được phân giải lúc compile.',
   viz: {
     type: 'compare',
     cols: ['Overloading', 'Overriding'],
@@ -308,15 +326,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Abstract class và Interface: chọn cái nào? Default method giải quyết gì?',
+  id: 'java-12r0r0u',
+  q: 'Khi nào nên chọn abstract class, khi nào chọn interface, và `default` method sinh ra để giải quyết vấn đề gì?',
   answer:
-    '`abstract class`: có state (field), constructor, method có thân, mọi access modifier; một class chỉ extends một abstract class. Dùng khi các lớp con **là một loại** (is-a) và chia sẻ code + state.\n\n' +
-    '`interface`: từ Java 8 có `default` và `static` method, từ Java 9 có `private` method; chỉ có hằng `public static final`, không có state khả biến; một class implements nhiều interface. Dùng để mô tả **năng lực/hợp đồng** (can-do), cho phép đa kế thừa hành vi.\n\n' +
-    '`default` method ra đời để **tiến hoá interface mà không phá vỡ** hàng loạt hiện thực có sẵn (ví dụ thêm `stream()`, `forEach()` vào `Collection`).',
+    '`abstract class` có state (field), có constructor, có method với phần thân và dùng được mọi access modifier, nhưng một class chỉ được extends đúng một abstract class. Hãy chọn nó khi các lớp con thật sự **là một loại** (is-a) và chia sẻ chung cả code lẫn state.\n' +
+    '\n' +
+    '`interface` từ Java 8 đã có `default` và `static` method, từ Java 9 có thêm `private` method; nó chỉ chứa hằng `public static final` chứ không có state khả biến, bù lại một class implements được nhiều interface cùng lúc. Hãy chọn nó để mô tả **năng lực hoặc hợp đồng** (can-do) và để đa kế thừa hành vi.\n' +
+    '\n' +
+    'Riêng `default` method ra đời nhằm **tiến hoá interface mà không phá vỡ** hàng loạt hiện thực có sẵn — nhờ nó mà `Collection` thêm được `stream()` và `forEach()`.',
   essence:
-    'Abstract class = khung xương chung (code + state) theo trục "là gì". Interface = hợp đồng theo trục "làm được gì", đa kế thừa. Ưu tiên interface + composition.',
+    'Abstract class là khung xương chung gồm cả code lẫn state, đi theo trục "là gì". Interface là hợp đồng đi theo trục "làm được gì" và cho phép đa kế thừa. Mặc định nên ưu tiên interface kết hợp composition.',
   example:
-    'Thiết kế module thanh toán: `interface PaymentGateway { PaymentResult charge(...); }` cho phép `StripeGateway`, `VnpayGateway`, `MockGateway` (test). Một `AbstractHttpGateway` (abstract class) chứa logic retry/timeout dùng chung, các gateway cụ thể extends nó nhưng vẫn implements interface để service phụ thuộc vào hợp đồng.',
+    'Hãy hình dung module thanh toán: khai báo `interface PaymentGateway { PaymentResult charge(...); }` cho phép có `StripeGateway`, `VnpayGateway` và cả `MockGateway` dùng khi test. Bên cạnh đó, một `AbstractHttpGateway` (abstract class) giữ phần logic retry/timeout dùng chung để các gateway cụ thể extends, nhưng chúng vẫn implements interface để tầng service chỉ phụ thuộc vào hợp đồng.',
   viz: {
     type: 'compare',
     cols: ['abstract class', 'interface'],
@@ -378,16 +399,20 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Checked exception và unchecked exception: khác gì, khi nào dùng?',
+  id: 'java-1ixi33r',
+  q: 'Checked exception khác unchecked exception ở đâu, và khi nào nên dùng loại nào?',
   answer:
-    'Cây kế thừa: `Throwable` → `Error` (lỗi hệ thống, không catch) và `Exception`. `Exception` chia thành `RuntimeException` + con (**unchecked**) và phần còn lại (**checked**).\n\n' +
-    '**Checked**: compiler bắt buộc `catch` hoặc khai báo `throws` (`IOException`, `SQLException`). Ý đồ: lỗi có thể phục hồi, caller nên xử lý.\n\n' +
-    '**Unchecked**: không bắt buộc khai báo (`NullPointerException`, `IllegalArgumentException`, `IllegalStateException`). Ý đồ: lỗi lập trình hoặc điều kiện không phục hồi được.\n\n' +
-    'Xu hướng hiện đại (Spring, nhiều framework): ưu tiên unchecked để tránh "throws lan truyền" và boilerplate, bọc checked thành runtime exception có nghĩa.',
+    'Cây kế thừa bắt đầu từ `Throwable`, chia thành `Error` (lỗi hệ thống, không nên catch) và `Exception`. Bản thân `Exception` lại tách thành `RuntimeException` cùng các lớp con của nó (**unchecked**) và toàn bộ phần còn lại (**checked**).\n' +
+    '\n' +
+    'Với **checked**, compiler bắt buộc bạn `catch` hoặc khai báo `throws`, như `IOException` và `SQLException`. Ý đồ của nhóm này là những lỗi có thể phục hồi và caller nên xử lý.\n' +
+    '\n' +
+    'Với **unchecked**, bạn không phải khai báo gì, như `NullPointerException`, `IllegalArgumentException` hay `IllegalStateException`. Ý đồ là những lỗi do lập trình sai hoặc những điều kiện không phục hồi được.\n' +
+    '\n' +
+    'Xu hướng hiện đại — Spring và nhiều framework khác — là ưu tiên unchecked để tránh cảnh `throws` lan truyền khắp nơi cùng đống boilerplate, rồi bọc checked exception thành runtime exception có nghĩa hơn.',
   essence:
-    'Checked = "hợp đồng lỗi" nằm trong chữ ký method, ép caller quyết định. Unchecked = lỗi không kỳ vọng caller xử lý ngay. Lựa chọn là về API design, không phải kỹ thuật.',
+    'Checked là "hợp đồng lỗi" được ghi thẳng vào chữ ký method, ép caller phải quyết định. Unchecked là loại lỗi mà ta không kỳ vọng caller xử lý ngay tại chỗ. Chọn loại nào là quyết định về thiết kế API chứ không thuần tuý kỹ thuật.',
   example:
-    'Spring bọc `SQLException` (checked) thành `DataAccessException` (unchecked) với cây con rõ nghĩa (`DuplicateKeyException`, `DeadlockLoserDataAccessException`). Nhờ đó tầng service không phải `try/catch SQLException` khắp nơi, và code không bị khoá vào JDBC.',
+    'Spring bọc `SQLException` (checked) thành `DataAccessException` (unchecked) với một cây con rõ nghĩa như `DuplicateKeyException` hay `DeadlockLoserDataAccessException`. Nhờ vậy tầng service không phải rải `try/catch SQLException` khắp nơi, và code cũng không bị khoá chặt vào JDBC.',
   viz: {
     type: 'tree',
     title: 'Cây Throwable',
@@ -439,15 +464,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'try-with-resources hoạt động thế nào? Ưu điểm so với finally?',
+  id: 'java-1cfgdaw',
+  q: 'try-with-resources hoạt động thế nào, và hơn gì so với tự dọn tài nguyên trong `finally`?',
   answer:
-    'Bất kỳ object nào implements `AutoCloseable` (hoặc `Closeable`) khai báo trong ngoặc `try (...)` sẽ được gọi `close()` tự động khi rời block, kể cả khi có exception hay `return`.\n\n' +
-    'Nhiều resource đóng theo **thứ tự ngược** khai báo. Nếu body ném exception và `close()` cũng ném, exception của `close()` được **suppressed** và gắn vào exception chính (`getSuppressed()`), không che mất lỗi gốc.\n\n' +
-    'So với `finally` thủ công: không cần kiểm tra null, không lồng nhiều `try/finally`, không nuốt mất exception gốc khi `close()` lỗi.',
+    'Mọi object implements `AutoCloseable` (hoặc `Closeable`) mà bạn khai báo trong ngoặc `try (...)` đều được gọi `close()` tự động khi rời khỏi block, kể cả khi có exception hay `return`.\n' +
+    '\n' +
+    'Nếu khai báo nhiều resource, chúng được đóng theo **thứ tự ngược** với lúc khai báo. Trường hợp thân `try` ném exception mà `close()` cũng ném, exception của `close()` sẽ bị **suppressed** và gắn kèm vào exception chính (đọc qua `getSuppressed()`), nên lỗi gốc không bị che mất.\n' +
+    '\n' +
+    'So với `finally` viết tay, cách này giúp bạn khỏi phải kiểm tra null, khỏi lồng nhiều tầng `try/finally`, và không vô tình nuốt mất exception gốc mỗi khi `close()` lỗi.',
   essence:
-    'Compiler sinh ra khối `finally` đúng chuẩn (null-safe, đóng ngược thứ tự, suppressed exception) thay cho bạn — loại bỏ cả một lớp bug tài nguyên.',
+    'Compiler sinh sẵn cho bạn một khối `finally` đúng chuẩn — null-safe, đóng ngược thứ tự, giữ lại suppressed exception — và nhờ đó xoá bỏ cả một lớp bug về tài nguyên.',
   example:
-    '`try (var in = Files.newInputStream(p); var out = Files.newOutputStream(q)) { in.transferTo(out); }` — cả hai stream đóng đúng, nếu ổ đĩa đầy khi ghi thì `IOException` gốc vẫn hiện, lỗi khi `close()` được đính kèm chứ không thay thế.',
+    'Với `try (var in = Files.newInputStream(p); var out = Files.newOutputStream(q)) { in.transferTo(out); }`, cả hai stream đều được đóng đúng cách. Nếu ổ đĩa đầy lúc ghi, `IOException` gốc vẫn hiện ra, còn lỗi phát sinh khi `close()` chỉ được đính kèm chứ không thay thế nó.',
   viz: {
     type: 'flow',
     title: 'Đóng resource theo thứ tự ngược',
@@ -507,17 +535,19 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Collections',
-  q: 'Autoboxing/unboxing là gì? Cạm bẫy với Integer cache?',
+  id: 'java-s79rd3',
+  q: 'Autoboxing/unboxing là gì, và vì sao Integer cache lại thành cạm bẫy?',
   answer:
-    'Autoboxing: tự chuyển primitive → wrapper (`int` → `Integer`). Unboxing: chiều ngược lại. Xảy ra khi gán, truyền tham số, dùng trong collection (chỉ chứa object).\n\n' +
-    'Cạm bẫy:\n' +
-    '- `Integer` trong `[-128, 127]` được **cache** (`Integer.valueOf`), nên `Integer a=100, b=100; a==b` là `true`, nhưng `a=200,b=200; a==b` là `false`. Luôn so sánh bằng `.equals()`.\n' +
-    '- Unboxing `null` → `NullPointerException` (ví dụ `int x = map.get(key)` khi key không tồn tại).\n' +
-    '- Boxing trong vòng lặp nóng tạo rác GC và chậm.',
+    'Autoboxing là việc tự chuyển primitive sang wrapper (`int` thành `Integer`), còn unboxing là chiều ngược lại. Chúng xảy ra khi bạn gán, truyền tham số, hay đưa giá trị vào collection — vì collection chỉ chứa được object.\n' +
+    '\n' +
+    'Mấy cạm bẫy cần nhớ:\n' +
+    '- `Integer` trong khoảng `[-128, 127]` được **cache** bởi `Integer.valueOf`, nên `Integer a=100, b=100; a==b` cho `true`, trong khi `a=200,b=200; a==b` lại cho `false`. Vì vậy luôn so sánh bằng `.equals()`.\n' +
+    '- Unbox một giá trị `null` sẽ ném `NullPointerException`, chẳng hạn `int x = map.get(key)` khi key không tồn tại.\n' +
+    '- Boxing trong vòng lặp nóng vừa tạo rác cho GC vừa làm chậm chương trình.',
   essence:
-    'Wrapper là object có định danh (identity); primitive chỉ có giá trị. Trộn hai thế giới bằng autobox tiện nhưng che giấu cấp phát heap và nguy cơ NPE.',
+    'Wrapper là object nên có định danh (identity), còn primitive thì chỉ có giá trị. Autoboxing giúp trộn hai thế giới đó rất tiện, nhưng đồng thời che giấu việc cấp phát trên heap và nguy cơ NPE.',
   example:
-    'Tính tổng: `Long total = 0L; for (long v : values) total += v;` — mỗi vòng lặp unbox `total`, cộng, rồi box lại → hàng triệu `Long`. Đổi `Long` thành `long` giúp nhanh gấp nhiều lần và không sinh rác.',
+    'Xét đoạn tính tổng `Long total = 0L; for (long v : values) total += v;` — mỗi vòng lặp phải unbox `total`, cộng, rồi box lại, sinh ra hàng triệu object `Long`. Chỉ cần đổi `Long` thành `long` là nhanh hơn gấp nhiều lần và không còn sinh rác.',
   viz: {
     type: 'compare',
     cols: ['Integer a=100, b=100', 'Integer a=200, b=200'],
@@ -553,15 +583,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Collections',
-  q: 'ArrayList và LinkedList: cấu trúc, độ phức tạp, khi nào dùng?',
+  id: 'java-rogkmj',
+  q: 'ArrayList và LinkedList khác nhau thế nào về cấu trúc lẫn độ phức tạp, và khi nào nên dùng cái nào?',
   answer:
-    '`ArrayList`: mảng động. `get(i)` O(1); `add` cuối amortized O(1) (đôi khi resize x1.5 và copy); `add/remove` giữa O(n) do dịch phần tử. Bộ nhớ liền mạch → cache-friendly.\n\n' +
-    '`LinkedList`: danh sách liên kết đôi. `add/remove` ở hai đầu O(1); `get(i)` O(n) do phải duyệt; mỗi node tốn thêm bộ nhớ cho 2 con trỏ + overhead object; kém cache locality.\n\n' +
-    'Thực tế `ArrayList` thắng gần như mọi trường hợp. `LinkedList` chỉ hợp lý khi dùng như `Queue`/`Deque` với thao tác hai đầu liên tục — mà `ArrayDeque` còn tốt hơn.',
+    '`ArrayList` là một mảng động. `get(i)` tốn O(1); `add` vào cuối là amortized O(1), thỉnh thoảng phải resize gấp 1.5 lần rồi copy; `add/remove` ở giữa tốn O(n) vì phải dịch phần tử. Bù lại bộ nhớ liền mạch nên rất cache-friendly.\n' +
+    '\n' +
+    '`LinkedList` là danh sách liên kết đôi. Thêm/xoá ở hai đầu tốn O(1), nhưng `get(i)` tốn O(n) vì phải duyệt; mỗi node còn tốn thêm bộ nhớ cho hai con trỏ cộng overhead object, và cache locality thì kém.\n' +
+    '\n' +
+    'Trên thực tế `ArrayList` thắng gần như mọi trường hợp. `LinkedList` chỉ hợp lý khi bạn dùng nó như `Queue`/`Deque` với thao tác liên tục ở hai đầu — mà ngay cả khi đó `ArrayDeque` vẫn tốt hơn.',
   essence:
-    'Big-O của LinkedList đẹp trên giấy nhưng hằng số lớn và cache miss khiến nó chậm hơn ArrayList trong hầu hết workload thực.',
+    'Big-O của LinkedList trông đẹp trên giấy, nhưng hằng số lớn cùng chuyện cache miss khiến nó chậm hơn ArrayList trong hầu hết workload thực tế.',
   example:
-    'Hàng đợi task in-memory: chọn `ArrayDeque` thay `LinkedList` — `offer`/`poll` O(1), mảng vòng liền mạch, ít GC hơn. Chỉ khi cần list truy cập ngẫu nhiên thì `ArrayList`.',
+    'Với một hàng đợi task in-memory, hãy chọn `ArrayDeque` thay vì `LinkedList`: `offer`/`poll` đều O(1), mảng vòng nằm liền mạch trong bộ nhớ và sinh ít rác hơn. Chỉ khi cần một list truy cập ngẫu nhiên thì mới quay lại `ArrayList`.',
   viz: {
     type: 'compare',
     cols: ['ArrayList', 'LinkedList'],
@@ -600,15 +633,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Collections',
-  q: 'HashMap hoạt động nội bộ thế nào? Load factor, resize, treeify?',
+  id: 'java-hsfmwp',
+  q: 'HashMap hoạt động nội bộ thế nào, và load factor, resize, treeify đóng vai trò gì?',
   answer:
-    'HashMap là mảng `Node[] table` (bucket). Với mỗi key: tính `hashCode()`, "khuấy" bit (`h ^ (h >>> 16)`) để giảm collision, rồi `index = (n - 1) & hash`.\n\n' +
-    'Va chạm cùng bucket tạo danh sách liên kết; từ Java 8, nếu một bucket có ≥ 8 phần tử **và** bảng ≥ 64, nó chuyển thành **cây đỏ-đen** (tra cứu O(log n) thay vì O(n)).\n\n' +
-    '`load factor` mặc định 0.75: khi `size > capacity * 0.75`, bảng **resize gấp đôi** và rehash lại toàn bộ. Đặt `initialCapacity` hợp lý nếu biết trước số phần tử để tránh nhiều lần resize.',
+    'HashMap là một mảng `Node[] table`, mỗi ô gọi là một bucket. Với mỗi key, nó tính `hashCode()`, "khuấy" bit bằng `h ^ (h >>> 16)` để giảm collision, rồi lấy `index = (n - 1) & hash`.\n' +
+    '\n' +
+    'Các key va chạm vào cùng bucket được nối thành danh sách liên kết. Từ Java 8, nếu một bucket chứa từ 8 phần tử trở lên **và** bảng đã đạt ít nhất 64 ô, bucket đó chuyển thành **cây đỏ-đen**, đưa tra cứu từ O(n) về O(log n).\n' +
+    '\n' +
+    '`load factor` mặc định là 0.75: khi `size > capacity * 0.75`, bảng **resize gấp đôi** và rehash lại toàn bộ. Nếu biết trước số phần tử, hãy đặt `initialCapacity` hợp lý để tránh phải resize nhiều lần.',
   essence:
-    'HashMap đánh đổi bộ nhớ (bảng thưa) lấy tốc độ truy cập trung bình O(1). Chất lượng `hashCode` và load factor quyết định nó gần O(1) hay suy biến về O(n)/O(log n).',
+    'HashMap đánh đổi bộ nhớ — dưới dạng một bảng thưa — để lấy tốc độ truy cập trung bình O(1). Chất lượng của `hashCode` và load factor quyết định nó giữ được gần O(1) hay suy biến về O(n)/O(log n).',
   example:
-    'Cache 1 triệu bản ghi: khởi tạo `new HashMap<>(1_400_000)` (≈ 1M/0.75) để tránh ~20 lần resize + rehash tốn CPU và tạo rác lúc warm-up. Với key là enum/immutable có hashCode tốt, tra cứu ổn định O(1).',
+    'Muốn cache 1 triệu bản ghi, hãy khởi tạo `new HashMap<>(1_400_000)` (xấp xỉ 1M chia 0.75) để khỏi phải trải qua khoảng 20 lần resize kèm rehash vốn rất tốn CPU và sinh rác lúc warm-up. Nếu key là enum hoặc kiểu immutable có hashCode tốt, tra cứu sẽ ổn định ở mức O(1).',
   viz: {
     type: 'flow',
     title: 'HashMap định vị một key',
@@ -646,16 +682,17 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Collections',
-  q: 'HashMap, Hashtable, ConcurrentHashMap, Collections.synchronizedMap khác nhau?',
+  id: 'java-hcocxm',
+  q: 'HashMap, Hashtable, ConcurrentHashMap và Collections.synchronizedMap khác nhau ở chỗ nào?',
   answer:
-    '- `HashMap`: không đồng bộ, cho phép 1 key null và nhiều value null, nhanh nhất trong môi trường 1 thread.\n' +
-    '- `Hashtable`: legacy, đồng bộ toàn bộ method bằng một khoá → nghẽn cổ chai; không cho null. Không nên dùng nữa.\n' +
-    '- `Collections.synchronizedMap(map)`: bọc mọi method trong `synchronized(this)`; vẫn phải tự đồng bộ khi iterate.\n' +
-    '- `ConcurrentHashMap`: thiết kế cho concurrency. Java 8 dùng CAS + `synchronized` trên từng bucket, đọc không khoá; iterator weakly-consistent (không ném `ConcurrentModificationException`); không cho null; có method nguyên tử `compute`, `merge`, `computeIfAbsent`.',
+    '- `HashMap` không đồng bộ, cho phép một key null cùng nhiều value null, và là lựa chọn nhanh nhất trong môi trường một thread.\n' +
+    '- `Hashtable` là lớp legacy, đồng bộ mọi method bằng chung một khoá nên tạo nghẽn cổ chai, lại không cho null. Ngày nay không nên dùng nữa.\n' +
+    '- `Collections.synchronizedMap(map)` bọc mọi method trong `synchronized(this)`, và bạn vẫn phải tự đồng bộ mỗi khi iterate.\n' +
+    '- `ConcurrentHashMap` được thiết kế riêng cho concurrency. Từ Java 8 nó dùng CAS kết hợp `synchronized` trên từng bucket, đọc thì không cần khoá; iterator của nó weakly-consistent nên không ném `ConcurrentModificationException`; nó không cho null; và nó cung cấp các method nguyên tử như `compute`, `merge`, `computeIfAbsent`.',
   essence:
-    'Khác nhau ở **hạt khoá**: Hashtable/synchronizedMap khoá cả map; ConcurrentHashMap khoá theo bucket + đọc lock-free → thông lượng cao khi nhiều thread.',
+    'Chúng khác nhau ở **hạt khoá**: Hashtable và synchronizedMap khoá cả map, còn ConcurrentHashMap khoá theo từng bucket và cho phép đọc lock-free, nhờ đó thông lượng cao hơn hẳn khi có nhiều thread.',
   example:
-    'Bộ đếm truy cập theo endpoint dưới tải cao: `map.merge(path, 1L, Long::sum)` trên `ConcurrentHashMap` là nguyên tử và không khoá toàn cục. Dùng `synchronizedMap` ở đây sẽ khiến mọi request tuần tự hoá qua một lock.',
+    'Với bộ đếm truy cập theo endpoint dưới tải cao, `map.merge(path, 1L, Long::sum)` trên `ConcurrentHashMap` vừa nguyên tử vừa không cần khoá toàn cục. Nếu dùng `synchronizedMap` ở đây, mọi request sẽ bị tuần tự hoá qua một lock duy nhất.',
   viz: {
     type: 'compare',
     cols: ['HashMap', 'Hashtable', 'synchronizedMap', 'ConcurrentHashMap'],
@@ -696,14 +733,16 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Collections',
-  q: 'Fail-fast và fail-safe iterator? ConcurrentModificationException từ đâu ra?',
+  id: 'java-1f1t11f',
+  q: 'Iterator fail-fast khác fail-safe thế nào, và `ConcurrentModificationException` sinh ra từ đâu?',
   answer:
-    'Iterator **fail-fast** (của `ArrayList`, `HashMap`…) theo dõi biến đếm `modCount`. Nếu collection bị sửa cấu trúc trong lúc duyệt (không qua `iterator.remove()`), lần `next()` kế tiếp phát hiện `modCount` lệch và ném `ConcurrentModificationException` ngay — kể cả khi chỉ có một thread.\n\n' +
-    'Iterator **fail-safe** (`CopyOnWriteArrayList`, `ConcurrentHashMap`) duyệt trên bản snapshot hoặc weakly-consistent view → không ném exception nhưng có thể không thấy thay đổi mới nhất.',
+    'Iterator **fail-fast** — của `ArrayList`, `HashMap`… — theo dõi một biến đếm tên `modCount`. Nếu collection bị sửa cấu trúc giữa lúc duyệt mà không thông qua `iterator.remove()`, lần gọi `next()` kế tiếp sẽ thấy `modCount` lệch và ném `ConcurrentModificationException` ngay lập tức, kể cả khi chỉ có một thread duy nhất.\n' +
+    '\n' +
+    'Iterator **fail-safe** — của `CopyOnWriteArrayList`, `ConcurrentHashMap` — lại duyệt trên một bản snapshot hoặc một weakly-consistent view, nên nó không ném exception nhưng đổi lại có thể không thấy được thay đổi mới nhất.',
   essence:
-    '`ConcurrentModificationException` là cơ chế phát hiện bug "sửa collection khi đang duyệt", không phải lỗi đa luồng thuần. Sửa đúng: dùng `iterator.remove()`, `removeIf()`, hoặc gom thay đổi rồi áp dụng sau.',
+    '`ConcurrentModificationException` là cơ chế phát hiện lỗi "sửa collection khi đang duyệt" chứ không phải một lỗi đa luồng thuần tuý. Cách sửa đúng là dùng `iterator.remove()`, `removeIf()`, hoặc gom thay đổi lại rồi áp dụng sau khi duyệt xong.',
   example:
-    '`for (Order o : orders) if (o.isExpired()) orders.remove(o);` → CME. Sửa: `orders.removeIf(Order::isExpired)`. Nếu cần xử lý song song khi duyệt, chuyển sang `ConcurrentHashMap`/`CopyOnWriteArrayList`.',
+    'Đoạn `for (Order o : orders) if (o.isExpired()) orders.remove(o);` sẽ ném CME. Hãy sửa thành `orders.removeIf(Order::isExpired)`. Còn nếu bạn thật sự cần xử lý song song trong lúc duyệt thì chuyển sang `ConcurrentHashMap` hoặc `CopyOnWriteArrayList`.',
   viz: {
     type: 'compare',
     cols: ['fail-fast', 'fail-safe'],
@@ -745,15 +784,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Collections',
-  q: 'Comparable và Comparator: dùng khi nào? Bẫy khi so sánh?',
+  id: 'java-be4ngb',
+  q: 'Nên dùng Comparable hay Comparator, và có những bẫy nào khi viết hàm so sánh?',
   answer:
-    '`Comparable<T>` định nghĩa thứ tự **tự nhiên** ngay trong class (`compareTo`), một class chỉ có một. `Comparator<T>` là chiến lược so sánh **bên ngoài**, có thể tạo nhiều cái khác nhau, truyền vào `sort`, `TreeMap`, `PriorityQueue`.\n\n' +
-    'API tiện: `Comparator.comparing(User::getAge).thenComparing(User::getName).reversed()`; `nullsFirst`, `nullsLast`.\n\n' +
-    'Bẫy: `compare` phải nhất quán — phản đối xứng và bắc cầu. Dùng `a - b` với `int` có thể tràn số → sai; nên dùng `Integer.compare(a, b)`. Thứ tự không nhất quán khiến `TreeSet` mất phần tử và `sort` có thể ném `IllegalArgumentException: Comparison method violates its general contract`.',
+    '`Comparable<T>` định nghĩa thứ tự **tự nhiên** ngay bên trong class qua `compareTo`, và mỗi class chỉ có duy nhất một thứ tự như vậy. `Comparator<T>` thì là chiến lược so sánh nằm **bên ngoài**, bạn tạo bao nhiêu cái cũng được rồi truyền vào `sort`, `TreeMap` hay `PriorityQueue`.\n' +
+    '\n' +
+    'API đi kèm khá tiện: `Comparator.comparing(User::getAge).thenComparing(User::getName).reversed()`, cùng với `nullsFirst` và `nullsLast`.\n' +
+    '\n' +
+    'Bẫy nằm ở chỗ `compare` phải nhất quán, tức là phản đối xứng và bắc cầu. Viết `a - b` với `int` có thể tràn số và cho kết quả sai, nên hãy dùng `Integer.compare(a, b)`. Một thứ tự không nhất quán sẽ khiến `TreeSet` làm mất phần tử, còn `sort` thì ném `IllegalArgumentException: Comparison method violates its general contract`.',
   essence:
-    'Comparable = "thứ tự mặc định của tôi". Comparator = "cách sắp xếp theo ngữ cảnh". Hàm so sánh phải là total order đúng chuẩn, nếu không cấu trúc sắp xếp sẽ hỏng.',
+    'Comparable nói "đây là thứ tự mặc định của tôi", còn Comparator nói "đây là cách sắp xếp cho ngữ cảnh này". Dù chọn cái nào, hàm so sánh vẫn phải là một total order đúng chuẩn, nếu không các cấu trúc sắp xếp sẽ hỏng.',
   example:
-    'Danh sách sản phẩm: thứ tự tự nhiên theo `sku` (`Comparable`), nhưng màn hình cần sắp theo giá tăng dần rồi tên: `products.sort(comparing(Product::getPrice).thenComparing(Product::getName))`. Không cần sửa class `Product`.',
+    'Danh sách sản phẩm có thứ tự tự nhiên theo `sku` khai báo bằng `Comparable`, nhưng màn hình lại cần sắp theo giá tăng dần rồi mới tới tên. Chỉ cần `products.sort(comparing(Product::getPrice).thenComparing(Product::getName))` là xong, không phải đụng vào class `Product`.',
   viz: {
     type: 'compare',
     cols: ['Comparable<T>', 'Comparator<T>'],
@@ -795,16 +837,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Generics',
-  q: 'Type erasure là gì? Giải thích `? extends` và `? super` (PECS).',
+  id: 'java-1lvyiqn',
+  q: 'Type erasure là gì, và `? extends` khác `? super` thế nào (nguyên tắc PECS)?',
   answer:
-    'Generics của Java là **compile-time**: sau khi biên dịch, thông tin kiểu bị **xoá** (erasure), `List<String>` và `List<Integer>` đều thành `List` ở runtime. Do đó không thể `new T[]`, `T.class`, `instanceof List<String>`.\n\n' +
-    'Wildcard theo nguyên tắc **PECS — Producer Extends, Consumer Super**:\n' +
-    '- `List<? extends Number>`: chỉ **đọc** (lấy ra `Number`), không add (trừ null). Nguồn cung cấp dữ liệu.\n' +
-    '- `List<? super Integer>`: chỉ **ghi** (`add(Integer)`), đọc ra chỉ chắc là `Object`. Nơi nhận dữ liệu.',
+    'Generics của Java chỉ tồn tại ở mức **compile-time**: sau khi biên dịch, thông tin kiểu bị **xoá** đi (erasure), nên `List<String>` và `List<Integer>` đều trở thành `List` ở runtime. Chính vì vậy bạn không viết được `new T[]`, `T.class` hay `instanceof List<String>`.\n' +
+    '\n' +
+    'Wildcard đi theo nguyên tắc **PECS — Producer Extends, Consumer Super**:\n' +
+    '- `List<? extends Number>` chỉ để **đọc** (lấy ra `Number`), không add được gì ngoài null. Đây là nguồn cung cấp dữ liệu.\n' +
+    '- `List<? super Integer>` chỉ để **ghi** (`add(Integer)`), còn đọc ra thì chỉ chắc chắn được kiểu `Object`. Đây là nơi nhận dữ liệu.',
   essence:
-    'Erasure giữ tương thích ngược với code trước Java 5. Wildcard cho phép API vừa an toàn kiểu vừa linh hoạt: chọn `extends` hay `super` tuỳ method đang sản xuất hay tiêu thụ phần tử.',
+    'Erasure tồn tại để giữ tương thích ngược với code viết trước Java 5. Wildcard bù lại cho phép API vừa an toàn kiểu vừa linh hoạt: chọn `extends` hay `super` tuỳ theo method đang sản xuất hay tiêu thụ phần tử.',
   example:
-    '`Collections.copy(List<? super T> dest, List<? extends T> src)`: `src` là producer (đọc phần tử) nên `extends`; `dest` là consumer (ghi phần tử) nên `super`. Nhờ vậy có thể copy `List<Integer>` sang `List<Number>`.',
+    'Hãy nhìn `Collections.copy(List<? super T> dest, List<? extends T> src)`: `src` là producer vì ta đọc phần tử từ nó nên dùng `extends`, còn `dest` là consumer vì ta ghi phần tử vào nên dùng `super`. Nhờ cách khai báo này mà bạn copy được `List<Integer>` sang `List<Number>`.',
   viz: {
     type: 'compare',
     cols: ['? extends T — Producer', '? super T — Consumer'],
@@ -858,17 +902,21 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java 8+',
-  q: 'Stream API: lazy evaluation, intermediate vs terminal, `map` vs `flatMap`.',
+  id: 'java-x6nh74',
+  q: 'Stream API lazy ở chỗ nào, intermediate khác terminal ra sao, và `map` khác `flatMap` thế nào?',
   answer:
-    'Stream mô tả **pipeline xử lý** trên nguồn dữ liệu, không lưu dữ liệu.\n\n' +
-    '- **Intermediate** (`filter`, `map`, `sorted`, `distinct`): trả về stream mới, **lazy** — chưa chạy gì.\n' +
-    '- **Terminal** (`collect`, `forEach`, `reduce`, `count`, `findFirst`): kích hoạt pipeline chạy **một lần**, sau đó stream không tái sử dụng được.\n\n' +
-    'Lazy + fusion: các phép được ghép và duyệt nguồn **một lần**; `findFirst`/`limit` cho phép short-circuit.\n\n' +
-    '`map`: 1 phần tử → 1 phần tử. `flatMap`: 1 phần tử → 1 stream, rồi **nối phẳng** tất cả lại (dùng để "mở" collection lồng nhau).',
+    'Stream mô tả một **pipeline xử lý** đặt trên nguồn dữ liệu, bản thân nó không lưu dữ liệu.\n' +
+    '\n' +
+    '- Các phép **intermediate** như `filter`, `map`, `sorted`, `distinct` trả về một stream mới và hoàn toàn **lazy** — tới đây chưa có gì chạy cả.\n' +
+    '- Các phép **terminal** như `collect`, `forEach`, `reduce`, `count`, `findFirst` mới kích hoạt pipeline, và chỉ chạy được **một lần**; sau đó stream không tái sử dụng được nữa.\n' +
+    '\n' +
+    'Nhờ lazy cộng với fusion, các phép được ghép lại và nguồn dữ liệu chỉ bị duyệt **một lần**; riêng `findFirst` và `limit` còn cho phép short-circuit.\n' +
+    '\n' +
+    'Về hai phép biến đổi: `map` biến một phần tử thành một phần tử, còn `flatMap` biến một phần tử thành một stream rồi **nối phẳng** tất cả lại — đây là cách để "mở" các collection lồng nhau.',
   essence:
-    'Stream là "công thức" chứ không phải dữ liệu; không có terminal thì không tính toán. `flatMap` = `map` + làm phẳng, dành cho quan hệ một-nhiều.',
+    'Stream là một công thức xử lý chứ không phải dữ liệu, nên chưa có terminal thì chưa có gì được tính. Còn `flatMap` chính là `map` cộng thêm bước làm phẳng, dành cho quan hệ một-nhiều.',
   example:
-    'Lấy tất cả line-item của các đơn hàng: `orders.stream().flatMap(o -> o.getItems().stream()).filter(i -> i.getQty() > 0).collect(toList())`. Dùng `map` ở đây sẽ ra `Stream<List<Item>>`, không phải `Stream<Item>`.',
+    'Muốn lấy toàn bộ line-item của các đơn hàng, hãy viết `orders.stream().flatMap(o -> o.getItems().stream()).filter(i -> i.getQty() > 0).collect(toList())`. Nếu dùng `map` ở vị trí đó, kết quả sẽ là `Stream<List<Item>>` chứ không phải `Stream<Item>`.',
   viz: {
     type: 'flow',
     title: 'Không có terminal thì không tính toán',
@@ -909,19 +957,22 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java 8+',
-  q: '`Optional` dùng đúng cách như thế nào? Những anti-pattern phổ biến?',
+  id: 'java-ot9o23',
+  q: 'Dùng `Optional` thế nào cho đúng, và đâu là những anti-pattern phổ biến?',
   answer:
-    '`Optional<T>` là kiểu trả về diễn đạt "có thể không có giá trị", buộc caller xử lý trường hợp rỗng thay vì quên check null.\n\n' +
-    'Dùng đúng: `return repo.findById(id);` (kiểu `Optional<User>`), rồi `opt.map(...).orElseThrow(() -> new NotFoundException())` hoặc `.orElseGet(supplier)`.\n\n' +
-    'Anti-pattern:\n' +
-    '- Dùng `Optional` làm **field** hoặc **tham số method** (nó không `Serializable`, thêm rác).\n' +
-    '- `opt.get()` không kiểm tra → ném `NoSuchElementException`, chẳng khác gì NPE.\n' +
-    '- `opt.isPresent()` rồi `opt.get()` — quay lại kiểu null-check.\n' +
-    '- `Optional` cho collection: trả về list rỗng thay vì `Optional<List>`.',
+    '`Optional<T>` là kiểu trả về diễn đạt ý "có thể không có giá trị", buộc caller phải xử lý trường hợp rỗng thay vì quên mất việc check null.\n' +
+    '\n' +
+    'Cách dùng đúng là trả về nó từ tầng dữ liệu, ví dụ `return repo.findById(id);` với kiểu `Optional<User>`, rồi phía gọi xử lý bằng `opt.map(...).orElseThrow(() -> new NotFoundException())` hoặc `.orElseGet(supplier)`.\n' +
+    '\n' +
+    'Còn đây là những anti-pattern hay gặp:\n' +
+    '- Dùng `Optional` làm **field** hoặc **tham số method**, trong khi nó không `Serializable` và chỉ thêm rác.\n' +
+    '- Gọi `opt.get()` mà không kiểm tra, dẫn tới `NoSuchElementException` — chẳng khá hơn NPE là bao.\n' +
+    '- Viết `opt.isPresent()` rồi mới `opt.get()`, tức là quay về đúng kiểu null-check cũ.\n' +
+    '- Bọc collection trong `Optional`, trong khi trả về một list rỗng vẫn tốt hơn `Optional<List>`.',
   essence:
-    'Optional là công cụ thiết kế API ở **ranh giới trả về**, không phải để thay thế mọi null trong hệ thống. Giá trị của nó là ép xử lý nhánh rỗng tại compile-time-ish.',
+    'Optional là công cụ thiết kế API ở **ranh giới giá trị trả về**, không phải thứ để thay thế mọi null trong hệ thống. Giá trị của nó nằm ở chỗ ép người gọi phải xử lý nhánh rỗng.',
   example:
-    '`userRepo.findByEmail(email).map(User::getId).orElseThrow(() -> new BusinessException("Email chưa đăng ký"))` — dòng này vừa gọn vừa không thể quên nhánh "không tìm thấy", khác hẳn `user.getId()` có nguy cơ NPE.',
+    'Dòng `userRepo.findByEmail(email).map(User::getId).orElseThrow(() -> new BusinessException("Email chưa đăng ký"))` vừa gọn vừa không cho phép bạn quên nhánh "không tìm thấy", khác hẳn cách viết `user.getId()` luôn tiềm ẩn NPE.',
   viz: {
     type: 'flow',
     title: 'Optional ở ranh giới trả về',
@@ -965,15 +1016,18 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java 8+',
+  id: 'java-22uu33',
   q: 'Functional interface, lambda và method reference khác nhau thế nào?',
   answer:
-    '**Functional interface**: interface có đúng **một** abstract method (SAM), có thể có default/static method; đánh dấu `@FunctionalInterface` để compiler kiểm tra. Ví dụ `Runnable`, `Callable`, `Function<T,R>`, `Predicate<T>`, `Supplier<T>`, `Consumer<T>`.\n\n' +
-    '**Lambda**: biểu thức hiện thực SAM đó, `(a, b) -> a + b`. Không phải anonymous class — compile thành `invokedynamic` + method ẩn, không sinh file `$1.class`, không tạo `this` mới (this trỏ tới class bao ngoài).\n\n' +
-    '**Method reference**: cú pháp rút gọn của lambda chỉ gọi một method có sẵn: `User::getName` ≈ `u -> u.getName()`; `System.out::println`; `ArrayList::new`.',
+    '**Functional interface** là interface có đúng **một** abstract method (viết tắt là SAM), bên cạnh đó vẫn được phép có default hoặc static method; đánh dấu `@FunctionalInterface` để compiler kiểm tra giúp. Quen thuộc nhất là `Runnable`, `Callable`, `Function<T,R>`, `Predicate<T>`, `Supplier<T>` và `Consumer<T>`.\n' +
+    '\n' +
+    '**Lambda** là biểu thức hiện thực chính cái SAM đó, chẳng hạn `(a, b) -> a + b`. Nó không phải anonymous class: compiler dịch nó thành `invokedynamic` cộng một method ẩn, nên không sinh file `$1.class` và cũng không tạo ra `this` mới — `this` bên trong lambda vẫn trỏ tới class bao ngoài.\n' +
+    '\n' +
+    '**Method reference** là cách viết rút gọn của những lambda chỉ gọi lại một method có sẵn: `User::getName` tương đương `u -> u.getName()`, tương tự có `System.out::println` hay `ArrayList::new`.',
   essence:
-    'Functional interface là "kiểu" của hành vi; lambda/method reference là hai cách viết một giá trị hành vi. Lambda nhẹ hơn anonymous class về ngữ nghĩa `this` và bytecode.',
+    'Functional interface đóng vai trò "kiểu" của một hành vi, còn lambda và method reference là hai cách viết ra giá trị hành vi đó. So với anonymous class, lambda nhẹ hơn cả về ngữ nghĩa `this` lẫn bytecode sinh ra.',
   example:
-    '`list.forEach(System.out::println)`, `stream.map(String::trim).filter(s -> !s.isBlank())`. Trong Spring: `jdbcTemplate.query(sql, (rs, i) -> new User(rs.getLong("id"), rs.getString("name")))` — `RowMapper` là functional interface.',
+    'Bạn gặp chúng khắp nơi: `list.forEach(System.out::println)` hay `stream.map(String::trim).filter(s -> !s.isBlank())`. Trong Spring cũng vậy — `jdbcTemplate.query(sql, (rs, i) -> new User(rs.getLong("id"), rs.getString("name")))` viết được như thế vì `RowMapper` là một functional interface.',
   viz: {
     type: 'compare',
     cols: ['Functional interface', 'Lambda', 'Method reference'],
@@ -1019,17 +1073,20 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
+  id: 'java-fzjkh0',
   q: 'Java truyền tham số theo pass-by-value hay pass-by-reference?',
   answer:
-    'Java **luôn pass-by-value**. Với primitive, value là chính giá trị đó. Với object, value là **bản sao của tham chiếu** (reference) — không phải bản sao object, cũng không phải chính biến gốc.\n\n' +
-    'Hệ quả:\n' +
-    '- Trong method, gán lại tham số (`param = new X()`) **không** ảnh hưởng biến ở caller.\n' +
-    '- Nhưng gọi method làm thay đổi trạng thái object (`param.setName(...)`) **có** ảnh hưởng, vì cả hai reference trỏ cùng object.\n\n' +
-    'Nhiều người nhầm là pass-by-reference vì thấy object bị sửa; thực chất đó là "pass reference by value".',
+    'Java **luôn pass-by-value**. Với primitive, cái value đó chính là giá trị. Với object, value là **bản sao của tham chiếu** — không phải bản sao object, cũng không phải chính biến gốc.\n' +
+    '\n' +
+    'Từ đó suy ra hai hệ quả:\n' +
+    '- Gán lại tham số bên trong method (`param = new X()`) **không** ảnh hưởng gì tới biến ở caller.\n' +
+    '- Nhưng gọi method làm thay đổi trạng thái object (`param.setName(...)`) thì **có** ảnh hưởng, vì cả hai reference cùng trỏ tới một object.\n' +
+    '\n' +
+    'Nhiều người nhầm đây là pass-by-reference chỉ vì thấy object bị sửa; thực chất nó là "pass reference by value".',
   essence:
-    'Cái được copy khi truyền tham số là ô nhớ chứa reference, không phải object. Sửa xuyên qua reference thì thấy, thay reference thì không.',
+    'Thứ được copy khi truyền tham số là ô nhớ chứa reference chứ không phải bản thân object. Vì vậy sửa xuyên qua reference thì caller thấy, còn thay hẳn reference thì caller không thấy.',
   example:
-    '`void reset(User u) { u = new User(); }` — sau khi gọi, biến ở ngoài không đổi. `void deactivate(User u) { u.setActive(false); }` — biến ở ngoài thấy `active=false`. Đây là lý do method "swap(a, b)" kiểu C không viết được trong Java.',
+    'Với `void reset(User u) { u = new User(); }`, sau khi gọi xong biến ở ngoài vẫn nguyên. Nhưng với `void deactivate(User u) { u.setActive(false); }`, biến ở ngoài sẽ thấy `active=false`. Đây cũng chính là lý do bạn không viết được method `swap(a, b)` kiểu C trong Java.',
   viz: {
     type: 'compare',
     cols: ['param = new User()', 'param.setActive(false)'],
@@ -1071,16 +1128,20 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Java Core & OOP',
-  q: 'Shallow copy và deep copy? Vấn đề của `Cloneable`/`clone()`?',
+  id: 'java-rwtq02',
+  q: 'Shallow copy khác deep copy thế nào, và `Cloneable`/`clone()` có vấn đề gì?',
   answer:
-    '**Shallow copy**: sao chép object ngoài cùng nhưng các field tham chiếu vẫn trỏ chung tới object con → sửa object con ảnh hưởng cả bản gốc lẫn bản sao.\n\n' +
-    '**Deep copy**: sao chép đệ quy toàn bộ đồ thị object, hai bản độc lập hoàn toàn.\n\n' +
-    '`Object.clone()` mặc định là shallow, lại còn: `Cloneable` là marker interface rỗng khó hiểu; `clone()` là `protected`, không gọi constructor, ép cast, xử lý exception vụng. Josh Bloch khuyên tránh.\n\n' +
-    'Thay thế: **copy constructor** `new User(other)`, **static factory** `User.copyOf(other)`, hoặc serialize/deserialize (chậm) cho deep copy.',
+    '**Shallow copy** sao chép object ngoài cùng nhưng các field tham chiếu vẫn trỏ chung tới object con, nên sửa object con là ảnh hưởng cả bản gốc lẫn bản sao.\n' +
+    '\n' +
+    '**Deep copy** thì sao chép đệ quy toàn bộ đồ thị object, cho ra hai bản độc lập hoàn toàn.\n' +
+    '\n' +
+    '`Object.clone()` mặc định chỉ là shallow, và còn kèm một loạt vấn đề: `Cloneable` là marker interface rỗng khó hiểu, `clone()` lại `protected`, nó không gọi constructor, bắt bạn phải ép cast và xử lý exception một cách vụng về. Chính Josh Bloch khuyên nên tránh.\n' +
+    '\n' +
+    'Các lựa chọn thay thế gồm **copy constructor** kiểu `new User(other)`, **static factory** kiểu `User.copyOf(other)`, hoặc serialize rồi deserialize khi cần deep copy — tuy cách này chậm.',
   essence:
-    'Khác biệt nằm ở việc các tham chiếu con được chia sẻ hay nhân bản. `clone()` là cơ chế cũ nhiều khiếm khuyết; copy constructor rõ ràng và an toàn hơn.',
+    'Khác biệt nằm ở chỗ các tham chiếu con được chia sẻ hay được nhân bản. Riêng `clone()` là cơ chế cũ với nhiều khiếm khuyết, nên copy constructor vừa rõ ràng vừa an toàn hơn.',
   example:
-    '`class Team { List<Player> players; }`. Shallow copy hai team dùng chung list → thêm cầu thủ vào team A cũng vào team B. Copy constructor: `this.players = new ArrayList<>(other.players)` (và deep-copy từng `Player` nếu `Player` mutable).',
+    'Xét `class Team { List<Player> players; }`. Nếu shallow copy, hai team dùng chung một list, nên thêm cầu thủ vào team A thì team B cũng có. Copy constructor giải quyết chuyện đó bằng `this.players = new ArrayList<>(other.players)`, và nếu `Player` là mutable thì phải deep-copy từng `Player` nữa.',
   viz: {
     type: 'compare',
     cols: ['Shallow copy', 'Deep copy'],

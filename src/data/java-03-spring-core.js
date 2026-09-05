@@ -1,6 +1,7 @@
 SS.addQuestions('java', [
 {
   cat: 'Spring Core / IoC',
+  id: 'java-10zebq6',
   q: 'IoC và DI là gì? Có mấy kiểu inject, nên dùng kiểu nào?',
   answer:
     '**IoC** đảo quyền điều khiển: container tạo và ghép nối object thay vì code tự `new`. **DI** là cách hiện thực IoC — container "tiêm" phụ thuộc vào bean.\n\n' +
@@ -61,6 +62,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-12p12o5',
   q: 'Phân biệt `@Component`, `@Bean` và `@Configuration`.',
   answer:
     '`@Component` (và `@Service`, `@Repository`, `@Controller`): đánh dấu class để **component scan** tự phát hiện và tạo bean. Dùng cho class **của bạn**.\n\n' +
@@ -113,6 +115,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-9ksr4m',
   q: 'Các scope của Spring bean? "Singleton" của Spring nghĩa là gì?',
   answer:
     '- **singleton** (mặc định): **một instance cho mỗi ApplicationContext**, không phải một per JVM. Tạo eager khi khởi động.\n' +
@@ -164,6 +167,7 @@ SS.addQuestions('java', [
 {
   cat: 'Spring Core / IoC',
   diagram: 'bean-lifecycle',
+  id: 'java-numv1x',
   q: 'Vòng đời của một Spring bean gồm những bước nào?',
   answer:
     'Khởi tạo: instantiate (constructor) → populate properties (DI) → `BeanNameAware`/`BeanFactoryAware`/`ApplicationContextAware` → `BeanPostProcessor.postProcessBeforeInitialization` → `@PostConstruct` → `InitializingBean.afterPropertiesSet()` → custom `initMethod` → `BeanPostProcessor.postProcessAfterInitialization` (nơi **AOP proxy** được tạo) → bean sẵn sàng.\n\n' +
@@ -209,6 +213,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-u6l9hz',
   q: 'Spring xử lý circular dependency thế nào? Khi nào không xử lý được?',
   answer:
     'Với **field/setter injection** giữa hai singleton A↔B: Spring dùng **three-level cache**. Nó tạo A (chưa hoàn thiện), đặt một tham chiếu sớm vào "early singleton cache", tiêm A dở dang vào B, hoàn thiện B, rồi hoàn thiện A. Hoạt động được.\n\n' +
@@ -265,6 +270,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-1h723rh',
   q: 'BeanFactory và ApplicationContext khác nhau ra sao?',
   answer:
     '`BeanFactory` là container cơ bản: DI, lazy khởi tạo bean khi `getBean`.\n\n' +
@@ -315,6 +321,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-wrhza5',
   q: '`BeanPostProcessor` và `BeanFactoryPostProcessor` khác gì?',
   answer:
     '`BeanFactoryPostProcessor` (BFPP): chạy **sau khi** đọc xong bean definition nhưng **trước khi** tạo bean. Sửa **metadata/định nghĩa** bean. Ví dụ `PropertySourcesPlaceholderConfigurer` thay `${...}`.\n\n' +
@@ -376,6 +383,7 @@ SS.addQuestions('java', [
 {
   cat: 'Spring AOP',
   diagram: 'spring-aop-proxy',
+  id: 'java-1dlv7ha',
   q: 'Spring AOP hoạt động thế nào? JDK proxy vs CGLIB? Vấn đề self-invocation?',
   answer:
     'Spring AOP dựa trên **proxy runtime**. Nếu bean **implements interface** → mặc định JDK dynamic proxy (proxy theo interface). Nếu không → **CGLIB** (tạo subclass, ghi đè method). Spring Boot mặc định ép CGLIB (`proxyTargetClass=true`).\n\n' +
@@ -428,6 +436,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring AOP',
+  id: 'java-gqd9um',
   q: '`@Transactional` hoạt động nội bộ ra sao? Khi nào KHÔNG rollback?',
   answer:
     'Một BPP bọc bean bằng proxy; method `@Transactional` được `TransactionInterceptor` bao: mở transaction (qua `PlatformTransactionManager`), gọi method, `commit` nếu bình thường, `rollback` nếu ném exception.\n\n' +
@@ -492,6 +501,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring AOP',
+  id: 'java-u9besr',
   q: 'Transaction propagation: REQUIRED, REQUIRES_NEW, NESTED khác nhau thế nào?',
   answer:
     '- **REQUIRED** (mặc định): tham gia transaction hiện có, nếu chưa có thì tạo mới. Rollback ở bất kỳ đâu → cả transaction rollback.\n' +
@@ -547,6 +557,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-2dh2vp',
   q: '`@Autowired` resolve bean thế nào khi có nhiều ứng viên?',
   answer:
     'Thứ tự: (1) khớp theo **kiểu**; (2) nếu nhiều ứng viên, lọc theo `@Primary`; (3) nếu vẫn nhiều, so khớp `@Qualifier("name")` hoặc **tên field/param** với tên bean; (4) không giải quyết được → `NoUniqueBeanDefinitionException`.\n\n' +
@@ -620,6 +631,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-1st8uxi',
   q: 'Tiêm bean prototype vào bean singleton thì sao? Cách lấy instance mới mỗi lần?',
   answer:
     'Nếu tiêm thẳng, prototype chỉ được resolve **một lần** lúc tạo singleton → singleton giữ mãi một instance prototype ("đóng băng").\n\n' +
@@ -688,6 +700,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-rx2uoc',
   q: '`${...}` và `#{...}` trong `@Value` khác nhau thế nào?',
   answer:
     '`${property.key:default}` — **property placeholder**: lấy giá trị từ `Environment` (application.yml, biến môi trường, `--arg`, config server). Resolve bởi `PropertySourcesPlaceholderConfigurer`.\n\n' +
@@ -747,6 +760,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-xy2g4d',
   q: 'Profiles trong Spring dùng để làm gì? `@Profile` hoạt động ra sao?',
   answer:
     'Profile cho phép nhóm cấu hình/bean theo môi trường (`dev`, `test`, `staging`, `prod`). Kích hoạt qua `spring.profiles.active=prod` (env var, arg, config).\n\n' +
@@ -828,6 +842,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-17koutq',
   q: 'Spring event: `ApplicationEventPublisher`, `@EventListener`, `@TransactionalEventListener`.',
   answer:
     'Publish: inject `ApplicationEventPublisher`, gọi `publishEvent(new OrderCreatedEvent(order))`.\n\n' +
@@ -895,6 +910,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-1spkfue',
   q: 'Component scanning là gì? `@ComponentScan` và `@SpringBootApplication` liên quan thế nào?',
   answer:
     'Component scan quét classpath tìm class có `@Component` (và stereotype) để đăng ký bean tự động.\n\n' +
@@ -947,6 +963,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-1m8csdq',
   q: '`@Configuration` với `proxyBeanMethods = true/false` khác gì (full vs lite mode)?',
   answer:
     '**Full mode** (`proxyBeanMethods = true`, mặc định): class `@Configuration` được bọc CGLIB proxy. Gọi một `@Bean` method từ method khác trong cùng config trả về **cùng singleton** đã đăng ký, không tạo instance mới.\n\n' +
@@ -1010,6 +1027,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-1rkx80d',
   q: '`@Conditional` là gì? Nó liên quan gì tới auto-configuration?',
   answer:
     '`@Conditional(SomeCondition.class)` chỉ đăng ký bean/config khi điều kiện đúng. Spring Boot cung cấp sẵn:\n' +
@@ -1079,6 +1097,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring AOP',
+  id: 'java-topucn',
   q: '`@Async` và `@Scheduled` hoạt động thế nào? Cạm bẫy thường gặp?',
   answer:
     'Cả hai dựa trên proxy AOP (cần `@EnableAsync` / `@EnableScheduling`).\n\n' +
@@ -1151,6 +1170,7 @@ SS.addQuestions('java', [
 },
 {
   cat: 'Spring Core / IoC',
+  id: 'java-1cx05ci',
   q: 'Spring singleton bean có thread-safe không? Làm sao để an toàn?',
   answer:
     'Spring **không** làm gì để bean thread-safe. Một singleton bean được nhiều request/thread dùng chung, nên:\n' +

@@ -2,6 +2,7 @@ SS.addQuestions('aws', [
 {
   cat: 'VPC',
   diagram: 'vpc-subnets',
+  id: 'aws-q6a1vd',
   q: 'VPC, subnet (public/private) và route table hoạt động thế nào?',
   answer:
     '**VPC**: mạng ảo cô lập trong một region, bạn chọn dải CIDR (ví dụ `10.0.0.0/16`).\n\n' +
@@ -50,6 +51,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'VPC',
+  id: 'aws-12g3z1a',
   q: 'Internet Gateway và NAT Gateway khác nhau thế nào?',
   answer:
     '- **Internet Gateway (IGW)**: cho phép tài nguyên có **public IP** trong public subnet giao tiếp **hai chiều** với internet. Không tính phí, không bottleneck, redundant sẵn.\n' +
@@ -102,6 +104,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'VPC',
+  id: 'aws-85noxt',
   q: 'Security Group và Network ACL khác nhau ra sao?',
   answer:
     '| | Security Group | Network ACL |\n' +
@@ -159,6 +162,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Kết nối',
+  id: 'aws-tg8v2',
   q: 'VPC Peering và Transit Gateway — khi nào dùng cái nào?',
   answer:
     '- **VPC Peering**: kết nối **1-1** giữa hai VPC (cùng/khác region/account). **Không bắc cầu** (A-B, B-C không cho A-C). Số kết nối bùng nổ theo `n(n-1)/2` khi nhiều VPC.\n' +
@@ -212,6 +216,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Kết nối',
+  id: 'aws-sb2d1y',
   q: 'VPC Endpoint: Gateway Endpoint và Interface Endpoint (PrivateLink)?',
   answer:
     'Cho phép tài nguyên trong VPC truy cập dịch vụ AWS **không đi qua internet/NAT**.\n\n' +
@@ -267,6 +272,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DNS',
+  id: 'aws-1hw6sd',
   q: 'Route 53: các routing policy?',
   answer:
     '- **Simple**: một record, một hoặc nhiều IP (client tự chọn).\n' +
@@ -327,6 +333,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'DNS',
+  id: 'aws-yy48w1',
   q: 'Route 53 health check hoạt động thế nào?',
   answer:
     'Health checker của AWS (từ nhiều địa điểm toàn cầu) định kỳ gọi endpoint (HTTP/HTTPS/TCP). Endpoint được coi unhealthy nếu tỉ lệ checker báo fail vượt ngưỡng.\n\n' +
@@ -387,6 +394,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'CDN',
+  id: 'aws-1ih39qh',
   q: 'CloudFront: caching, TTL, invalidation và OAC?',
   answer:
     'CloudFront cache nội dung ở edge location. **Cache key** mặc định là URL; cấu hình thêm để cache theo header/cookie/query string cụ thể.\n\n' +
@@ -452,6 +460,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'CDN',
+  id: 'aws-19ca0sx',
   q: 'Dựng static website với S3 + CloudFront như thế nào?',
   answer:
     'Kiến trúc khuyến nghị:\n' +
@@ -515,6 +524,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'API',
+  id: 'aws-1dl4dn1',
   q: 'API Gateway: REST API, HTTP API và WebSocket API khác nhau?',
   answer:
     '- **HTTP API**: mới hơn, **rẻ hơn ~70%**, latency thấp hơn, đủ cho hầu hết use case — proxy tới Lambda/HTTP backend, JWT authorizer, CORS. Thiếu: API keys/usage plans, request validation nâng cao, WAF gắn trực tiếp, cache.\n' +
@@ -566,6 +576,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'API',
+  id: 'aws-xjyy3y',
   q: 'API Gateway: throttling, usage plan và các cách xác thực?',
   answer:
     '**Throttling**: token bucket — `rate` (steady) + `burst`. Áp ở cấp account, stage, method, hoặc per-client qua usage plan. Vượt → `429 Too Many Requests`.\n\n' +
@@ -631,6 +642,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'API',
+  id: 'aws-jsnrd8',
   q: 'Khi nào dùng ALB, khi nào dùng API Gateway?',
   answer:
     '**API Gateway** hơn khi: serverless (tích hợp Lambda native), cần API key/usage plan/quota, request validation & transformation, WebSocket, không muốn quản lý VPC/subnet, throttling per-client tinh vi, canary theo %.\n\n' +
@@ -683,6 +695,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Kết nối',
+  id: 'aws-1tnokjc',
   q: 'Direct Connect và Site-to-Site VPN khác nhau thế nào?',
   answer:
     '- **Site-to-Site VPN**: tunnel IPsec **qua internet** giữa on-prem và VPC (hoặc TGW). Thiết lập trong vài phút, rẻ, nhưng băng thông/latency phụ thuộc internet, kém ổn định.\n' +
@@ -739,6 +752,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'VPC',
+  id: 'aws-963aje',
   q: 'DNS resolution trong VPC hoạt động thế nào?',
   answer:
     'Mỗi VPC có **Route 53 Resolver** tại địa chỉ `VPC_CIDR_base + 2` (ví dụ `10.0.0.2`) và `169.254.169.253`.\n\n' +
@@ -805,6 +819,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Chi phí',
+  id: 'aws-1inb18s',
   q: 'Chi phí data transfer trên AWS — những điểm hay bị bỏ sót?',
   answer:
     '- **Inbound tới AWS**: hầu như **miễn phí**.\n' +
@@ -868,6 +883,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Bảo mật',
+  id: 'aws-12pbq50',
   q: 'AWS WAF và Shield bảo vệ khỏi những gì?',
   answer:
     '- **AWS Shield Standard** (miễn phí, tự động): chống DDoS lớp mạng/vận chuyển (L3/L4) — SYN flood, UDP reflection — cho mọi tài nguyên có public IP / CloudFront / Route 53.\n' +
@@ -927,6 +943,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'Kết nối',
+  id: 'aws-1e5it0q',
   q: 'AWS PrivateLink để expose dịch vụ SaaS/nội bộ như thế nào?',
   answer:
     'PrivateLink cho phép **consumer** truy cập một dịch vụ qua **Interface Endpoint (ENI private IP trong VPC của họ)** mà không qua internet, không peering, không lộ dải IP hai bên.\n\n' +
@@ -983,6 +1000,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'VPC',
+  id: 'aws-1ap1th6',
   q: 'Troubleshoot kết nối mạng trong VPC — dùng công cụ gì?',
   answer:
     '- **VPC Flow Logs**: ghi metadata mọi luồng IP (src/dst/port/protocol, ACCEPT/REJECT, byte) ra CloudWatch Logs / S3. Cho biết traffic có tới nơi không và bị chặn ở đâu (SG hay NACL).\n' +
@@ -1040,6 +1058,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'CDN',
+  id: 'aws-17eidip',
   q: 'AWS Global Accelerator khác CloudFront thế nào?',
   answer:
     '- **CloudFront**: CDN — **cache** nội dung (chủ yếu HTTP/S) ở edge, tối ưu cho content tĩnh/động cacheable, có WAF/Lambda@Edge.\n' +
@@ -1095,6 +1114,7 @@ SS.addQuestions('aws', [
 },
 {
   cat: 'VPC',
+  id: 'aws-17l6qkp',
   q: 'Elastic IP và Elastic Network Interface (ENI) là gì?',
   answer:
     '- **ENI**: card mạng ảo — có private IP (1 primary + nhiều secondary), MAC, security group, có thể có public IP/EIP. Gắn/tháo giữa các instance (cùng AZ) → di chuyển "danh tính mạng".\n' +

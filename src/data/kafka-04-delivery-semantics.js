@@ -1,6 +1,7 @@
 SS.addQuestions('kafka', [
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1v3yz87',
   q: 'At-most-once, at-least-once, exactly-once nghĩa là gì?',
   answer:
     '- **At-most-once**: mỗi message được xử lý 0 hoặc 1 lần — có thể **mất**, không bao giờ trùng. Đạt bằng cách commit offset *trước* khi xử lý.\n' +
@@ -52,6 +53,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1wd6soo',
   q: 'Vì sao at-least-once là mặc định, và trùng lặp đến từ đâu?',
   answer:
     'Kafka ưu tiên **không mất dữ liệu**: producer retry khi không chắc ghi thành công, consumer commit offset sau khi xử lý. Cả hai đều có thể tạo trùng:\n\n' +
@@ -103,6 +105,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-dt56am',
   q: 'Idempotent producer khử trùng lặp về mặt kỹ thuật như thế nào?',
   answer:
     'Khi bật `enable.idempotence=true`, mỗi producer được cấp **PID (Producer ID)** từ broker. Mỗi batch gửi tới một partition mang **sequence number** tăng liên tục.\n\n' +
@@ -158,6 +161,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-1xc5q2j',
   q: 'Kafka transactions cho phép ghi nguyên tử như thế nào?',
   answer:
     'Producer đặt `transactional.id` cố định. Luồng:\n' +
@@ -209,6 +213,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-1etoye',
   q: 'Pattern consume-transform-produce với exactly-once hoạt động ra sao?',
   answer:
     'Đây là pipeline điển hình: đọc từ topic A, biến đổi, ghi ra topic B.\n\n' +
@@ -273,6 +278,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-f5w6u5',
   q: 'Zombie fencing trong Kafka transactions là gì?',
   answer:
     '"Zombie" = một instance producer cũ tưởng đã chết nhưng vẫn còn sống (network partition), tiếp tục ghi.\n\n' +
@@ -329,6 +335,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-153z2e',
   q: 'Dual-write problem là gì và Outbox pattern giải quyết thế nào?',
   answer:
     '**Dual write**: một thao tác cần ghi vào **hai hệ thống** — DB (lưu đơn hàng) và Kafka (phát sự kiện). Không có transaction phân tán → nếu ghi DB xong mà publish Kafka fail (hoặc ngược lại) → hai bên **không nhất quán**.\n\n' +
@@ -401,6 +408,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1wsrh5t',
   q: 'Idempotent consumer với dedup store — thiết kế thế nào?',
   answer:
     'Mỗi message cần một **khoá idempotency** ổn định: id nghiệp vụ (`paymentId`), hoặc `(topic, partition, offset)`, hoặc hash nội dung.\n\n' +
@@ -459,6 +467,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-yd57uj',
   q: 'EOS có nhược điểm gì? Khi nào KHÔNG nên dùng?',
   answer:
     'Chi phí:\n' +
@@ -513,6 +522,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-1tyxyxa',
   q: 'Kafka Streams đạt exactly-once bằng cách nào (`processing.guarantee`)?',
   answer:
     'Đặt `processing.guarantee=exactly_once_v2`. Mỗi task Streams dùng một transactional producer. Trong một chu kỳ commit, nó **atomically**:\n' +
@@ -570,6 +580,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1wm5c8e',
   q: 'Làm sao vừa giữ thứ tự, vừa exactly-once, vừa throughput?',
   answer:
     '- **Thứ tự trong partition**: `enable.idempotence=true` cho phép `max.in.flight.requests.per.connection ≤ 5` mà không đảo thứ tự khi retry.\n' +
@@ -629,6 +640,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Exactly-once',
+  id: 'kafka-jaeosg',
   q: '`transaction.timeout.ms` và transaction "treo" (hanging) là gì?',
   answer:
     '`transaction.timeout.ms` (producer, mặc định 60s; ≤ `transaction.max.timeout.ms` của broker): nếu producer mở transaction mà không commit/abort trong thời gian này, **coordinator tự abort** nó.\n\n' +
@@ -680,6 +692,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-15yu8dt',
   q: 'So sánh Kafka EOS với distributed transaction (2PC/XA)?',
   answer:
     '**2PC/XA**: coordinator hỏi tất cả participant "sẵn sàng?" (prepare), rồi "commit". Blocking: nếu coordinator chết sau prepare, participant giữ khoá chờ vô hạn. Kém scale, latency cao, hầu hết hệ phân tán hiện đại tránh.\n\n' +
@@ -733,6 +746,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-a9nv2h',
   q: 'Message key ảnh hưởng thế nào tới dedup và compaction?',
   answer:
     'Key là đơn vị cho **compaction** (giữ bản mới nhất mỗi key) và thường là **khoá idempotency tự nhiên** cho consumer.\n\n' +
@@ -783,6 +797,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1rd252f',
   q: 'Xử lý poison message trong pipeline exactly-once mà không phá EOS?',
   answer:
     'Poison message (không deserialize được / luôn ném exception) trong transaction: nếu bạn abort transaction để "bỏ qua" thì cả lô bị xử lý lại → kẹt vĩnh viễn.\n\n' +
@@ -839,6 +854,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1ozdqu9',
   q: '"Effectively-once" và tranh luận quanh "exactly-once"?',
   answer:
     'Có ý kiến cho rằng "exactly-once delivery" là bất khả thi trong hệ phân tán (two generals problem) — bạn không thể đảm bảo message được *gửi* đúng một lần qua mạng không tin cậy.\n\n' +
@@ -888,6 +904,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1a2phpk',
   q: 'Saga pattern là gì? Choreography vs orchestration?',
   answer:
     'Saga: một transaction nghiệp vụ dài trải nhiều service được chia thành chuỗi **local transaction**, mỗi bước phát sự kiện kích hoạt bước sau. Nếu một bước fail → chạy các **compensating action** (bù trừ) để hoàn tác các bước trước.\n\n' +
@@ -950,6 +967,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-1wd2ofh',
   q: 'Idempotency key ở biên API (HTTP) hoạt động thế nào?',
   answer:
     'Client gửi header `Idempotency-Key: <uuid>` cho các request không an toàn (POST tạo tài nguyên/thanh toán). Server:\n' +
@@ -1014,6 +1032,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-vor1gj',
   q: 'Transactional outbox: polling publisher vs CDC (Debezium)?',
   answer:
     'Cả hai đọc bảng `outbox` (được ghi cùng transaction với dữ liệu nghiệp vụ) và publish lên Kafka.\n\n' +
@@ -1085,6 +1104,7 @@ SS.addQuestions('kafka', [
 },
 {
   cat: 'Delivery semantics',
+  id: 'kafka-iyiych',
   q: 'Trùng lặp do consumer rebalance — chống bằng cách nào?',
   answer:
     'Khi rebalance xảy ra giữa lúc consumer đã xử lý một phần lô nhưng chưa commit, consumer mới nhận partition đó và xử lý lại từ offset committed cũ.\n\n' +

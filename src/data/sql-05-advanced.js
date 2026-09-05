@@ -1,6 +1,7 @@
 SS.addQuestions('sql', [
 {
   cat: 'Window functions',
+  id: 'sql-qy4p6v',
   q: 'Window function là gì? `OVER`, `PARTITION BY`, `ORDER BY`?',
   answer:
     'Window function tính toán trên **một tập hàng liên quan** tới hàng hiện tại, nhưng **không gộp** chúng lại (khác `GROUP BY` — vẫn giữ nguyên số hàng).\n\n' +
@@ -82,6 +83,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Window functions',
+  id: 'sql-1cxeqk2',
   q: 'Window frame (`ROWS`/`RANGE BETWEEN`): running total và moving average?',
   answer:
     'Frame xác định **những hàng nào** trong partition được đưa vào tính toán cho hàng hiện tại:\n' +
@@ -149,6 +151,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Window functions',
+  id: 'sql-xd1ibq',
   q: '`LAG` / `LEAD` và bài toán so sánh với hàng trước/sau?',
   answer:
     '`LAG(col, n, default) OVER (PARTITION BY ... ORDER BY ...)` — lấy giá trị `col` của hàng **cách n hàng phía trước** (mặc định n=1). `LEAD` = phía sau.\n\n' +
@@ -228,6 +231,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'CTE',
+  id: 'sql-vacui7',
   q: 'CTE (`WITH`) là gì? Có tối ưu / materialize không?',
   answer:
     'CTE đặt tên cho một truy vấn con, dùng lại trong query chính — giúp **đọc dễ**, tránh lặp subquery, và cho phép **recursive**.\n\n' +
@@ -296,6 +300,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'CTE',
+  id: 'sql-si2l8o',
   q: 'Recursive CTE — duyệt cây/đồ thị trong SQL?',
   answer:
     '```\n' +
@@ -375,6 +380,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'View',
+  id: 'sql-1hxa3zp',
   q: 'View và materialized view khác nhau thế nào?',
   answer:
     '- **View**: truy vấn được lưu tên; mỗi lần query view, DB chạy lại truy vấn gốc. Không lưu dữ liệu, luôn mới. Dùng để: đóng gói logic phức tạp, kiểm soát truy cập (chỉ expose một số cột/hàng), tương thích ngược khi refactor schema.\n' +
@@ -435,6 +441,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Nâng cao',
+  id: 'sql-l06f3l',
   q: '`GROUPING SETS`, `ROLLUP`, `CUBE` — tính nhiều mức tổng hợp một lần?',
   answer:
     'Thay vì `UNION ALL` nhiều query `GROUP BY` khác nhau:\n' +
@@ -496,6 +503,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'JOIN',
+  id: 'sql-cl0654',
   q: '`LATERAL` join dùng để làm gì?',
   answer:
     '`LATERAL` cho phép một subquery/hàm ở mệnh đề `FROM` **tham chiếu cột của bảng đứng trước** nó — như một "vòng lặp for" trên bảng bên trái.\n\n' +
@@ -560,6 +568,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Nâng cao',
+  id: 'sql-1q7l4d3',
   q: 'Greatest-N-per-group: các cách lấy "hàng mới nhất mỗi nhóm"?',
   answer:
     'Bài toán: mỗi `customer_id`, lấy đơn hàng có `created_at` lớn nhất (cả hàng, không chỉ max date).\n\n' +
@@ -645,6 +654,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Phân vùng',
+  id: 'sql-53teim',
   q: 'Partition pruning và constraint exclusion hoạt động thế nào?',
   answer:
     'Khi query lọc theo **khoá partition**, optimizer chỉ quét các partition có thể chứa kết quả, bỏ qua phần còn lại.\n\n' +
@@ -707,6 +717,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Sharding',
+  id: 'sql-1hpsntr',
   q: 'Sharding: hash, range, directory — và bài toán cross-shard?',
   answer:
     'Chia dữ liệu qua **nhiều database instance** theo shard key:\n' +
@@ -769,6 +780,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Vận hành',
+  id: 'sql-1fkkd05',
   q: 'Read replica và read/write splitting: xử lý replication lag thế nào?',
   answer:
     'Route write → primary, read → replica để scale đọc. Vấn đề: replica **trễ** (async) → "read your own write" fail (user cập nhật xong, load lại thấy dữ liệu cũ).\n\n' +
@@ -831,6 +843,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Vận hành',
+  id: 'sql-bwzar8',
   q: 'Connection pooling (PgBouncer) — vì sao cần và các pool mode?',
   answer:
     'Mỗi kết nối Postgres = một **process** (~vài MB RAM + overhead). Vài nghìn app connection → DB sập. App thường mở/đóng connection nhiều, để idle.\n\n' +
@@ -894,6 +907,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'sql-19e5rme',
   q: 'Bulk insert: `COPY`, multi-row `INSERT`, batching?',
   answer:
     'Từ chậm tới nhanh:\n' +
@@ -960,6 +974,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'sql-8kvqq2',
   q: 'OLTP vs OLAP — khi nào chuyển sang data warehouse?',
   answer:
     '- **OLTP** (transactional): nhiều truy vấn nhỏ, đọc/ghi vài hàng, index B-tree, chuẩn hoá, latency ms. Postgres/MySQL.\n' +
@@ -1018,6 +1033,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'sql-13ah00r',
   q: 'Xoá/cập nhật hàng loạt mà không khoá lâu — batching?',
   answer:
     'Một `DELETE FROM t WHERE created_at < :cutoff` trên 50M hàng: giữ lock lâu, WAL khổng lồ, replication lag, bloat, có thể timeout.\n\n' +
@@ -1095,6 +1111,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Kiến trúc',
+  id: 'sql-1cghkr0',
   q: 'SQL vs NoSQL — chọn theo tiêu chí nào? Polyglot persistence?',
   answer:
     'Chọn **SQL** (RDBMS) khi: dữ liệu có quan hệ rõ, cần transaction ACID đa hàng/bảng, cần constraint/integrity mạnh, truy vấn ad-hoc đa dạng, tính nhất quán quan trọng. (Mặc định hợp lý cho hầu hết ứng dụng.)\n\n' +
@@ -1157,6 +1174,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Full-text search',
+  id: 'sql-11xurgs',
   q: 'Full-text search trong SQL (`tsvector`/GIN) vs search engine chuyên dụng?',
   answer:
     'Postgres FTS: `to_tsvector(\'english\', body)` → GIN index; `WHERE search_vector @@ to_tsquery(\'quick & fox\')`. Có stemming, ranking (`ts_rank`), highlight.\n\n' +
@@ -1221,6 +1239,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'sql-195gufs',
   q: 'Prepared statements: lợi ích và cạm bẫy (plan caching)?',
   answer:
     'Prepared statement: parse + plan một lần, thực thi nhiều lần với tham số khác nhau → tiết kiệm parse/plan overhead, chống SQL injection.\n\n' +
@@ -1283,6 +1302,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Hiệu năng',
+  id: 'sql-ydkoyz',
   q: 'Các anti-pattern SQL phổ biến nhất trong code production?',
   answer:
     '1. **`SELECT *`** — kéo cột thừa, phá covering index.\n' +

@@ -2,6 +2,7 @@ SS.addQuestions('sql', [
 {
   cat: 'Index',
   diagram: 'btree-index',
+  id: 'sql-kkkiia',
   q: 'B-tree index hoạt động thế nào? Khi nào được dùng?',
   answer:
     'B-tree là cây cân bằng, các node lá liên kết nhau và chứa (key đã sắp xếp → con trỏ tới hàng). Tra cứu từ root xuống lá là O(log N).\n\n' +
@@ -52,6 +53,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-a2wwv2',
   q: 'Clustered index và non-clustered index khác nhau thế nào?',
   answer:
     '- **Clustered index** (MySQL InnoDB PK, SQL Server): **các hàng dữ liệu được lưu vật lý theo thứ tự của key này**. Một bảng chỉ có một. Tra theo PK là lấy luôn cả hàng (không cần bước phụ).\n' +
@@ -108,6 +110,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-khbped',
   q: 'Composite index và quy tắc "leftmost prefix"?',
   answer:
     'Index `(a, b, c)` sắp xếp theo `a`, rồi `b`, rồi `c`. Nó phục vụ được các truy vấn dùng **tiền tố trái liên tục**:\n' +
@@ -168,6 +171,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-eg9bsc',
   q: 'Covering index / index-only scan là gì?',
   answer:
     'Nếu **mọi cột** truy vấn cần (trong SELECT, WHERE, ORDER BY) đều nằm trong index, DB trả kết quả **chỉ từ index**, không chạm bảng (heap) → nhanh hơn nhiều (bỏ bước bookmark lookup).\n\n' +
@@ -223,6 +227,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-gfoxw9',
   q: 'Vì sao index tồn tại nhưng optimizer không dùng?',
   answer:
     'Các lý do phổ biến:\n' +
@@ -292,6 +297,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-15fqxp9',
   q: 'Đọc EXPLAIN / EXPLAIN ANALYZE — chú ý những gì?',
   answer:
     '- `EXPLAIN`: kế hoạch + **ước lượng** (rows, cost).\n' +
@@ -360,6 +366,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-3yha27',
   q: 'Nested loop, hash join và merge join — khi nào DB chọn cái nào?',
   answer:
     '- **Nested Loop**: với mỗi hàng bảng ngoài, tra bảng trong (thường qua index). Tốt khi **bảng ngoài nhỏ** và bảng trong có index trên cột join. Tệ khi bảng ngoài lớn (N × chi phí tra trong).\n' +
@@ -415,6 +422,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-1vrkqib',
   q: 'Predicate "sargable" là gì? Hàm trên cột phá index thế nào?',
   answer:
     'SARGable (Search ARGument able) = predicate mà DB có thể dùng index để định vị. Yêu cầu: **cột đứng một mình một vế**, so sánh với hằng/tham số.\n\n' +
@@ -478,6 +486,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-80zkjg',
   q: 'Statistics của optimizer là gì? Vì sao "stats cũ" gây plan tệ?',
   answer:
     'DB lưu thống kê về mỗi bảng/cột: số hàng, số giá trị distinct (n_distinct), histogram phân bố, giá trị phổ biến nhất, tỉ lệ NULL. Optimizer dùng chúng để **ước lượng số hàng** mỗi bước → chọn scan/join/order.\n\n' +
@@ -535,6 +544,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-15vw1ot',
   q: 'Partial index (filtered index) dùng khi nào?',
   answer:
     'Index chỉ trên **tập con hàng** thoả điều kiện: `CREATE INDEX idx ON orders (created_at) WHERE status = \'PENDING\'`.\n\n' +
@@ -595,6 +605,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-1s0s1np',
   q: 'Over-indexing: chi phí của việc có quá nhiều index?',
   answer:
     'Mỗi index phải được **cập nhật** khi `INSERT`/`UPDATE`(cột index)/`DELETE` → **write amplification**: một insert vào bảng 10 index = 11 lần ghi cấu trúc.\n\n' +
@@ -652,6 +663,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-1ml92h2',
   q: 'Tìm kiếm chuỗi: `LIKE \'abc%\'` vs `\'%abc%\'` — index nào giúp?',
   answer:
     '- `LIKE \'abc%\'` (prefix): B-tree index trên cột **dùng được** (là một range scan).\n' +
@@ -711,6 +723,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-1mcgf0r',
   q: 'Truy vấn với `OR` — vì sao chậm và viết lại thế nào?',
   answer:
     '`WHERE a = 1 OR b = 2` — nếu `a` và `b` ở hai index khác nhau, DB thường không thể dùng một index cho cả hai vế → seq scan (hoặc bitmap OR nếu hỗ trợ).\n\n' +
@@ -772,6 +785,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-7zzjto',
   q: 'Index bloat và fillfactor là gì?',
   answer:
     '**Bloat**: theo thời gian, `UPDATE`/`DELETE` để lại "khoảng trống" trong index (Postgres: dead tuple; nói chung: page nửa rỗng) → index to hơn dữ liệu thực cần → chậm hơn, tốn cache.\n\n' +
@@ -832,6 +846,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-1eo819q',
   q: 'N+1 query problem ở tầng SQL/ORM — nhận diện và sửa?',
   answer:
     'Lấy N hàng cha, rồi vòng lặp chạy một truy vấn con cho **mỗi** hàng → 1 + N truy vấn. Latency = (1 + N) × RTT + N × chi phí query.\n\n' +
@@ -893,6 +908,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-11bnrg5',
   q: 'Vì sao `SELECT *` là anti-pattern trong code production?',
   answer:
     '- Kéo về **cột không cần** → nhiều I/O, nhiều network, nhiều RAM (nhất là cột `text`/`blob`/`jsonb` lớn).\n' +
@@ -951,6 +967,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-15xzhxu',
   q: 'Các mẫu slow query phổ biến và cách sửa nhanh?',
   answer:
     '1. **Hàm trên cột index** → viết lại sargable / functional index.\n' +
@@ -1019,6 +1036,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-1d59e2x',
   q: 'Index trên cột cardinality thấp (ví dụ boolean, status) có ích không?',
   answer:
     'Thường **ít ích** khi dùng đơn lẻ: nếu `status = \'active\'` khớp 90% bảng → optimizer bỏ index, seq scan.\n\n' +
@@ -1079,6 +1097,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Tối ưu',
+  id: 'sql-1rblu8b',
   q: 'Có nên dùng query hint / ép plan không?',
   answer:
     'Hint (`FORCE INDEX`, `/*+ ... */`, `pg_hint_plan`, `OPTION (...)`): ép optimizer chọn index/join cụ thể.\n\n' +
@@ -1140,6 +1159,7 @@ SS.addQuestions('sql', [
 },
 {
   cat: 'Index',
+  id: 'sql-pe6aw2',
   q: 'Expression / functional index và generated column index?',
   answer:
     'Index trên **kết quả một biểu thức** thay vì cột thô:\n' +
