@@ -35,6 +35,33 @@ CREATE TABLE IF NOT EXISTS daily_topic (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Thống kê theo ĐỊA CHỈ IP.
+-- CẢNH BÁO: IP là dữ liệu cá nhân theo GDPR, và trang /stats CÔNG KHAI hiển thị
+-- bảng IP này. Đây là lựa chọn có chủ ý của chủ site — /privacy đã ghi rõ.
+-- Muốn bớt nhạy cảm: che 8 bit cuối trước khi lưu (xem maskIp trong analytics.js).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS visitor_ip (
+  ip        TEXT PRIMARY KEY,
+  first_day TEXT NOT NULL,              -- YYYY-MM-DD (UTC) — lần đầu thấy IP này
+  last_day  TEXT NOT NULL,
+  last_seen INTEGER NOT NULL,           -- epoch ms — để sắp theo "gần đây nhất"
+  views     INTEGER NOT NULL DEFAULT 1, -- số phiên truy cập từ IP này
+  country   TEXT,                       -- request.cf.country (Cloudflare cho sẵn)
+  city      TEXT                        -- request.cf.city
+);
+CREATE INDEX IF NOT EXISTS idx_visitor_ip_views ON visitor_ip (views DESC);
+CREATE INDEX IF NOT EXISTS idx_visitor_ip_last_seen ON visitor_ip (last_seen DESC);
+
+-- Một dòng cho mỗi (ip, ngày) → đếm IP duy nhất theo ngày
+CREATE TABLE IF NOT EXISTS ip_day (
+  ip  TEXT NOT NULL,
+  day TEXT NOT NULL,
+  PRIMARY KEY (ip, day)
+);
+CREATE INDEX IF NOT EXISTS idx_ip_day_day ON ip_day (day);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Tài khoản người dùng (đăng nhập Google) — tuỳ chọn, chỉ để đồng bộ tiến độ
 -- học đa thiết bị + bảng xếp hạng. KHÔNG gắn với bảng visitor/lượt xem ẩn danh.
 -- ─────────────────────────────────────────────────────────────────────────────

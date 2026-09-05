@@ -126,9 +126,20 @@ export function renderPrivacyPage(o) {
 
     <h2>Thống kê truy cập (mọi khách)</h2>
     <p>Chúng tôi đếm lượt xem trang bằng một mã ngẫu nhiên lưu trong <code>localStorage</code> của
-      trình duyệt bạn. <strong>Không cookie, không lưu địa chỉ IP, không dịch vụ theo dõi bên thứ ba.</strong>
-      Chúng tôi tôn trọng tín hiệu <em>Do Not Track</em>. Xem số liệu tổng hợp tại
-      <a href="../stats/">trang Thống kê</a>.</p>
+      trình duyệt bạn. <strong>Không cookie, không dịch vụ theo dõi bên thứ ba.</strong>
+      Chúng tôi tôn trọng tín hiệu <em>Do Not Track</em>: bật nó thì trình duyệt bạn
+      <strong>không gửi gì</strong> cho máy chủ thống kê.</p>
+    <p><strong>Chúng tôi có lưu địa chỉ IP của bạn</strong> — kèm quốc gia và thành phố mà
+      Cloudflare suy ra từ IP đó, số phiên truy cập, lần đầu và lần gần nhất ghé thăm.
+      Danh sách này được <strong>hiển thị công khai</strong> tại
+      <a href="../stats/">trang Thống kê</a>: bất kỳ ai vào trang đó đều xem được.</p>
+    <p>Địa chỉ IP <strong>không</strong> được gắn với tài khoản Google của bạn (nếu bạn có đăng
+      nhập), không bán, không chia sẻ với bên thứ ba, và không dùng cho quảng cáo. Bảng IP theo
+      ngày được xoá tự động sau 90 ngày; bản ghi tổng hợp cho mỗi IP được giữ tới khi chúng tôi
+      xoá thủ công.</p>
+    <p>Nếu bạn không muốn IP của mình bị ghi nhận: bật <em>Do Not Track</em> trong trình duyệt,
+      hoặc chặn JavaScript của trang (site vẫn dùng được bình thường). Muốn xoá một IP đã ghi
+      nhận, xin liên hệ theo mục <em>Liên hệ</em> bên dưới.</p>
 
     <h2>Tài khoản Google (tuỳ chọn)</h2>
     <p>Bạn có thể đăng nhập bằng Google. Khi đó chúng tôi nhận và lưu từ hồ sơ Google của bạn:

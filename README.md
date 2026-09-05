@@ -60,7 +60,7 @@ Sau khi deploy Worker, đặt **repo variable** `ANALYTICS_URL` = URL Worker
 (*Settings → Secrets and variables → Actions → Variables*) rồi build lại (push hoặc re-run Actions).
 
 - Có `ANALYTICS_URL`: footer hiện **số thật**, thêm trang **`/stats`** (tổng lượt truy cập, khách duy
-  nhất, khách quay lại, biểu đồ 30 ngày, lượt truy cập theo chủ đề).
+  nhất, khách quay lại, biểu đồ 30 ngày, lượt truy cập theo chủ đề, và bảng địa chỉ IP).
 - Chưa có: footer dùng bộ đếm tạm phía client, `/stats` báo "chưa cấu hình".
 
 **Một lượt truy cập = một phiên**: `enhance.js` chỉ gửi `/collect` khi phiên mới — phiên hết hạn sau
@@ -68,8 +68,17 @@ Sau khi deploy Worker, đặt **repo variable** `ANALYTICS_URL` = URL Worker
 Tải lại trang / mở nhiều tab trong phiên không cộng thêm. "Khách duy nhất" và "khách quay lại"
 vẫn tính theo `iv-vid` + ngày như cũ.
 
-Dữ liệu **ẩn danh**: visitor id là chuỗi ngẫu nhiên trong `localStorage` (không cookie, không lưu
-IP); tôn trọng Do Not Track; bot bị lọc theo User-Agent.
+Visitor id là chuỗi ngẫu nhiên trong `localStorage` (**không cookie**); tôn trọng Do Not Track
+(bật DNT thì client không gửi gì cả); bot bị lọc theo User-Agent.
+
+**Thống kê theo địa chỉ IP**: Worker lưu IP khách (`CF-Connecting-IP`) vào bảng `visitor_ip` cùng
+quốc gia/thành phố Cloudflare suy ra, số phiên, lần đầu & lần gần nhất. Trang `/stats` hiển thị
+**công khai** bảng 100 IP nhiều lượt nhất (sắp theo lượt hoặc theo thời gian gần nhất) và biểu đồ
+theo quốc gia.
+
+> ⚠️ IP là **dữ liệu cá nhân** theo GDPR và trang `/stats` không có xác thực — ai biết URL đều xem
+> được. `/privacy/` đã ghi rõ điều này. Muốn giảm mức nhạy cảm: gọi `maskIp()` (có sẵn trong
+> `analytics/src/analytics.js`) trước khi ghi DB để che 8 bit cuối (IPv4) / giữ /64 (IPv6).
 
 ## Đăng nhập Google (tuỳ chọn)
 
@@ -87,7 +96,8 @@ Khi bật, người dùng đăng nhập Google (sau **màn hình đồng ý** n�
 - Quyền **premium**: đường ống entitlement có sẵn (`tier` trong `/me`), cấp thủ công qua
   `POST /admin/grant`. Chưa có nội dung premium.
 
-Lượt xem trang **không** gắn với danh tính người đăng nhập — thống kê vẫn ẩn danh.
+Lượt xem trang và địa chỉ IP **không** gắn với danh tính người đăng nhập — hai phần dữ liệu này
+tách biệt hoàn toàn trong database.
 
 ## SEO
 
@@ -124,7 +134,7 @@ assets/
   stats.js             # nạp & vẽ số liệu cho trang /stats
 tools/
   add-demos.mjs        # chèn field demo hàng loạt từ file patch (không tham gia build)
-analytics/             # Cloudflare Worker + D1 — thống kê ẩn danh + tài khoản Google (deploy riêng)
+analytics/             # Cloudflare Worker + D1 — thống kê truy cập + IP + tài khoản Google (deploy riêng)
   src/{worker,analytics,auth,users,lib}.js
 static/                # file copy nguyên trạng ra gốc site (google….html, BingSiteAuth.xml, CNAME…)
 .github/workflows/deploy.yml

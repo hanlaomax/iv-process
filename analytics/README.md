@@ -8,7 +8,8 @@ Site tĩnh (GitHub Pages) gọi:
   (30 phút không hoạt động = phiên mới), nên số "views" = số phiên
 - `GET /stats` — trả JSON tổng hợp cho footer + trang `/stats`
 
-Dữ liệu ẩn danh: visitor id là chuỗi ngẫu nhiên trong `localStorage`, không cookie, không lưu IP.
+Visitor id là chuỗi ngẫu nhiên trong `localStorage`, không cookie. Worker **có lưu địa chỉ IP**
+(bảng `visitor_ip`) và trang `/stats` hiển thị công khai — xem cảnh báo ở README gốc.
 
 **Đăng nhập Google (tuỳ chọn)** — để đồng bộ tiến độ học + bảng xếp hạng:
 - `POST /auth` `{credential}` — verify Google ID token, trả session token
@@ -17,6 +18,29 @@ Dữ liệu ẩn danh: visitor id là chuỗi ngẫu nhiên trong `localStorage`
 - `POST /admin/grant` — cấp premium (cần `Authorization: Bearer <ADMIN_TOKEN>`)
 
 Xem phần **C** bên dưới để bật.
+
+## Kiểm thử tại máy (không cần Cloudflare)
+
+```bash
+cd analytics && npm test        # hoặc: node test.mjs
+```
+
+`test.mjs` chạy `schema.sql` + `collect()` + `stats()` thật trên SQLite trong bộ nhớ
+(`node:sqlite`, cần Node 22+) qua một shim tối giản của API D1. Nhờ đó kiểm chứng được SQL và
+logic Worker mà không phải deploy. Thoát mã 1 khi có assertion sai — dùng được trong CI.
+
+## Đã có DB từ trước? Chạy lại schema
+
+`schema.sql` dùng `CREATE TABLE IF NOT EXISTS` nên chạy lại an toàn. Sau khi cập nhật code,
+**bắt buộc** chạy lại để tạo bảng `visitor_ip` và `ip_day`, rồi mới deploy Worker:
+
+```powershell
+cd analytics
+wrangler d1 execute iv-analytics --remote --file=schema.sql
+wrangler deploy
+```
+
+Thiếu bước này thì `/collect` và `/stats` sẽ lỗi vì bảng chưa tồn tại.
 
 ---
 

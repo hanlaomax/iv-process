@@ -1,8 +1,8 @@
 /* iv-analytics — Cloudflare Worker (router)
-   Thống kê ẩn danh:  POST /collect · GET /stats
+   Thống kê truy cập: POST /collect · GET /stats   (có lưu và công khai IP khách)
    Tài khoản Google:  POST /auth · GET /me · GET|POST /progress · POST /settings
                       POST /account/delete · GET /leaderboard · POST /admin/grant
-   cron: dọn bảng visitor_day + user_activity_day > 90 ngày */
+   cron: dọn visitor_day + user_activity_day + ip_day > 90 ngày */
 import { cors, json, utcDay } from './lib.js';
 import { collect, stats } from './analytics.js';
 import {
@@ -50,6 +50,7 @@ export default {
     ctx.waitUntil(env.DB.batch([
       env.DB.prepare(`DELETE FROM visitor_day WHERE day < ?`).bind(cutoff),
       env.DB.prepare(`DELETE FROM user_activity_day WHERE day < ?`).bind(cutoff),
+      env.DB.prepare(`DELETE FROM ip_day WHERE day < ?`).bind(cutoff),
     ]));
   },
 };

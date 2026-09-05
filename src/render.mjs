@@ -245,7 +245,9 @@ export function renderStatsPage({ topics, siteUrl, analyticsUrl, googleClientId 
       <div class="stat-tile"><b data-k="totalViews">—</b><span>Tổng lượt truy cập</span></div>
       <div class="stat-tile"><b data-k="totalVisitors">—</b><span>Khách duy nhất</span></div>
       <div class="stat-tile"><b data-k="returningVisitors">—</b><span>Khách quay lại <em data-k="returningPct"></em></span></div>
+      <div class="stat-tile"><b data-k="totalIps">—</b><span>Địa chỉ IP duy nhất</span></div>
       <div class="stat-tile"><b data-k="todayViews">—</b><span>Truy cập hôm nay</span></div>
+      <div class="stat-tile"><b data-k="todayIps">—</b><span>IP hôm nay</span></div>
     </div>
 
     <section class="stats-section" data-stats-chart-wrap hidden>
@@ -259,6 +261,32 @@ export function renderStatsPage({ topics, siteUrl, analyticsUrl, googleClientId 
       <div class="stats-bars" data-stats-topics></div>
     </section>
 
+    <section class="stats-section" data-stats-countries-wrap hidden>
+      <h2>Lượt truy cập theo quốc gia</h2>
+      <div class="stats-bars" data-stats-countries></div>
+      <p class="stats-legend">Quốc gia do Cloudflare suy ra từ địa chỉ IP.</p>
+    </section>
+
+    <section class="stats-section" data-stats-ips-wrap hidden>
+      <h2>Địa chỉ IP truy cập</h2>
+      <div class="stats-table-wrap">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th scope="col" class="num">#</th>
+              <th scope="col">Địa chỉ IP</th>
+              <th scope="col">Vị trí</th>
+              <th scope="col" class="num"><button type="button" class="stats-sort is-active" data-sort="views">Lượt</button></th>
+              <th scope="col">Lần đầu</th>
+              <th scope="col" class="num"><button type="button" class="stats-sort" data-sort="lastSeen">Gần nhất</button></th>
+            </tr>
+          </thead>
+          <tbody data-stats-ips></tbody>
+        </table>
+      </div>
+      <p class="stats-legend" data-stats-ip-note></p>
+    </section>
+
     <p class="stats-meta muted" data-stats-meta hidden></p>
   </div>
 </main>
@@ -269,7 +297,7 @@ ${footer('../')}`;
     scripts: ['assets/stats.js'],
     head: head({
       title: 'Thống kê truy cập — Interview Vault',
-      description: 'Số liệu truy cập ẩn danh của Interview Vault: tổng lượt truy cập, khách duy nhất, khách quay lại, 30 ngày gần nhất.',
+      description: 'Số liệu truy cập của Interview Vault: tổng lượt truy cập, khách duy nhất, khách quay lại, 30 ngày gần nhất, và thống kê theo địa chỉ IP.',
       canonical: url,
       root: '../',
       robots: 'noindex, follow',

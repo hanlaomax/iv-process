@@ -78,13 +78,22 @@ và bài nộp trên **2 dataset** rồi so result set (chống hard-code).
 ### Backend (`analytics/` — deploy riêng)
 
 Cloudflare Worker + D1, không nằm trong pipeline build của site. `worker.js` là router bảng
-GET/POST; `analytics.js` (`/collect`, `/stats` ẩn danh), `users.js` (Google login, progress
+GET/POST; `analytics.js` (`/collect`, `/stats`, gồm cả thống kê IP), `users.js` (Google login, progress
 sync, leaderboard, `/admin/grant`), `auth.js` (verify Google ID token + ký session), `lib.js`.
 Deploy bằng `wrangler deploy` trong `analytics/`; schema ở `schema.sql` (idempotent).
 Xem `analytics/README.md`.
 
-Thống kê **ẩn danh, không gắn với tài khoản đăng nhập** — giữ nguyên tách biệt này. Một lượt
+Thống kê truy cập **không gắn với tài khoản đăng nhập** — giữ nguyên tách biệt này. Một lượt
 truy cập = một phiên (30 phút không hoạt động).
+
+`collect` lưu **IP đầy đủ** (`CF-Connecting-IP`) + quốc gia/thành phố vào `visitor_ip`, và `/stats`
+công khai bảng IP. Đây là lựa chọn có chủ ý của chủ site, `/privacy` đã nêu rõ — **đừng "sửa lại"
+thành ẩn danh**. Có sẵn `maskIp()` trong `analytics.js` nếu sau này muốn che 8 bit cuối.
+
+Worker **có test chạy được tại máy**: `cd analytics && npm test` — dựng SQLite trong bộ nhớ
+(`node:sqlite`) với shim API D1 rồi chạy `collect()`/`stats()` thật. Sửa `analytics/src/*` hay
+`schema.sql` thì chạy nó để kiểm chứng, không cần deploy. Đổi schema ở production phải chạy lại
+`wrangler d1 execute ... --file=schema.sql` TRƯỚC khi `wrangler deploy`.
 
 ## Thêm / sửa câu hỏi
 
