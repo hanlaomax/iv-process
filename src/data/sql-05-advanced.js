@@ -40,6 +40,45 @@ SS.addQuestions('sql', [
       'SELECT name, dept, salary, RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk FROM emp',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Tính toán trên nhóm mà KHÔNG gộp hàng lại",
+      code:
+        "-- Khác GROUP BY ở điểm cốt lõi: window function GIỮ NGUYÊN số hàng.\n" +
+        "SELECT\n" +
+        "  id, customer_id, amount,\n" +
+        "  SUM(amount)     OVER (PARTITION BY customer_id)              AS tong_cua_khach,\n" +
+        "  AVG(amount)     OVER (PARTITION BY customer_id)              AS tb_cua_khach,\n" +
+        "  amount - AVG(amount) OVER (PARTITION BY customer_id)         AS lech_so_voi_tb,\n" +
+        "  ROW_NUMBER()    OVER (PARTITION BY customer_id ORDER BY amount DESC) AS thu_tu,\n" +
+        "  RANK()          OVER (ORDER BY amount DESC)                  AS hang,\n" +
+        "  DENSE_RANK()    OVER (ORDER BY amount DESC)                  AS hang_lien_tuc,\n" +
+        "  PERCENT_RANK()  OVER (ORDER BY amount)                       AS phan_vi,\n" +
+        "  NTILE(4)        OVER (ORDER BY amount)                       AS nhom_tu_phan\n" +
+        "FROM orders;\n" +
+        "\n" +
+        "-- PARTITION BY — chia thành các \"cửa sổ\" độc lập (giống GROUP BY nhưng không gộp)\n" +
+        "-- ORDER BY    — thứ tự TRONG cửa sổ; cần cho ROW_NUMBER, LAG/LEAD, running total\n" +
+        "-- Bỏ cả hai -> cửa sổ là TOÀN BỘ kết quả\n" +
+        "\n" +
+        "-- PHÂN BIỆT BA HÀM XẾP HẠNG (điểm 100, 100, 90):\n" +
+        "--   ROW_NUMBER  -> 1, 2, 3   (luôn duy nhất, phá hoà bằng tuỳ ý)\n" +
+        "--   RANK        -> 1, 1, 3   (đồng hạng, rồi NHẢY số)\n" +
+        "--   DENSE_RANK  -> 1, 1, 2   (đồng hạng, KHÔNG nhảy)\n" +
+        "\n" +
+        "-- Đặt tên cửa sổ khi dùng lại nhiều lần:\n" +
+        "SELECT id, SUM(amount) OVER w, AVG(amount) OVER w\n" +
+        "FROM orders WINDOW w AS (PARTITION BY customer_id);\n" +
+        "\n" +
+        "-- LƯU Ý: window function chạy SAU WHERE/GROUP BY/HAVING -> KHÔNG lọc được\n" +
+        "-- theo kết quả của nó trong cùng câu lệnh. Phải bọc subquery hoặc CTE:\n" +
+        "SELECT * FROM (\n" +
+        "  SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) rn\n" +
+        "  FROM orders\n" +
+        ") t WHERE rn = 1;",
+    },
+  ],
 },
 {
   cat: 'Window functions',
@@ -65,6 +104,48 @@ SS.addQuestions('sql', [
       ['Mặc định khi có ORDER BY', '—', 'RANGE UNBOUNDED PRECEDING AND CURRENT ROW (bất ngờ với LAST_VALUE)'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Running total và moving average",
+      code:
+        "-- FRAME xác định những hàng nào trong partition được đưa vào phép tính\n" +
+        "-- cho MỖI hàng.\n" +
+        "SELECT\n" +
+        "  ngay, doanh_thu,\n" +
+        "  -- LUỸ KẾ từ đầu tới hàng hiện tại\n" +
+        "  SUM(doanh_thu) OVER (ORDER BY ngay\n" +
+        "       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)        AS luy_ke,\n" +
+        "  -- TRUNG BÌNH TRƯỢT 7 ngày (6 hàng trước + hàng hiện tại)\n" +
+        "  AVG(doanh_thu) OVER (ORDER BY ngay\n" +
+        "       ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)                AS tb_7_ngay,\n" +
+        "  -- Cửa sổ TRUNG TÂM: 3 trước, 3 sau\n" +
+        "  AVG(doanh_thu) OVER (ORDER BY ngay\n" +
+        "       ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING)                AS tb_trung_tam,\n" +
+        "  -- Tổng TOÀN BỘ partition\n" +
+        "  SUM(doanh_thu) OVER ()                                         AS tong_tat_ca\n" +
+        "FROM daily_revenue;\n" +
+        "\n" +
+        "-- ROWS vs RANGE — khác biệt quan trọng khi có GIÁ TRỊ TRÙNG:\n" +
+        "--   ROWS  đếm theo SỐ HÀNG vật lý\n" +
+        "--   RANGE gộp mọi hàng có CÙNG giá trị ORDER BY vào cùng một bậc\n" +
+        "SELECT amount,\n" +
+        "  SUM(amount) OVER (ORDER BY amount ROWS  BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS theo_rows,\n" +
+        "  SUM(amount) OVER (ORDER BY amount RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS theo_range\n" +
+        "FROM orders;\n" +
+        "-- Hai giá trị 100 giống nhau: ROWS cho hai kết quả khác nhau, RANGE cho\n" +
+        "-- cùng một kết quả (đã cộng cả hai).\n" +
+        "\n" +
+        "-- MẶC ĐỊNH khi có ORDER BY mà không ghi frame:\n" +
+        "--   RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n" +
+        "-- -> đây là nguồn của nhiều kết quả \"sai khó hiểu\" khi có giá trị trùng.\n" +
+        "-- Cần chính xác theo hàng -> LUÔN ghi rõ ROWS.\n" +
+        "\n" +
+        "-- RANGE theo KHOẢNG GIÁ TRỊ (Postgres 11+): trung bình 7 ngày THẬT\n" +
+        "-- (đúng cả khi thiếu ngày, khác với \"7 hàng\"):\n" +
+        "SUM(doanh_thu) OVER (ORDER BY ngay RANGE BETWEEN INTERVAL \u00276 days\u0027 PRECEDING AND CURRENT ROW)",
+    },
+  ],
 },
 {
   cat: 'Window functions',
@@ -100,6 +181,50 @@ SS.addQuestions('sql', [
     solution: 'SELECT month, revenue, revenue - LAG(revenue) OVER (ORDER BY month) AS delta FROM monthly',
     ordered: true,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Truy cập hàng khác mà không self-join",
+      code:
+        "SELECT\n" +
+        "  ngay, doanh_thu,\n" +
+        "  LAG(doanh_thu)     OVER (ORDER BY ngay)          AS hom_truoc,\n" +
+        "  LEAD(doanh_thu)    OVER (ORDER BY ngay)          AS hom_sau,\n" +
+        "  LAG(doanh_thu, 7)  OVER (ORDER BY ngay)          AS cung_ky_tuan_truoc,\n" +
+        "  LAG(doanh_thu, 1, 0) OVER (ORDER BY ngay)        AS hom_truoc_mac_dinh_0,\n" +
+        "  doanh_thu - LAG(doanh_thu) OVER (ORDER BY ngay)  AS thay_doi,\n" +
+        "  ROUND(100.0 * (doanh_thu - LAG(doanh_thu) OVER (ORDER BY ngay))\n" +
+        "        / NULLIF(LAG(doanh_thu) OVER (ORDER BY ngay), 0), 2) AS phan_tram_thay_doi\n" +
+        "FROM daily_revenue\n" +
+        "ORDER BY ngay;\n" +
+        "-- LAG(cột, n, mặc_định): tham số thứ ba tránh NULL ở hàng đầu tiên.\n" +
+        "\n" +
+        "-- TÍNH KHOẢNG CÁCH giữa hai sự kiện của cùng một người dùng:\n" +
+        "SELECT user_id, event_at,\n" +
+        "  event_at - LAG(event_at) OVER (PARTITION BY user_id ORDER BY event_at) AS khoang_cach\n" +
+        "FROM events;\n" +
+        "\n" +
+        "-- PHÁT HIỆN KHOẢNG TRỐNG trong dãy (gap detection):\n" +
+        "SELECT * FROM (\n" +
+        "  SELECT id, LEAD(id) OVER (ORDER BY id) - id AS gap FROM invoices\n" +
+        ") t WHERE gap > 1;\n" +
+        "\n" +
+        "-- CHIA PHIÊN (sessionization) — mẫu rất hay dùng cho phân tích hành vi:\n" +
+        "SELECT user_id, event_at,\n" +
+        "  SUM(is_new_session) OVER (PARTITION BY user_id ORDER BY event_at) AS session_id\n" +
+        "FROM (\n" +
+        "  SELECT user_id, event_at,\n" +
+        "    CASE WHEN event_at - LAG(event_at) OVER (PARTITION BY user_id ORDER BY event_at)\n" +
+        "              > INTERVAL \u002730 minutes\u0027 THEN 1 ELSE 0 END AS is_new_session\n" +
+        "  FROM events\n" +
+        ") t;\n" +
+        "\n" +
+        "-- FIRST_VALUE / LAST_VALUE / NTH_VALUE — lấy hàng đầu/cuối trong cửa sổ.\n" +
+        "-- CẨN THẬN với LAST_VALUE: frame mặc định kết thúc ở CURRENT ROW ->\n" +
+        "-- phải ghi rõ frame mới đúng:\n" +
+        "LAST_VALUE(amount) OVER (ORDER BY ngay ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)",
+    },
+  ],
 },
 {
   cat: 'CTE',
@@ -125,6 +250,49 @@ SS.addQuestions('sql', [
       ['Ép thủ công', '—', 'WITH x AS MATERIALIZED / NOT MATERIALIZED'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chia nhỏ truy vấn phức tạp",
+      code:
+        "WITH don_thang_nay AS (\n" +
+        "  SELECT customer_id, SUM(amount) AS tong\n" +
+        "  FROM orders\n" +
+        "  WHERE created_at >= DATE_TRUNC(\u0027month\u0027, now())\n" +
+        "  GROUP BY customer_id\n" +
+        "),\n" +
+        "khach_vip AS (\n" +
+        "  SELECT customer_id FROM don_thang_nay WHERE tong > 10000000\n" +
+        ")\n" +
+        "SELECT c.name, d.tong\n" +
+        "FROM khach_vip v\n" +
+        "JOIN don_thang_nay d ON d.customer_id = v.customer_id\n" +
+        "JOIN customers c ON c.id = v.customer_id;\n" +
+        "\n" +
+        "-- LỢI ÍCH: đặt tên cho từng bước -> đọc như đọc code, dễ kiểm thử từng phần.\n" +
+        "\n" +
+        "-- MATERIALIZE HAY KHÔNG — điểm khác biệt lớn giữa các phiên bản:\n" +
+        "--  Postgres <= 11: CTE LUÔN được materialize (tính xong, lưu tạm) ->\n" +
+        "--    hàng rào tối ưu hoá: điều kiện WHERE bên ngoài KHÔNG đẩy vào trong\n" +
+        "--    được -> nhiều truy vấn chậm bất ngờ.\n" +
+        "--  Postgres 12+: CTE không đệ quy và chỉ dùng MỘT LẦN sẽ được INLINE\n" +
+        "--    (như subquery) -> optimizer tự do hơn.\n" +
+        "WITH t AS MATERIALIZED   (SELECT ...)   -- ÉP tính một lần (dùng khi CTE đắt\n" +
+        "                                        -- và được tham chiếu nhiều lần)\n" +
+        "WITH t AS NOT MATERIALIZED (SELECT ...) -- ÉP inline\n" +
+        "\n" +
+        "-- MySQL 8+ và SQL Server: CTE thường được inline, không phải hàng rào.\n" +
+        "\n" +
+        "-- CTE GHI DỮ LIỆU (data-modifying CTE) — rất mạnh, chỉ Postgres có:\n" +
+        "WITH deleted AS (\n" +
+        "  DELETE FROM orders WHERE created_at < \u00272025-01-01\u0027 RETURNING *\n" +
+        ")\n" +
+        "INSERT INTO orders_archive SELECT * FROM deleted;\n" +
+        "-- Xoá và lưu trữ trong MỘT câu lệnh, nguyên tử.\n" +
+        "-- Lưu ý: mọi nhánh của CTE nhìn thấy CÙNG một snapshot -> không thấy\n" +
+        "-- thay đổi của nhau.",
+    },
+  ],
 },
 {
   cat: 'CTE',
@@ -157,6 +325,53 @@ SS.addQuestions('sql', [
       { to: 4, label: 'Dữ liệu có chu trình → cần điều kiện dừng / theo dõi visited' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Đệ quy để đi qua quan hệ phân cấp",
+      code:
+        "-- Cấu trúc: phần NEO (anchor) UNION ALL phần ĐỆ QUY\n" +
+        "WITH RECURSIVE cay_nhan_vien AS (\n" +
+        "  -- NEO: điểm bắt đầu\n" +
+        "  SELECT id, name, manager_id, 1 AS cap, name::text AS duong_dan\n" +
+        "  FROM employees WHERE manager_id IS NULL\n" +
+        "\n" +
+        "  UNION ALL\n" +
+        "\n" +
+        "  -- ĐỆ QUY: tham chiếu chính CTE\n" +
+        "  SELECT e.id, e.name, e.manager_id, c.cap + 1, c.duong_dan || \u0027 > \u0027 || e.name\n" +
+        "  FROM employees e\n" +
+        "  JOIN cay_nhan_vien c ON e.manager_id = c.id\n" +
+        "  WHERE c.cap < 10                       -- CHẶN ĐỘ SÂU: bắt buộc, chống vòng lặp\n" +
+        ")\n" +
+        "SELECT * FROM cay_nhan_vien ORDER BY duong_dan;\n" +
+        "\n" +
+        "-- Duyệt NGƯỢC: tìm mọi cấp trên của một nhân viên\n" +
+        "WITH RECURSIVE chuoi_quan_ly AS (\n" +
+        "  SELECT id, name, manager_id FROM employees WHERE id = 42\n" +
+        "  UNION ALL\n" +
+        "  SELECT e.id, e.name, e.manager_id\n" +
+        "  FROM employees e JOIN chuoi_quan_ly c ON e.id = c.manager_id\n" +
+        ")\n" +
+        "SELECT * FROM chuoi_quan_ly;\n" +
+        "\n" +
+        "-- SINH DÃY (không cần bảng):\n" +
+        "WITH RECURSIVE ngay AS (\n" +
+        "  SELECT DATE \u00272026-01-01\u0027 AS d\n" +
+        "  UNION ALL\n" +
+        "  SELECT d + 1 FROM ngay WHERE d < DATE \u00272026-12-31\u0027\n" +
+        ") SELECT * FROM ngay;\n" +
+        "-- (Postgres có generate_series() tiện hơn cho việc này.)\n" +
+        "\n" +
+        "-- CHỐNG VÒNG LẶP trong đồ thị có chu trình — bắt buộc, nếu không truy vấn\n" +
+        "-- chạy mãi:\n" +
+        "--   giữ mảng đường đi và kiểm tra: WHERE NOT (e.id = ANY(c.path))\n" +
+        "--   hoặc Postgres 14+: ... CYCLE id SET is_cycle USING path\n" +
+        "\n" +
+        "-- CÂN NHẮC: cây rất sâu/rộng -> recursive CTE chậm. Cân nhắc mô hình khác:\n" +
+        "-- closure table, materialized path, hoặc nested set.",
+    },
+  ],
 },
 {
   cat: 'View',
@@ -179,6 +394,44 @@ SS.addQuestions('sql', [
       ['Dùng cho', 'đóng gói logic, kiểm soát truy cập, tương thích ngược', 'aggregate/report nặng chạy định kỳ'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Truy vấn được đặt tên vs kết quả được lưu",
+      code:
+        "-- VIEW — chỉ là truy vấn được lưu tên. Mỗi lần gọi là chạy LẠI từ đầu.\n" +
+        "CREATE VIEW active_orders AS\n" +
+        "SELECT * FROM orders WHERE status <> \u0027CANCELLED\u0027;\n" +
+        "SELECT * FROM active_orders WHERE customer_id = 1;\n" +
+        "-- Optimizer gộp view vào truy vấn ngoài -> điều kiện WHERE được đẩy vào trong.\n" +
+        "-- + luôn thấy dữ liệu MỚI NHẤT, không tốn dung lượng\n" +
+        "-- + dùng để: đơn giản hoá truy vấn phức tạp, che cột nhạy cảm, tương thích ngược\n" +
+        "-- - không tăng tốc gì cả\n" +
+        "\n" +
+        "-- MATERIALIZED VIEW — kết quả được TÍNH và LƯU thật trên đĩa.\n" +
+        "CREATE MATERIALIZED VIEW mv_doanh_thu_ngay AS\n" +
+        "SELECT DATE_TRUNC(\u0027day\u0027, created_at) AS ngay,\n" +
+        "       COUNT(*) AS so_don, SUM(amount) AS doanh_thu\n" +
+        "FROM orders GROUP BY 1;\n" +
+        "\n" +
+        "CREATE UNIQUE INDEX ON mv_doanh_thu_ngay (ngay);   -- BẮT BUỘC cho CONCURRENTLY\n" +
+        "CREATE INDEX ON mv_doanh_thu_ngay (doanh_thu);     -- index được như bảng thường\n" +
+        "\n" +
+        "REFRESH MATERIALIZED VIEW mv_doanh_thu_ngay;              -- KHOÁ người đọc\n" +
+        "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_doanh_thu_ngay; -- không khoá, chậm hơn\n" +
+        "-- + đọc CỰC NHANH (tính sẵn), index được\n" +
+        "-- - dữ liệu CŨ tới lần refresh sau -> phải có lịch refresh\n" +
+        "-- - tốn dung lượng\n" +
+        "\n" +
+        "-- UPDATABLE VIEW — view đơn giản (một bảng, không aggregate) ghi được:\n" +
+        "CREATE VIEW v AS SELECT id, name FROM users WHERE active = true\n" +
+        "WITH CHECK OPTION;      -- chặn ghi dữ liệu nằm ngoài điều kiện của view\n" +
+        "-- View phức tạp: dùng INSTEAD OF trigger.\n" +
+        "\n" +
+        "-- CHỌN: cần dữ liệu tươi -> VIEW. Truy vấn tổng hợp nặng chạy thường xuyên\n" +
+        "-- và chấp nhận trễ vài phút -> MATERIALIZED VIEW.",
+    },
+  ],
 },
 {
   cat: 'Nâng cao',
@@ -206,6 +459,40 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Nhiều mức tổng hợp trong MỘT lần quét",
+      code:
+        "-- Thay vì UNION ALL nhiều câu GROUP BY (quét bảng nhiều lần):\n" +
+        "SELECT region, product, SUM(amount) AS tong\n" +
+        "FROM sales\n" +
+        "GROUP BY GROUPING SETS ((region, product), (region), (product), ());\n" +
+        "-- Cho ra: tổng theo (vùng, sản phẩm), theo vùng, theo sản phẩm, và tổng chung.\n" +
+        "\n" +
+        "-- ROLLUP — phân cấp từ trái sang phải (tổng nhỏ dần)\n" +
+        "SELECT nam, quy, thang, SUM(amount)\n" +
+        "FROM sales GROUP BY ROLLUP (nam, quy, thang);\n" +
+        "-- = GROUPING SETS ((nam,quy,thang), (nam,quy), (nam), ())\n" +
+        "-- Đúng cho báo cáo có tiểu tổng theo cấp: năm > quý > tháng.\n" +
+        "\n" +
+        "-- CUBE — MỌI tổ hợp có thể\n" +
+        "SELECT region, product, SUM(amount) FROM sales GROUP BY CUBE (region, product);\n" +
+        "-- = GROUPING SETS ((region,product), (region), (product), ())\n" +
+        "-- n cột -> 2^n tổ hợp -> cẩn thận với nhiều cột.\n" +
+        "\n" +
+        "-- GROUPING() phân biệt NULL \"tổng cộng\" với NULL \"dữ liệu thật\" —\n" +
+        "-- rất quan trọng khi cột có thể chứa NULL:\n" +
+        "SELECT\n" +
+        "  CASE WHEN GROUPING(region) = 1 THEN \u0027TẤT CẢ VÙNG\u0027 ELSE region END AS vung,\n" +
+        "  CASE WHEN GROUPING(product) = 1 THEN \u0027TẤT CẢ SP\u0027 ELSE product END AS sp,\n" +
+        "  SUM(amount)\n" +
+        "FROM sales GROUP BY ROLLUP (region, product);\n" +
+        "\n" +
+        "-- LỢI ÍCH: một lần quét bảng thay vì bốn -> nhanh hơn nhiều trên bảng lớn,\n" +
+        "-- và không phải viết UNION ALL dài dòng.",
+    },
+  ],
 },
 {
   cat: 'JOIN',
@@ -230,6 +517,46 @@ SS.addQuestions('sql', [
       { to: 3, label: 'Top-N per group, gọi hàm trả bảng theo từng hàng' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Subquery bên phải được THAM CHIẾU hàng bên trái",
+      code:
+        "-- Subquery thường KHÔNG thấy được cột của bảng bên trái. LATERAL cho phép\n" +
+        "-- điều đó — như một vòng lặp for chạy cho từng hàng.\n" +
+        "SELECT c.id, c.name, don.id AS don_moi_nhat, don.amount\n" +
+        "FROM customers c\n" +
+        "LEFT JOIN LATERAL (\n" +
+        "  SELECT id, amount FROM orders o\n" +
+        "  WHERE o.customer_id = c.id           -- <- tham chiếu c, chỉ LATERAL mới cho phép\n" +
+        "  ORDER BY created_at DESC\n" +
+        "  LIMIT 3                              -- TOP 3 đơn của MỖI khách\n" +
+        ") don ON true\n" +
+        "ORDER BY c.id;\n" +
+        "-- Đây là cách sạch nhất cho bài toán \"top N mỗi nhóm\" khi N > 1.\n" +
+        "-- LEFT JOIN LATERAL ... ON true để giữ cả khách chưa có đơn.\n" +
+        "\n" +
+        "-- Gọi HÀM TRẢ VỀ TẬP cho từng hàng:\n" +
+        "SELECT o.id, t.tag\n" +
+        "FROM orders o, LATERAL unnest(o.tags) AS t(tag);\n" +
+        "\n" +
+        "-- TÍNH TOÁN NHIỀU BƯỚC mà không lặp lại biểu thức:\n" +
+        "SELECT o.id, calc.thue, calc.tong\n" +
+        "FROM orders o,\n" +
+        "LATERAL (SELECT o.amount * 0.1 AS thue) t,\n" +
+        "LATERAL (SELECT t.thue, o.amount + t.thue AS tong) calc;\n" +
+        "\n" +
+        "-- SO VỚI CORRELATED SUBQUERY: correlated subquery chỉ trả về MỘT giá trị\n" +
+        "-- và một cột. LATERAL trả về NHIỀU HÀNG và NHIỀU CỘT.\n" +
+        "\n" +
+        "-- MySQL 8.0.14+ cũng có LATERAL; SQL Server dùng CROSS/OUTER APPLY\n" +
+        "-- (cùng ý nghĩa, khác từ khoá).\n" +
+        "\n" +
+        "-- HIỆU NĂNG: LATERAL chạy subquery cho TỪNG hàng bên trái -> bảng trái\n" +
+        "-- phải nhỏ, hoặc subquery phải có index tốt. Cần \"top 1 mỗi nhóm\" trên\n" +
+        "-- bảng lớn thì DISTINCT ON hoặc ROW_NUMBER thường nhanh hơn.",
+    },
+  ],
 },
 {
   cat: 'Nâng cao',
@@ -276,6 +603,45 @@ SS.addQuestions('sql', [
       '  FROM orders\n) t WHERE rn = 1',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Bốn cách, và cái nào nhanh nhất",
+      code:
+        "-- CÁCH 1: ROW_NUMBER — chuẩn SQL, chạy ở mọi hệ quản trị\n" +
+        "SELECT * FROM (\n" +
+        "  SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) rn\n" +
+        "  FROM orders\n" +
+        ") t WHERE rn = 1;\n" +
+        "-- Rõ ràng, đổi rn <= 3 là ra top 3. Nhưng phải QUÉT VÀ SẮP XẾP toàn bảng.\n" +
+        "\n" +
+        "-- CÁCH 2: DISTINCT ON — chỉ Postgres, NGẮN GỌN và thường NHANH NHẤT\n" +
+        "SELECT DISTINCT ON (customer_id) *\n" +
+        "FROM orders\n" +
+        "ORDER BY customer_id, created_at DESC;\n" +
+        "-- ORDER BY bắt buộc bắt đầu bằng cột trong DISTINCT ON.\n" +
+        "CREATE INDEX idx_orders_cust_created ON orders (customer_id, created_at DESC);\n" +
+        "-- Với index này, Postgres đọc lướt và lấy hàng đầu mỗi nhóm -> rất nhanh.\n" +
+        "\n" +
+        "-- CÁCH 3: LATERAL — tốt khi bảng \"nhóm\" NHỎ và bảng chi tiết LỚN\n" +
+        "SELECT c.id, o.*\n" +
+        "FROM customers c\n" +
+        "LEFT JOIN LATERAL (\n" +
+        "  SELECT * FROM orders WHERE customer_id = c.id ORDER BY created_at DESC LIMIT 1\n" +
+        ") o ON true;\n" +
+        "-- Chỉ chạm vào đúng vài hàng mỗi khách -> tốt nhất khi có 1.000 khách\n" +
+        "-- nhưng 100 triệu đơn.\n" +
+        "\n" +
+        "-- CÁCH 4: subquery với MAX — cách cũ, DỄ SAI\n" +
+        "SELECT * FROM orders o\n" +
+        "WHERE created_at = (SELECT MAX(created_at) FROM orders WHERE customer_id = o.customer_id);\n" +
+        "-- BẪY: hai đơn cùng created_at -> trả về CẢ HAI. Và phải quét hai lần.\n" +
+        "\n" +
+        "-- CHỌN: Postgres -> DISTINCT ON. Đa nền tảng -> ROW_NUMBER.\n" +
+        "-- Bảng nhóm nhỏ + bảng chi tiết rất lớn -> LATERAL.\n" +
+        "-- Điều quan trọng nhất trong mọi cách: có INDEX (nhóm, thứ tự DESC).",
+    },
+  ],
 },
 {
   cat: 'Phân vùng',
@@ -300,6 +666,44 @@ SS.addQuestions('sql', [
       ['Bonus', 'partition-wise join khi cùng scheme', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Bỏ qua phân vùng không liên quan",
+      code:
+        "CREATE TABLE events (id BIGSERIAL, created_at TIMESTAMPTZ NOT NULL, data JSONB)\n" +
+        "PARTITION BY RANGE (created_at);\n" +
+        "CREATE TABLE events_2026_09 PARTITION OF events\n" +
+        "  FOR VALUES FROM (\u00272026-09-01\u0027) TO (\u00272026-10-01\u0027);\n" +
+        "\n" +
+        "-- PRUNING HOẠT ĐỘNG: điều kiện trên khoá phân vùng là HẰNG SỐ\n" +
+        "EXPLAIN SELECT * FROM events WHERE created_at >= \u00272026-09-01\u0027;\n" +
+        "-- -> chỉ quét events_2026_09, các phân vùng khác bị loại ngay khi lập kế hoạch.\n" +
+        "\n" +
+        "-- PRUNING KHÔNG HOẠT ĐỘNG:\n" +
+        "EXPLAIN SELECT * FROM events WHERE data->>\u0027type\u0027 = \u0027click\u0027;   -- không có điều\n" +
+        "                                                              -- kiện trên khoá\n" +
+        "                                                              -- -> quét MỌI phân vùng\n" +
+        "EXPLAIN SELECT * FROM events WHERE DATE(created_at) = \u00272026-09-05\u0027;  -- hàm bọc cột\n" +
+        "\n" +
+        "-- RUNTIME PRUNING (Postgres 11+): loại phân vùng ngay cả khi giá trị chỉ\n" +
+        "-- biết lúc CHẠY (prepared statement, tham số, subquery)\n" +
+        "SET enable_partition_pruning = on;      -- mặc định on\n" +
+        "EXPLAIN (ANALYZE) SELECT * FROM events WHERE created_at >= $1;\n" +
+        "-- Trong plan sẽ thấy \"Subplans Removed: N\".\n" +
+        "\n" +
+        "-- CONSTRAINT EXCLUSION — cơ chế CŨ, dùng cho kế thừa bảng (inheritance)\n" +
+        "-- kiểu trước Postgres 10. Nó dựa vào CHECK constraint trên bảng con.\n" +
+        "SET constraint_exclusion = partition;   -- mặc định\n" +
+        "-- Chậm hơn pruning và chỉ hoạt động lúc lập kế hoạch. Với partition khai\n" +
+        "-- báo (declarative) từ PG10+ thì dùng pruning, không cần cái này.\n" +
+        "\n" +
+        "-- ĐIỀU QUAN TRỌNG NHẤT: mọi truy vấn NÓNG phải có điều kiện trên KHOÁ\n" +
+        "-- PHÂN VÙNG. Nếu không, phân vùng làm hệ thống CHẬM HƠN bảng thường\n" +
+        "-- (phải mở và quét hàng trăm bảng con).\n" +
+        "EXPLAIN (ANALYZE, BUFFERS) SELECT ...;   -- kiểm tra số phân vùng thực sự bị quét",
+    },
+  ],
 },
 {
   cat: 'Sharding',
@@ -325,6 +729,43 @@ SS.addQuestions('sql', [
       ['Chi phí', 'thấp', 'thấp', 'thêm lookup + điểm lỗi'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chia dữ liệu ra nhiều database",
+      code:
+        "-- HASH SHARDING: shard = hash(key) % N\n" +
+        "--   + phân bố ĐỀU, không có hot shard\n" +
+        "--   - THÊM SHARD phải di chuyển gần như TOÀN BỘ dữ liệu (modulo đổi)\n" +
+        "--   -> dùng CONSISTENT HASHING để chỉ di chuyển 1/N dữ liệu\n" +
+        "\n" +
+        "-- RANGE SHARDING: shard 1 giữ id 1-1tr, shard 2 giữ 1tr-2tr\n" +
+        "--   + truy vấn theo KHOẢNG hiệu quả, thêm shard dễ\n" +
+        "--   - dễ HOT SHARD: dữ liệu mới luôn đổ vào shard cuối\n" +
+        "\n" +
+        "-- DIRECTORY SHARDING: một bảng tra cứu ánh xạ key -> shard\n" +
+        "CREATE TABLE shard_map (tenant_id BIGINT PRIMARY KEY, shard_id INT NOT NULL);\n" +
+        "--   + linh hoạt nhất: di chuyển từng tenant tuỳ ý, tenant lớn cho shard riêng\n" +
+        "--   - bảng tra cứu thành điểm nghẽn và điểm lỗi -> phải cache\n" +
+        "\n" +
+        "-- CHỌN SHARD KEY là quyết định QUAN TRỌNG NHẤT và khó sửa nhất:\n" +
+        "--  - phân bố đều\n" +
+        "--  - phần lớn truy vấn phải BIẾT được key này (nếu không -> scatter-gather)\n" +
+        "--  - dữ liệu cần join thường nằm cùng shard (tenant_id, user_id là ứng viên tốt)\n" +
+        "\n" +
+        "-- BÀI TOÁN CROSS-SHARD:\n" +
+        "-- 1) JOIN giữa các shard -> KHÔNG làm được ở tầng DB. Phải gộp ở ứng dụng,\n" +
+        "--    hoặc NHÂN BẢN bảng tra cứu nhỏ sang mọi shard.\n" +
+        "-- 2) TRANSACTION xuyên shard -> không có 2PC thực dụng -> dùng saga/outbox.\n" +
+        "-- 3) UNIQUE toàn cục -> dùng UUID/snowflake thay vì auto-increment.\n" +
+        "-- 4) TỔNG HỢP toàn cục (COUNT, SUM) -> hỏi mọi shard rồi cộng, hoặc duy trì\n" +
+        "--    bảng tổng hợp riêng.\n" +
+        "-- 5) PHÂN TRANG xuyên shard -> rất khó làm đúng; thường đổi sang keyset.\n" +
+        "\n" +
+        "-- TRƯỚC KHI SHARD: hãy thử replica đọc, partition, tối ưu truy vấn, và\n" +
+        "-- máy lớn hơn. Sharding làm mọi thứ phức tạp lên nhiều lần và rất khó lui.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -353,6 +794,40 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Tách tải đọc, và xử lý độ trễ nhân bản",
+      code:
+        "-- Ghi vào PRIMARY, đọc từ REPLICA. Nhưng replica LUÔN có độ trễ.\n" +
+        "SELECT now() - pg_last_xact_replay_timestamp() AS lag;     -- trên replica\n" +
+        "SELECT client_addr, state, replay_lag FROM pg_stat_replication;  -- trên primary\n" +
+        "\n" +
+        "-- VẤN ĐỀ KINH ĐIỂN \"read-your-own-write\": người dùng lưu hồ sơ rồi tải lại\n" +
+        "-- trang, đọc từ replica chưa kịp đồng bộ -> thấy dữ liệu CŨ -> tưởng mất dữ liệu.\n" +
+        "\n" +
+        "-- CÁCH XỬ LÝ, theo thứ tự nên dùng:\n" +
+        "-- 1) STICKY: sau khi GHI, ĐỌC từ primary trong một khoảng ngắn (vài giây)\n" +
+        "--    -> đơn giản và hiệu quả nhất trong thực tế.\n" +
+        "-- 2) Định tuyến theo NGỮ NGHĨA: mọi truy vấn trong luồng nghiệp vụ quan\n" +
+        "--    trọng đọc từ primary; báo cáo/danh sách đọc từ replica.\n" +
+        "@Transactional(readOnly = true)     // Spring: đánh dấu để routing datasource\n" +
+        "                                    // chuyển sang replica\n" +
+        "-- 3) CHỜ ĐỒNG BỘ tới một vị trí LSN cụ thể (chính xác nhất, phức tạp hơn):\n" +
+        "SELECT pg_current_wal_lsn();                       -- trên primary sau khi ghi\n" +
+        "SELECT pg_wal_replay_wait(\u00270/16B3748\u0027);            -- trên replica (PG 18+)\n" +
+        "-- 4) SYNCHRONOUS REPLICATION — không còn độ trễ, nhưng GHI CHẬM HẲN\n" +
+        "--    và primary phụ thuộc vào replica:\n" +
+        "--    synchronous_commit = on; synchronous_standby_names = \u0027replica1\u0027\n" +
+        "\n" +
+        "-- CÁC ĐIỂM KHÁC CẦN LƯU Ý:\n" +
+        "--  - replica CHỈ ĐỌC: mọi ghi (kể cả session variable ghi vào bảng) sẽ lỗi\n" +
+        "--  - truy vấn dài trên replica có thể bị HUỶ do xung đột với replay:\n" +
+        "--    max_standby_streaming_delay = 300s\n" +
+        "--    hot_standby_feedback = on   (đổi lại: replica chặn vacuum ở primary)\n" +
+        "--  - theo dõi replica lag và TỰ ĐỘNG rút replica khỏi pool khi lag quá cao",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -377,6 +852,45 @@ SS.addQuestions('sql', [
       ['Session-level state', 'dùng được', 'không (prepared toàn cục, SET, advisory lock, LISTEN)', 'không'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Mỗi kết nối Postgres là một tiến trình OS",
+      code:
+        "-- Postgres tạo MỘT TIẾN TRÌNH cho mỗi kết nối (~5-10MB RAM mỗi cái).\n" +
+        "-- 1000 kết nối = 1000 tiến trình -> RAM cạn, context switch khủng khiếp.\n" +
+        "SHOW max_connections;                            -- thường 100-200\n" +
+        "SELECT count(*), state FROM pg_stat_activity GROUP BY state;\n" +
+        "\n" +
+        "-- PGBOUNCER đứng giữa: hàng nghìn kết nối từ ứng dụng -> vài chục kết nối thật.\n" +
+        "--   [databases]\n" +
+        "--   mydb = host=127.0.0.1 port=5432 dbname=mydb\n" +
+        "--   [pgbouncer]\n" +
+        "--   pool_mode = transaction\n" +
+        "--   max_client_conn = 5000\n" +
+        "--   default_pool_size = 25\n" +
+        "\n" +
+        "-- BA POOL MODE:\n" +
+        "-- SESSION — kết nối server gán cho client tới khi client ngắt.\n" +
+        "--   An toàn nhất (mọi tính năng hoạt động), nhưng gộp được ít nhất.\n" +
+        "-- TRANSACTION — trả kết nối về pool sau MỖI transaction. GỘP TỐT NHẤT,\n" +
+        "--   là mode dùng phổ biến nhất. NHƯNG KHÔNG dùng được:\n" +
+        "--     prepared statement ở cấp phiên (phải tắt hoặc dùng protocol mới),\n" +
+        "--     SET/RESET ở cấp phiên, advisory lock theo PHIÊN, LISTEN/NOTIFY,\n" +
+        "--     temporary table, cursor giữ qua nhiều transaction.\n" +
+        "-- STATEMENT — trả về sau mỗi CÂU LỆNH. Không dùng được transaction nhiều câu.\n" +
+        "\n" +
+        "-- VỚI TRANSACTION MODE, cấu hình client cho đúng:\n" +
+        "--   JDBC: prepareThreshold=0  (tắt server-side prepared statement)\n" +
+        "--   hoặc dùng PgBouncer 1.21+ có hỗ trợ prepared statement\n" +
+        "\n" +
+        "-- CÔNG THỨC KÍCH THƯỚC POOL (điểm hay bị hiểu sai): pool LỚN KHÔNG nhanh hơn.\n" +
+        "--   connections ≈ (core_count * 2) + effective_spindle_count\n" +
+        "-- Máy 8 core, SSD -> khoảng 20-25 kết nối là tối ưu. Vượt qua đó, throughput\n" +
+        "-- GIẢM vì tranh chấp tài nguyên.\n" +
+        "SHOW POOLS;   -- trong console pgbouncer: cl_waiting > 0 nghĩa là pool thiếu",
+    },
+  ],
 },
 {
   cat: 'Hiệu năng',
@@ -404,6 +918,45 @@ SS.addQuestions('sql', [
       { label: 'COPY / LOAD DATA INFILE', value: 120, note: 'đường nạp chuyên dụng, bỏ qua overhead parse/plan' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Từ chậm nhất tới nhanh nhất",
+      code:
+        "-- CHẬM NHẤT: từng câu INSERT, mỗi cái một transaction (autocommit)\n" +
+        "INSERT INTO orders (amount) VALUES (100);   -- x 100.000 lần -> rất chậm\n" +
+        "-- Mỗi lần là một round-trip mạng + một lần fsync WAL.\n" +
+        "\n" +
+        "-- NHANH HƠN: gộp nhiều hàng trong MỘT câu\n" +
+        "INSERT INTO orders (customer_id, amount) VALUES\n" +
+        "  (1, 100), (2, 200), (3, 300), ... ;       -- 500-1000 hàng mỗi câu là hợp lý\n" +
+        "-- Nhanh hơn khoảng 5-10 lần. Đừng gộp quá lớn (giới hạn tham số và bộ nhớ).\n" +
+        "\n" +
+        "-- NHANH NHẤT: COPY — đường nạp dữ liệu chuyên dụng, bỏ qua phần lớn\n" +
+        "-- chi phí phân tích câu lệnh\n" +
+        "COPY orders (customer_id, amount) FROM \u0027/tmp/orders.csv\u0027 WITH (FORMAT csv, HEADER);\n" +
+        "COPY orders (customer_id, amount) FROM STDIN WITH (FORMAT csv);\n" +
+        "-- Từ ứng dụng: PostgreSQL JDBC có CopyManager; psql có \\copy (chạy phía client).\n" +
+        "-- Nhanh hơn INSERT thường 10-100 lần.\n" +
+        "\n" +
+        "-- TỐI ƯU THÊM cho lần nạp dữ liệu LỚN (một lần):\n" +
+        "BEGIN;\n" +
+        "  ALTER TABLE orders SET UNLOGGED;         -- bỏ ghi WAL (MẤT dữ liệu nếu sập!)\n" +
+        "  DROP INDEX idx_orders_customer;          -- bỏ index trước khi nạp\n" +
+        "  COPY orders FROM STDIN WITH (FORMAT csv);\n" +
+        "  CREATE INDEX idx_orders_customer ON orders (customer_id);   -- tạo lại sau\n" +
+        "  ALTER TABLE orders SET LOGGED;\n" +
+        "COMMIT;\n" +
+        "ANALYZE orders;                            -- BẮT BUỘC: cập nhật statistics\n" +
+        "-- Tạo index SAU khi nạp nhanh hơn nhiều so với cập nhật index từng hàng.\n" +
+        "\n" +
+        "-- TRONG ỨNG DỤNG (JDBC): bật batch thật sự\n" +
+        "--   reWriteBatchedInserts=true trong URL kết nối (Postgres JDBC)\n" +
+        "--   -> driver tự gộp nhiều INSERT thành multi-row -> nhanh hơn nhiều lần.\n" +
+        "-- Hibernate: hibernate.jdbc.batch_size=50 + order_inserts=true, và KHÔNG\n" +
+        "-- dùng GenerationType.IDENTITY (nó vô hiệu hoá batch hoàn toàn).",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -428,6 +981,40 @@ SS.addQuestions('sql', [
       ['Ví dụ', 'Postgres, MySQL', 'Snowflake, BigQuery, ClickHouse, Redshift'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Hai loại tải, hai mô hình lưu trữ",
+      code:
+        "-- OLTP: nhiều giao dịch nhỏ, đọc/ghi vài hàng, độ trễ mili giây.\n" +
+        "SELECT * FROM orders WHERE id = 12345;                       -- điển hình OLTP\n" +
+        "UPDATE orders SET status = \u0027PAID\u0027 WHERE id = 12345;\n" +
+        "-- Lưu trữ theo HÀNG (row-store): lấy cả một hàng rất rẻ.\n" +
+        "\n" +
+        "-- OLAP: ít truy vấn nhưng mỗi cái quét hàng triệu hàng, tổng hợp nhiều chiều.\n" +
+        "SELECT region, DATE_TRUNC(\u0027month\u0027, created_at), SUM(amount), COUNT(DISTINCT customer_id)\n" +
+        "FROM orders WHERE created_at >= \u00272025-01-01\u0027 GROUP BY 1, 2;   -- điển hình OLAP\n" +
+        "-- Lưu trữ theo CỘT (column-store): chỉ đọc cột cần, nén rất tốt (dữ liệu\n" +
+        "-- cùng cột giống nhau) -> nhanh hơn hàng chục lần cho loại truy vấn này.\n" +
+        "\n" +
+        "-- DẤU HIỆU CẦN TÁCH RA DATA WAREHOUSE:\n" +
+        "--  1) truy vấn phân tích làm chậm OLTP dù đã có replica\n" +
+        "--  2) cần join dữ liệu từ NHIỀU nguồn (DB, log, CRM, quảng cáo)\n" +
+        "--  3) cần giữ lịch sử dài mà OLTP không nên phình\n" +
+        "--  4) người dùng nghiệp vụ cần truy vấn tự do (BI tool)\n" +
+        "--  5) bảng vượt vài trăm GB và phần lớn truy vấn là tổng hợp\n" +
+        "\n" +
+        "-- LỘ TRÌNH TĂNG DẦN (đừng nhảy thẳng tới bước cuối):\n" +
+        "--  1) tối ưu truy vấn + index\n" +
+        "--  2) materialized view cho báo cáo hay dùng\n" +
+        "--  3) READ REPLICA riêng cho phân tích\n" +
+        "--  4) partition theo thời gian\n" +
+        "--  5) DATA WAREHOUSE (ClickHouse, BigQuery, Snowflake, Redshift) qua CDC/ETL\n" +
+        "\n" +
+        "-- Postgres có thể làm OLAP ở quy mô vừa nhờ partition + materialized view\n" +
+        "-- + extension citus/columnar. Đừng vội chuyển khi chưa cần.",
+    },
+  ],
 },
 {
   cat: 'Hiệu năng',
@@ -460,6 +1047,51 @@ SS.addQuestions('sql', [
       { label: 'EXIT khi hết hàng', note: 'lặp tới khi không còn hàng nào khớp' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chia nhỏ để không khoá và không làm phình WAL",
+      code:
+        "-- SAI: một câu lệnh động tới hàng chục triệu hàng\n" +
+        "DELETE FROM orders WHERE created_at < \u00272024-01-01\u0027;\n" +
+        "-- -> transaction chạy hàng giờ, giữ khoá, WAL khổng lồ, replica tụt lại,\n" +
+        "--    và nếu lỗi thì rollback cũng mất hàng giờ.\n" +
+        "\n" +
+        "-- ĐÚNG: chia lô, mỗi lô một transaction riêng\n" +
+        "DO $$\n" +
+        "DECLARE rows_deleted INT;\n" +
+        "BEGIN\n" +
+        "  LOOP\n" +
+        "    DELETE FROM orders\n" +
+        "    WHERE id IN (\n" +
+        "      SELECT id FROM orders WHERE created_at < \u00272024-01-01\u0027 LIMIT 10000\n" +
+        "    );\n" +
+        "    GET DIAGNOSTICS rows_deleted = ROW_COUNT;\n" +
+        "    EXIT WHEN rows_deleted = 0;\n" +
+        "    COMMIT;                     -- commit từng lô (Postgres 11+ trong DO block)\n" +
+        "    PERFORM pg_sleep(0.1);      -- nhường tài nguyên cho tải chính\n" +
+        "  END LOOP;\n" +
+        "END $$;\n" +
+        "\n" +
+        "-- Cần index hỗ trợ, nếu không mỗi lô lại quét toàn bảng:\n" +
+        "CREATE INDEX CONCURRENTLY idx_orders_created ON orders (created_at);\n" +
+        "\n" +
+        "-- CẬP NHẬT HÀNG LOẠT theo lô — dùng khoá chính để phân lô:\n" +
+        "UPDATE orders SET status = \u0027ARCHIVED\u0027\n" +
+        "WHERE id BETWEEN 1 AND 10000 AND status = \u0027OLD\u0027;\n" +
+        "\n" +
+        "-- XOÁ PHẦN LỚN BẢNG: tạo bảng mới chứa phần GIỮ LẠI, nhanh hơn nhiều\n" +
+        "CREATE TABLE orders_new AS SELECT * FROM orders WHERE created_at >= \u00272024-01-01\u0027;\n" +
+        "-- tạo index, ràng buộc... rồi:\n" +
+        "BEGIN;\n" +
+        "  ALTER TABLE orders RENAME TO orders_old;\n" +
+        "  ALTER TABLE orders_new RENAME TO orders;\n" +
+        "COMMIT;\n" +
+        "\n" +
+        "-- TỐT NHẤT nếu biết trước: PARTITION theo thời gian -> DROP partition tức thì.\n" +
+        "-- Đây là lý do quan trọng để phân vùng bảng có vòng đời dữ liệu rõ ràng.",
+    },
+  ],
 },
 {
   cat: 'Kiến trúc',
@@ -484,6 +1116,44 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chọn công cụ theo mẫu truy cập, không theo trào lưu",
+      code:
+        "-- CHỌN SQL KHI (mặc định nên bắt đầu ở đây):\n" +
+        "--  - dữ liệu có QUAN HỆ rõ ràng, cần join\n" +
+        "--  - cần TRANSACTION nhiều bảng và ràng buộc toàn vẹn\n" +
+        "--  - truy vấn ĐA DẠNG và chưa biết hết từ đầu (SQL rất linh hoạt khi đọc)\n" +
+        "--  - cần báo cáo, tổng hợp\n" +
+        "--  - đội đã quen, hệ sinh thái công cụ trưởng thành\n" +
+        "SELECT c.name, SUM(o.amount) FROM customers c\n" +
+        "JOIN orders o ON o.customer_id = c.id GROUP BY c.name HAVING SUM(o.amount) > 1000;\n" +
+        "\n" +
+        "-- CHỌN NoSQL KHI:\n" +
+        "--  DOCUMENT (MongoDB): schema thay đổi liên tục, dữ liệu lồng nhau tự nhiên,\n" +
+        "--    truy vấn chủ yếu theo một khoá gốc\n" +
+        "--  KEY-VALUE (Redis, DynamoDB): truy cập theo khoá, quy mô cực lớn, độ trễ\n" +
+        "--    dưới mili giây, mẫu truy vấn BIẾT TRƯỚC\n" +
+        "--  COLUMN-FAMILY (Cassandra): ghi rất nhiều, phân tán nhiều vùng, chấp nhận\n" +
+        "--    nhất quán cuối cùng\n" +
+        "--  GRAPH (Neo4j): quan hệ nhiều tầng là trung tâm (mạng xã hội, phát hiện gian lận)\n" +
+        "--  SEARCH (Elasticsearch): tìm kiếm toàn văn, xếp hạng, phân tích log\n" +
+        "--  TIME-SERIES (Timescale, InfluxDB): dữ liệu đo lường theo thời gian\n" +
+        "\n" +
+        "-- POLYGLOT PERSISTENCE — dùng nhiều loại cho từng việc:\n" +
+        "--   Postgres  -> nguồn sự thật, giao dịch\n" +
+        "--   Redis     -> cache, session, rate limit\n" +
+        "--   Elasticsearch -> tìm kiếm\n" +
+        "--   ClickHouse    -> phân tích\n" +
+        "--   S3        -> file\n" +
+        "-- CÁI GIÁ: đồng bộ dữ liệu giữa các hệ (thường qua CDC/Kafka), nhiều thứ\n" +
+        "-- phải vận hành, nhiều thứ có thể hỏng.\n" +
+        "-- LỜI KHUYÊN: bắt đầu bằng MỘT Postgres. Nó làm được JSONB, full-text,\n" +
+        "-- geo, time-series, hàng đợi ở mức đủ tốt. Chỉ thêm hệ mới khi ĐÃ ĐO\n" +
+        "-- được rằng Postgres không đáp ứng nổi.",
+    },
+  ],
 },
 {
   cat: 'Full-text search',
@@ -508,6 +1178,46 @@ SS.addQuestions('sql', [
       ['Thêm hệ thống + đồng bộ', 'không cần', 'cần (CDC từ Postgres)'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Postgres làm được tới đâu",
+      code:
+        "-- TSVECTOR — chuẩn hoá văn bản thành các từ tố (lexeme) có trọng số\n" +
+        "ALTER TABLE articles ADD COLUMN search_vector tsvector\n" +
+        "  GENERATED ALWAYS AS (\n" +
+        "    setweight(to_tsvector(\u0027simple\u0027, coalesce(title, \u0027\u0027)),   \u0027A\u0027) ||\n" +
+        "    setweight(to_tsvector(\u0027simple\u0027, coalesce(body, \u0027\u0027)),    \u0027B\u0027)\n" +
+        "  ) STORED;\n" +
+        "CREATE INDEX idx_articles_search ON articles USING GIN (search_vector);\n" +
+        "\n" +
+        "SELECT id, title, ts_rank(search_vector, query) AS diem\n" +
+        "FROM articles, to_tsquery(\u0027simple\u0027, \u0027redis & cache\u0027) query\n" +
+        "WHERE search_vector @@ query\n" +
+        "ORDER BY diem DESC LIMIT 20;\n" +
+        "\n" +
+        "-- Các toán tử truy vấn: & (và), | (hoặc), ! (không), <-> (kề nhau)\n" +
+        "SELECT * FROM articles WHERE search_vector @@ phraseto_tsquery(\u0027simple\u0027, \u0027cơ sở dữ liệu\u0027);\n" +
+        "SELECT ts_headline(\u0027simple\u0027, body, query) FROM ...;   -- tô đậm đoạn khớp\n" +
+        "\n" +
+        "-- TÌM GẦN ĐÚNG / gõ sai chính tả -> trigram\n" +
+        "CREATE EXTENSION pg_trgm;\n" +
+        "CREATE INDEX idx_articles_title_trgm ON articles USING GIN (title gin_trgm_ops);\n" +
+        "SELECT * FROM articles WHERE title % \u0027databse\u0027 ORDER BY similarity(title, \u0027databse\u0027) DESC;\n" +
+        "\n" +
+        "-- POSTGRES ĐỦ DÙNG KHI: dưới vài triệu bản ghi, tìm kiếm là tính năng phụ,\n" +
+        "-- và bạn muốn dữ liệu tìm kiếm LUÔN đồng bộ với dữ liệu gốc (không có\n" +
+        "-- độ trễ index, không có dual-write).\n" +
+        "\n" +
+        "-- CẦN ELASTICSEARCH/OPENSEARCH KHI:\n" +
+        "--  - hàng chục triệu bản ghi trở lên, đòi hỏi độ trễ thấp\n" +
+        "--  - cần xếp hạng phức tạp (BM25 tuỳ chỉnh, boost theo nhiều tiêu chí)\n" +
+        "--  - cần faceted search, gợi ý, autocomplete quy mô lớn\n" +
+        "--  - phân tích tiếng Việt tốt hơn (Postgres không có bộ phân tích tiếng Việt sẵn)\n" +
+        "--  - tìm kiếm là TÍNH NĂNG CỐT LÕI của sản phẩm\n" +
+        "-- CÁI GIÁ: thêm một hệ thống, và bài toán đồng bộ dữ liệu (thường qua CDC).",
+    },
+  ],
 },
 {
   cat: 'Hiệu năng',
@@ -533,6 +1243,43 @@ SS.addQuestions('sql', [
       { to: 3, label: 'status=\'PENDING\' (0.1%) cần index; status=\'DONE\' (99%) cần seq — một plan không tối ưu cả hai. Fix: force_custom_plan' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Tách câu lệnh khỏi dữ liệu",
+      code:
+        "PREPARE get_order (bigint) AS SELECT * FROM orders WHERE id = $1;\n" +
+        "EXECUTE get_order(123);\n" +
+        "DEALLOCATE get_order;\n" +
+        "\n" +
+        "-- LỢI ÍCH:\n" +
+        "-- 1) CHỐNG SQL INJECTION — quan trọng nhất. Tham số KHÔNG BAO GIỜ được\n" +
+        "--    hiểu là mã lệnh, dù nội dung là gì.\n" +
+        "--    Nối chuỗi: \"... WHERE id = \" + input  -> lỗ hổng nghiêm trọng.\n" +
+        "-- 2) BỎ QUA việc phân tích và lập kế hoạch cho các lần chạy sau -> nhanh hơn\n" +
+        "--    khi cùng một câu chạy hàng nghìn lần.\n" +
+        "-- 3) Ép kiểu đúng, không phụ thuộc định dạng chuỗi/locale.\n" +
+        "\n" +
+        "-- CẠM BẪY: GENERIC PLAN\n" +
+        "-- Postgres chạy 5 lần đầu với plan RIÊNG cho từng giá trị (custom plan),\n" +
+        "-- rồi so sánh chi phí. Nếu plan chung không tệ hơn nhiều, nó chuyển sang\n" +
+        "-- GENERIC PLAN — không còn biết giá trị tham số.\n" +
+        "-- Với cột có phân phối LỆCH, điều này gây plan tệ:\n" +
+        "--   status = \u0027PENDING\u0027  (0,01% bảng)  -> nên dùng index\n" +
+        "--   status = \u0027DONE\u0027     (99% bảng)    -> nên seq scan\n" +
+        "--   generic plan chỉ chọn được MỘT cách cho cả hai.\n" +
+        "SET plan_cache_mode = force_custom_plan;    -- luôn lập kế hoạch lại\n" +
+        "SET plan_cache_mode = auto;                 -- mặc định\n" +
+        "EXPLAIN (GENERIC_PLAN) SELECT * FROM orders WHERE status = $1;   -- PG 16+\n" +
+        "\n" +
+        "-- CẠM BẪY 2: prepared statement là theo PHIÊN. Với PgBouncer ở transaction\n" +
+        "-- mode, kết nối bị chia sẻ -> lỗi \"prepared statement does not exist\".\n" +
+        "--   -> JDBC: prepareThreshold=0, hoặc PgBouncer 1.21+ có hỗ trợ.\n" +
+        "\n" +
+        "-- CẠM BẪY 3: KHÔNG tham số hoá được tên bảng/cột hay hướng ORDER BY.\n" +
+        "--   -> phải kiểm tra bằng danh sách trắng ở ứng dụng, tuyệt đối không nối chuỗi.",
+    },
+  ],
 },
 {
   cat: 'Hiệu năng',
@@ -570,5 +1317,53 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Danh sách kiểm tra khi review code",
+      code:
+        "-- 1) SELECT * -> mất covering index, truyền thừa, vỡ khi schema đổi\n" +
+        "SELECT id, name, amount FROM orders;                   -- ghi rõ cột\n" +
+        "\n" +
+        "-- 2) NỐI CHUỖI tạo câu lệnh -> SQL injection\n" +
+        "-- \"WHERE id = \" + userInput                           -> dùng tham số\n" +
+        "\n" +
+        "-- 3) NOT IN với subquery có thể chứa NULL -> kết quả RỖNG âm thầm\n" +
+        "SELECT * FROM c WHERE NOT EXISTS (SELECT 1 FROM o WHERE o.customer_id = c.id);\n" +
+        "\n" +
+        "-- 4) HÀM BỌC CỘT trong WHERE -> mất index\n" +
+        "WHERE created_at >= \u00272026-09-05\u0027 AND created_at < \u00272026-09-06\u0027;\n" +
+        "\n" +
+        "-- 5) OFFSET lớn để phân trang -> dùng keyset pagination\n" +
+        "\n" +
+        "-- 6) N+1 QUERY -> JOIN hoặc IN\n" +
+        "\n" +
+        "-- 7) DISTINCT để \"chữa\" kết quả nhân bản do join -> dùng EXISTS\n" +
+        "\n" +
+        "-- 8) THIẾU INDEX trên cột khoá ngoại (Postgres không tự tạo)\n" +
+        "\n" +
+        "-- 9) DÙNG FLOAT CHO TIỀN -> NUMERIC hoặc số nguyên đơn vị nhỏ nhất\n" +
+        "\n" +
+        "-- 10) KHÔNG có transaction cho nhóm thao tác liên quan -> dữ liệu nửa vời\n" +
+        "\n" +
+        "-- 11) TRANSACTION QUÁ DÀI (gọi API bên ngoài trong transaction) -> khoá,\n" +
+        "--     chặn vacuum, cạn connection pool\n" +
+        "\n" +
+        "-- 12) ORDER BY RANDOM() trên bảng lớn -> sắp xếp toàn bảng\n" +
+        "SELECT * FROM orders TABLESAMPLE SYSTEM (1) LIMIT 10;   -- lấy mẫu thay thế\n" +
+        "\n" +
+        "-- 13) COUNT(*) toàn bảng chỉ để hiển thị tổng số trang\n" +
+        "SELECT reltuples::bigint FROM pg_class WHERE relname = \u0027orders\u0027;   -- ước lượng\n" +
+        "\n" +
+        "-- 14) KHÔNG có timeout -> một câu lệnh treo giữ khoá vô hạn\n" +
+        "SET statement_timeout = \u002730s\u0027;\n" +
+        "SET lock_timeout = \u00273s\u0027;\n" +
+        "SET idle_in_transaction_session_timeout = \u002760s\u0027;\n" +
+        "\n" +
+        "-- 15) DÙNG TRIGGER cho logic nghiệp vụ phức tạp -> khó debug, khó test,\n" +
+        "--     và ẩn tác dụng phụ. Trigger chỉ nên dùng cho audit và duy trì\n" +
+        "--     dữ liệu phái sinh đơn giản.",
+    },
+  ],
 },
 ]);

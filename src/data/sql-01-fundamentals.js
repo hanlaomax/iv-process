@@ -33,6 +33,40 @@ SS.addQuestions('sql', [
       'GROUP BY c.id, c.name',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Cùng dữ liệu, năm kiểu JOIN cho năm kết quả khác nhau",
+      code:
+        "-- customers: (1,\u0027An\u0027), (2,\u0027Binh\u0027), (3,\u0027Cuong\u0027)\n" +
+        "-- orders:    (1, customer_id=1, 100), (2, customer_id=1, 50), (3, customer_id=9, 200)\n" +
+        "\n" +
+        "-- INNER: chỉ hàng khớp CẢ HAI bên -> An (2 dòng). Binh, Cuong và đơn #3 biến mất.\n" +
+        "SELECT c.name, o.amount\n" +
+        "FROM customers c INNER JOIN orders o ON o.customer_id = c.id;\n" +
+        "\n" +
+        "-- LEFT: giữ MỌI khách, kể cả người chưa mua -> Binh và Cuong hiện với NULL\n" +
+        "SELECT c.name, COALESCE(o.amount, 0) AS amount\n" +
+        "FROM customers c LEFT JOIN orders o ON o.customer_id = c.id;\n" +
+        "\n" +
+        "-- RIGHT: giữ mọi đơn, kể cả đơn mồ côi (#3 có customer_id=9 không tồn tại)\n" +
+        "-- Ít dùng: viết lại thành LEFT bằng cách đảo thứ tự bảng thì dễ đọc hơn.\n" +
+        "SELECT c.name, o.amount\n" +
+        "FROM customers c RIGHT JOIN orders o ON o.customer_id = c.id;\n" +
+        "\n" +
+        "-- FULL OUTER: giữ mồ côi CẢ HAI bên. MySQL không hỗ trợ -> dùng UNION hai LEFT.\n" +
+        "SELECT c.name, o.amount\n" +
+        "FROM customers c FULL OUTER JOIN orders o ON o.customer_id = c.id;\n" +
+        "\n" +
+        "-- CROSS: tích Descartes, KHÔNG có điều kiện. 3 x 3 = 9 dòng.\n" +
+        "-- Hữu ích khi cần sinh tổ hợp (mọi sản phẩm x mọi kích cỡ).\n" +
+        "SELECT c.name, o.amount FROM customers c CROSS JOIN orders o;\n" +
+        "\n" +
+        "-- SELF: join bảng với chính nó -> quan hệ phân cấp, so sánh hàng với hàng\n" +
+        "SELECT e.name AS nhan_vien, m.name AS quan_ly\n" +
+        "FROM employees e LEFT JOIN employees m ON e.manager_id = m.id;",
+    },
+  ],
 },
 {
   cat: 'JOIN',
@@ -74,6 +108,37 @@ SS.addQuestions('sql', [
       'GROUP BY c.id, c.name',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Cùng một điều kiện, hai kết quả hoàn toàn khác",
+      code:
+        "-- ĐẶT Ở ON: điều kiện áp dụng LÚC GHÉP -> hàng không khớp vẫn được GIỮ với NULL\n" +
+        "SELECT c.name, o.amount\n" +
+        "FROM customers c\n" +
+        "LEFT JOIN orders o ON o.customer_id = c.id AND o.status = \u0027PAID\u0027;\n" +
+        "-- Kết quả: MỌI khách hàng. Khách không có đơn PAID -> amount là NULL.\n" +
+        "-- Đây là câu trả lời cho \"danh sách khách hàng kèm doanh thu đã thanh toán\".\n" +
+        "\n" +
+        "-- ĐẶT Ở WHERE: điều kiện áp dụng SAU KHI ghép -> lọc bỏ luôn cả hàng NULL\n" +
+        "SELECT c.name, o.amount\n" +
+        "FROM customers c\n" +
+        "LEFT JOIN orders o ON o.customer_id = c.id\n" +
+        "WHERE o.status = \u0027PAID\u0027;\n" +
+        "-- Kết quả: CHỈ khách có đơn PAID. NULL không thoả \u0027PAID\u0027 nên bị loại.\n" +
+        "-- LEFT JOIN đã âm thầm biến thành INNER JOIN.\n" +
+        "\n" +
+        "-- ĐÂY LÀ LỖI RẤT PHỔ BIẾN và khó phát hiện vì câu lệnh vẫn chạy đúng cú pháp.\n" +
+        "-- Quy tắc:\n" +
+        "--   điều kiện về BẢNG PHẢI  -> đặt ở ON\n" +
+        "--   điều kiện về BẢNG TRÁI  -> đặt ở WHERE\n" +
+        "--   muốn lọc đúng hàng KHÔNG khớp -> WHERE o.id IS NULL (anti-join)\n" +
+        "\n" +
+        "SELECT c.name\n" +
+        "FROM customers c LEFT JOIN orders o ON o.customer_id = c.id\n" +
+        "WHERE o.id IS NULL;          -- khách chưa từng mua",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -102,6 +167,39 @@ SS.addQuestions('sql', [
       { to: 4, label: 'window function chạy SAU GROUP BY' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Viết một đằng, chạy một nẻo",
+      code:
+        "-- THỨ TỰ VIẾT:  SELECT -> FROM -> WHERE -> GROUP BY -> HAVING -> ORDER BY -> LIMIT\n" +
+        "-- THỨ TỰ CHẠY (logic):\n" +
+        "--   1. FROM / JOIN     tạo tập dữ liệu nguồn\n" +
+        "--   2. WHERE           lọc TỪNG HÀNG (chưa có nhóm, chưa có aggregate)\n" +
+        "--   3. GROUP BY        gom nhóm\n" +
+        "--   4. HAVING          lọc TỪNG NHÓM (dùng được aggregate)\n" +
+        "--   5. SELECT          tính biểu thức, đặt alias\n" +
+        "--   6. DISTINCT\n" +
+        "--   7. ORDER BY        sắp xếp (dùng được alias vì SELECT đã chạy)\n" +
+        "--   8. LIMIT / OFFSET\n" +
+        "\n" +
+        "-- HỆ QUẢ 1: WHERE KHÔNG dùng được alias đặt ở SELECT\n" +
+        "SELECT amount * 1.1 AS total FROM orders WHERE total > 100;   -- LỖI\n" +
+        "SELECT amount * 1.1 AS total FROM orders WHERE amount * 1.1 > 100;  -- đúng\n" +
+        "\n" +
+        "-- HỆ QUẢ 2: ORDER BY thì DÙNG ĐƯỢC alias (vì chạy sau SELECT)\n" +
+        "SELECT amount * 1.1 AS total FROM orders ORDER BY total DESC;   -- chạy được\n" +
+        "\n" +
+        "-- HỆ QUẢ 3: WHERE không dùng được aggregate (chạy trước GROUP BY)\n" +
+        "SELECT customer_id, SUM(amount) FROM orders\n" +
+        "WHERE SUM(amount) > 1000 GROUP BY customer_id;                  -- LỖI\n" +
+        "SELECT customer_id, SUM(amount) FROM orders\n" +
+        "GROUP BY customer_id HAVING SUM(amount) > 1000;                 -- đúng\n" +
+        "\n" +
+        "-- LƯU Ý: đây là thứ tự LOGIC. Optimizer được phép chạy khác đi (đẩy điều\n" +
+        "-- kiện xuống sớm, đổi thứ tự join) miễn là KẾT QUẢ giống nhau.",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -146,6 +244,35 @@ SS.addQuestions('sql', [
       'GROUP BY customer_id HAVING SUM(amount) > 100',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Lọc hàng vs lọc nhóm",
+      code:
+        "-- WHERE lọc TỪNG HÀNG, chạy TRƯỚC khi gom nhóm -> không dùng được aggregate\n" +
+        "-- HAVING lọc TỪNG NHÓM, chạy SAU GROUP BY      -> dùng được aggregate\n" +
+        "\n" +
+        "SELECT customer_id, COUNT(*) AS so_don, SUM(amount) AS tong\n" +
+        "FROM orders\n" +
+        "WHERE created_at >= \u00272026-01-01\u0027      -- 1) loại bỏ hàng cũ TRƯỚC khi gom\n" +
+        "GROUP BY customer_id\n" +
+        "HAVING SUM(amount) > 1000000          -- 2) loại bỏ NHÓM có tổng nhỏ\n" +
+        "ORDER BY tong DESC;\n" +
+        "\n" +
+        "-- QUAN TRỌNG VỀ HIỆU NĂNG: đặt được điều kiện ở WHERE thì ĐỪNG đặt ở HAVING.\n" +
+        "-- WHERE giảm số hàng phải gom nhóm; HAVING chỉ vứt bỏ sau khi đã tính xong.\n" +
+        "SELECT customer_id, COUNT(*) FROM orders\n" +
+        "GROUP BY customer_id\n" +
+        "HAVING customer_id > 100;             -- SAI CHỖ: gom nhóm cả những cái sẽ bỏ\n" +
+        "\n" +
+        "SELECT customer_id, COUNT(*) FROM orders\n" +
+        "WHERE customer_id > 100               -- ĐÚNG: lọc trước, gom nhóm ít hơn\n" +
+        "GROUP BY customer_id;\n" +
+        "\n" +
+        "-- HAVING dùng được KHÔNG CẦN GROUP BY (coi toàn bảng là một nhóm):\n" +
+        "SELECT SUM(amount) FROM orders HAVING SUM(amount) > 0;",
+    },
+  ],
 },
 {
   cat: 'Subquery',
@@ -189,6 +316,39 @@ SS.addQuestions('sql', [
       'WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chạy một lần hay chạy cho từng hàng",
+      code:
+        "-- NON-CORRELATED: subquery ĐỘC LẬP, chạy MỘT LẦN, kết quả dùng lại\n" +
+        "SELECT * FROM orders\n" +
+        "WHERE amount > (SELECT AVG(amount) FROM orders);\n" +
+        "\n" +
+        "-- CORRELATED: subquery THAM CHIẾU cột của query ngoài -> về mặt logic chạy\n" +
+        "-- LẠI cho TỪNG hàng (optimizer hiện đại thường viết lại thành join)\n" +
+        "SELECT * FROM orders o\n" +
+        "WHERE amount > (SELECT AVG(amount) FROM orders WHERE customer_id = o.customer_id);\n" +
+        "\n" +
+        "-- IN vs EXISTS vs JOIN — ba cách viết cùng một ý\n" +
+        "SELECT * FROM customers c WHERE c.id IN (SELECT customer_id FROM orders);\n" +
+        "SELECT * FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);\n" +
+        "SELECT DISTINCT c.* FROM customers c JOIN orders o ON o.customer_id = c.id;\n" +
+        "\n" +
+        "-- KHÁC BIỆT THỰC SỰ QUAN TRỌNG — NULL:\n" +
+        "-- NOT IN với danh sách CÓ CHỨA NULL trả về RỖNG, luôn luôn.\n" +
+        "SELECT * FROM customers WHERE id NOT IN (SELECT customer_id FROM orders);\n" +
+        "-- orders.customer_id có một NULL -> câu này trả về 0 dòng, dù dữ liệu có.\n" +
+        "-- Lý do: id <> NULL cho ra UNKNOWN, không phải TRUE.\n" +
+        "\n" +
+        "-- NOT EXISTS AN TOÀN với NULL -> luôn ưu tiên dùng nó:\n" +
+        "SELECT * FROM customers c\n" +
+        "WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);\n" +
+        "\n" +
+        "-- Về hiệu năng, optimizer hiện đại thường cho plan giống nhau giữa IN/EXISTS/JOIN.\n" +
+        "-- Chọn theo NGỮ NGHĨA và độ dễ đọc, và luôn dùng NOT EXISTS thay cho NOT IN.",
+    },
+  ],
 },
 {
   cat: 'NULL',
@@ -220,6 +380,42 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "NULL không phải giá trị, nó là \"không biết\"",
+      code:
+        "-- Mọi so sánh với NULL đều cho UNKNOWN, không phải TRUE/FALSE:\n" +
+        "SELECT NULL = NULL;        -- NULL (không phải true!)\n" +
+        "SELECT NULL <> 1;          -- NULL\n" +
+        "SELECT NULL + 1;           -- NULL — mọi phép toán với NULL đều ra NULL\n" +
+        "\n" +
+        "-- WHERE chỉ giữ hàng có kết quả TRUE. UNKNOWN bị loại như FALSE.\n" +
+        "SELECT * FROM users WHERE phone = NULL;      -- LUÔN rỗng\n" +
+        "SELECT * FROM users WHERE phone IS NULL;     -- đúng cách\n" +
+        "\n" +
+        "-- BẪY 1: NOT IN với NULL (xem câu trước) -> luôn rỗng\n" +
+        "-- BẪY 2: điều kiện phủ định làm mất hàng NULL\n" +
+        "SELECT * FROM users WHERE status <> \u0027ACTIVE\u0027;\n" +
+        "-- Hàng có status = NULL KHÔNG được trả về, dù rõ ràng nó \"khác ACTIVE\".\n" +
+        "SELECT * FROM users WHERE status IS DISTINCT FROM \u0027ACTIVE\u0027;   -- Postgres: đúng ý\n" +
+        "SELECT * FROM users WHERE status <> \u0027ACTIVE\u0027 OR status IS NULL;  -- cách chuẩn\n" +
+        "\n" +
+        "-- BẪY 3: aggregate BỎ QUA NULL, trừ COUNT(*)\n" +
+        "SELECT COUNT(*),           -- đếm MỌI hàng\n" +
+        "       COUNT(phone),       -- chỉ đếm hàng phone KHÔNG NULL\n" +
+        "       AVG(score)          -- trung bình chỉ trên hàng không NULL (mẫu số khác!)\n" +
+        "FROM users;\n" +
+        "\n" +
+        "-- BẪY 4: UNIQUE cho phép NHIỀU NULL (chuẩn SQL) -> không chống trùng được\n" +
+        "--        các hàng chưa có giá trị.\n" +
+        "\n" +
+        "-- Công cụ xử lý:\n" +
+        "SELECT COALESCE(phone, \u0027chưa có\u0027),          -- giá trị đầu tiên không NULL\n" +
+        "       NULLIF(amount, 0),                   -- biến 0 thành NULL (tránh chia 0)\n" +
+        "       amount / NULLIF(quantity, 0)         -- mẫu chống chia cho 0",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -256,6 +452,38 @@ SS.addQuestions('sql', [
     solution: 'SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY customer_id HAVING COUNT(*) >= 2',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Khử trùng vs gom nhóm để tính",
+      code:
+        "-- Chỉ khử trùng -> hai câu sau tương đương và thường cho cùng plan\n" +
+        "SELECT DISTINCT customer_id FROM orders;\n" +
+        "SELECT customer_id FROM orders GROUP BY customer_id;\n" +
+        "\n" +
+        "-- GROUP BY mạnh hơn: nó cho phép TÍNH TOÁN trên từng nhóm\n" +
+        "SELECT customer_id, COUNT(*), SUM(amount), MAX(created_at)\n" +
+        "FROM orders GROUP BY customer_id;\n" +
+        "\n" +
+        "-- DISTINCT áp dụng cho TOÀN BỘ danh sách cột, không phải cột đầu tiên\n" +
+        "SELECT DISTINCT customer_id, status FROM orders;\n" +
+        "-- -> các cặp (customer_id, status) duy nhất, KHÔNG phải \"mỗi khách một dòng\".\n" +
+        "-- Đây là hiểu nhầm phổ biến nhất về DISTINCT.\n" +
+        "\n" +
+        "-- Postgres có DISTINCT ON — lấy MỘT hàng đại diện cho mỗi nhóm:\n" +
+        "SELECT DISTINCT ON (customer_id) customer_id, id, amount, created_at\n" +
+        "FROM orders\n" +
+        "ORDER BY customer_id, created_at DESC;    -- đơn MỚI NHẤT của mỗi khách\n" +
+        "-- ORDER BY bắt buộc bắt đầu bằng cột trong DISTINCT ON.\n" +
+        "\n" +
+        "-- DẤU HIỆU XẤU: DISTINCT được thêm vào để \"chữa\" kết quả bị nhân đôi do JOIN.\n" +
+        "SELECT DISTINCT c.* FROM customers c JOIN orders o ON o.customer_id = c.id;\n" +
+        "-- Cách đúng là dùng EXISTS — vừa rõ nghĩa vừa nhanh hơn (không phải sắp xếp\n" +
+        "-- và khử trùng toàn bộ kết quả):\n" +
+        "SELECT c.* FROM customers c\n" +
+        "WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);",
+    },
+  ],
 },
 {
   cat: 'Tập hợp',
@@ -279,6 +507,42 @@ SS.addQuestions('sql', [
       ['Dùng khi', 'thực sự cần khử trùng', 'mặc định nên nghĩ tới; biết không trùng', 'thay JOIN/NOT EXISTS phức tạp'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Phép toán tập hợp trên kết quả truy vấn",
+      code:
+        "-- UNION: gộp và KHỬ TRÙNG -> phải sắp xếp/băm toàn bộ -> TỐN KÉM\n" +
+        "SELECT email FROM customers\n" +
+        "UNION\n" +
+        "SELECT email FROM subscribers;\n" +
+        "\n" +
+        "-- UNION ALL: gộp, GIỮ NGUYÊN trùng lặp -> NHANH HƠN NHIỀU\n" +
+        "-- Biết chắc không trùng (hoặc trùng cũng không sao) thì LUÔN dùng UNION ALL.\n" +
+        "SELECT email FROM customers\n" +
+        "UNION ALL\n" +
+        "SELECT email FROM subscribers;\n" +
+        "\n" +
+        "-- INTERSECT: chỉ hàng có ở CẢ HAI\n" +
+        "SELECT email FROM customers INTERSECT SELECT email FROM subscribers;\n" +
+        "\n" +
+        "-- EXCEPT (MySQL: dùng NOT EXISTS thay thế): có ở vế đầu, KHÔNG có ở vế sau\n" +
+        "SELECT email FROM customers EXCEPT SELECT email FROM subscribers;\n" +
+        "\n" +
+        "-- QUY TẮC:\n" +
+        "--  - số cột và KIỂU DỮ LIỆU phải tương thích giữa các vế\n" +
+        "--  - tên cột lấy từ vế ĐẦU TIÊN\n" +
+        "--  - ORDER BY chỉ đặt được ở CUỐI CÙNG, áp cho toàn bộ kết quả\n" +
+        "(SELECT email, \u0027khach\u0027 AS loai FROM customers)\n" +
+        "UNION ALL\n" +
+        "(SELECT email, \u0027dang-ky\u0027 FROM subscribers)\n" +
+        "ORDER BY email\n" +
+        "LIMIT 100;\n" +
+        "\n" +
+        "-- UNION ALL còn là công cụ tối ưu: câu OR chậm có thể tách thành hai câu\n" +
+        "-- dùng được index rồi UNION ALL lại (xem câu về OR).",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -321,6 +585,41 @@ SS.addQuestions('sql', [
       'FROM orders GROUP BY customer_id',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Xoay bảng và đếm có điều kiện trong MỘT lần quét",
+      code:
+        "-- Thay vì chạy nhiều câu hoặc join nhiều lần, gộp điều kiện vào aggregate:\n" +
+        "SELECT\n" +
+        "  customer_id,\n" +
+        "  COUNT(*)                                        AS tong_don,\n" +
+        "  COUNT(*) FILTER (WHERE status = \u0027PAID\u0027)         AS da_thanh_toan,   -- Postgres\n" +
+        "  COUNT(CASE WHEN status = \u0027PAID\u0027 THEN 1 END)     AS da_thanh_toan_2, -- chuẩn SQL\n" +
+        "  SUM(CASE WHEN status = \u0027PAID\u0027 THEN amount ELSE 0 END) AS doanh_thu,\n" +
+        "  AVG(CASE WHEN status = \u0027PAID\u0027 THEN amount END)  AS tb_don_da_tt\n" +
+        "FROM orders\n" +
+        "GROUP BY customer_id;\n" +
+        "\n" +
+        "-- LƯU Ý: CASE không có ELSE thì trả NULL, và aggregate BỎ QUA NULL.\n" +
+        "--   COUNT(CASE WHEN ... THEN 1 END)      -> đếm đúng số hàng thoả điều kiện\n" +
+        "--   SUM(CASE WHEN ... THEN x ELSE 0 END) -> dùng ELSE 0 để tổng không ra NULL\n" +
+        "--   AVG thì ĐỪNG dùng ELSE 0 — nó làm sai mẫu số.\n" +
+        "\n" +
+        "-- PIVOT: biến hàng thành cột\n" +
+        "SELECT\n" +
+        "  DATE_TRUNC(\u0027month\u0027, created_at) AS thang,\n" +
+        "  SUM(amount) FILTER (WHERE region = \u0027Bắc\u0027)  AS bac,\n" +
+        "  SUM(amount) FILTER (WHERE region = \u0027Trung\u0027) AS trung,\n" +
+        "  SUM(amount) FILTER (WHERE region = \u0027Nam\u0027)   AS nam\n" +
+        "FROM orders\n" +
+        "GROUP BY 1\n" +
+        "ORDER BY 1;\n" +
+        "\n" +
+        "-- LỢI ÍCH LỚN NHẤT: chỉ QUÉT BẢNG MỘT LẦN thay vì nhiều subquery hoặc\n" +
+        "-- nhiều LEFT JOIN -> nhanh hơn nhiều trên bảng lớn.",
+    },
+  ],
 },
 {
   cat: 'DML',
@@ -345,6 +644,41 @@ SS.addQuestions('sql', [
       { to: 3, label: 'Postgres: ON CONFLICT + EXCLUDED; MySQL: ON DUPLICATE KEY UPDATE; chuẩn: MERGE' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chèn hoặc cập nhật, nguyên tử, không cần kiểm tra trước",
+      code:
+        "-- POSTGRES\n" +
+        "INSERT INTO products (sku, name, price, updated_at)\n" +
+        "VALUES (\u0027SKU-1\u0027, \u0027Áo\u0027, 100000, now())\n" +
+        "ON CONFLICT (sku) DO UPDATE\n" +
+        "SET name       = EXCLUDED.name,       -- EXCLUDED = hàng ĐỊNH chèn\n" +
+        "    price      = EXCLUDED.price,\n" +
+        "    updated_at = now()\n" +
+        "WHERE products.price IS DISTINCT FROM EXCLUDED.price;   -- chỉ ghi khi THỰC SỰ đổi\n" +
+        "-- Mệnh đề WHERE này tránh ghi vô ích -> giảm bloat và giảm ghi WAL.\n" +
+        "\n" +
+        "INSERT INTO products (sku, name) VALUES (\u0027SKU-1\u0027, \u0027Áo\u0027)\n" +
+        "ON CONFLICT (sku) DO NOTHING;         -- bỏ qua nếu đã có\n" +
+        "\n" +
+        "-- MYSQL\n" +
+        "INSERT INTO products (sku, name, price) VALUES (\u0027SKU-1\u0027, \u0027Áo\u0027, 100000)\n" +
+        "ON DUPLICATE KEY UPDATE name = VALUES(name), price = VALUES(price);\n" +
+        "\n" +
+        "-- CHUẨN SQL (Postgres 15+, SQL Server, Oracle)\n" +
+        "MERGE INTO products p\n" +
+        "USING (VALUES (\u0027SKU-1\u0027, \u0027Áo\u0027, 100000)) AS s(sku, name, price)\n" +
+        "ON p.sku = s.sku\n" +
+        "WHEN MATCHED THEN UPDATE SET name = s.name, price = s.price\n" +
+        "WHEN NOT MATCHED THEN INSERT (sku, name, price) VALUES (s.sku, s.name, s.price);\n" +
+        "\n" +
+        "-- VÌ SAO KHÔNG TỰ LÀM \"SELECT rồi INSERT/UPDATE\": giữa hai lệnh có RACE\n" +
+        "-- CONDITION -> hai transaction cùng thấy \"chưa có\" và cùng INSERT -> lỗi\n" +
+        "-- trùng khoá hoặc dữ liệu nhân đôi. Upsert là NGUYÊN TỬ ở mức câu lệnh.\n" +
+        "-- ĐIỀU KIỆN: phải có UNIQUE constraint/index trên cột xung đột.",
+    },
+  ],
 },
 {
   cat: 'DDL',
@@ -369,6 +703,45 @@ SS.addQuestions('sql', [
       ['Chung', 'LUÔN index cột FK ở phía con (Postgres không tự tạo)', '—', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Ràng buộc toàn vẹn và hành vi khi xoá/sửa",
+      code:
+        "CREATE TABLE orders (\n" +
+        "  id          BIGSERIAL PRIMARY KEY,\n" +
+        "  customer_id BIGINT NOT NULL\n" +
+        "    REFERENCES customers(id)\n" +
+        "    ON DELETE RESTRICT      -- không cho xoá khách còn đơn hàng\n" +
+        "    ON UPDATE CASCADE,\n" +
+        "  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()\n" +
+        ");\n" +
+        "\n" +
+        "CREATE TABLE order_lines (\n" +
+        "  id       BIGSERIAL PRIMARY KEY,\n" +
+        "  order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,\n" +
+        "  sku      TEXT NOT NULL\n" +
+        ");\n" +
+        "-- CASCADE ở đây ĐÚNG: order_line không tồn tại độc lập ngoài order.\n" +
+        "\n" +
+        "-- CÁC HÀNH VI:\n" +
+        "--  RESTRICT   — chặn NGAY, không cho xoá (kiểm tra tức thì)\n" +
+        "--  NO ACTION  — chặn, nhưng kiểm tra CUỐI transaction (mặc định chuẩn SQL)\n" +
+        "--               -> cho phép xoá rồi chèn lại trong cùng transaction\n" +
+        "--  CASCADE    — xoá/sửa lan sang bảng con. MẠNH và NGUY HIỂM: một lệnh DELETE\n" +
+        "--               có thể xoá hàng triệu dòng ở nhiều bảng.\n" +
+        "--  SET NULL   — đặt cột về NULL (cột phải cho phép NULL)\n" +
+        "--  SET DEFAULT— đặt về giá trị mặc định\n" +
+        "\n" +
+        "-- BẮT BUỘC: đánh index trên cột FK. Postgres KHÔNG tự tạo index cho FK\n" +
+        "-- -> mỗi lần xoá hàng cha phải quét toàn bộ bảng con, và dễ gây deadlock.\n" +
+        "CREATE INDEX idx_orders_customer ON orders (customer_id);\n" +
+        "\n" +
+        "-- Kiểm tra hoãn tới cuối transaction (hữu ích khi nạp dữ liệu vòng tròn):\n" +
+        "ALTER TABLE orders ADD CONSTRAINT fk_customer\n" +
+        "  FOREIGN KEY (customer_id) REFERENCES customers(id) DEFERRABLE INITIALLY DEFERRED;",
+    },
+  ],
 },
 {
   cat: 'DML',
@@ -392,6 +765,39 @@ SS.addQuestions('sql', [
       ['Dùng cho', 'xoá có điều kiện, cần logic', 'làm sạch nhanh cả bảng staging', 'xoá luôn định nghĩa'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Ba mức độ, ba hệ quả rất khác nhau",
+      code:
+        "-- DELETE — DML, xoá TỪNG HÀNG, có WHERE, ghi WAL/undo log cho mỗi hàng\n" +
+        "DELETE FROM orders WHERE created_at < \u00272025-01-01\u0027;\n" +
+        "--  + rollback được, kích hoạt TRIGGER, tôn trọng FK\n" +
+        "--  - CHẬM trên bảng lớn, ghi log rất nhiều, để lại dead tuple (Postgres cần VACUUM)\n" +
+        "--  - KHÔNG giải phóng dung lượng đĩa ngay\n" +
+        "\n" +
+        "-- TRUNCATE — DDL, xoá TOÀN BỘ bảng bằng cách cấp lại vùng lưu trữ\n" +
+        "TRUNCATE TABLE orders RESTART IDENTITY CASCADE;\n" +
+        "--  + CỰC NHANH (không quan tâm số hàng), giải phóng đĩa ngay\n" +
+        "--  + RESTART IDENTITY đặt lại bộ đếm sequence\n" +
+        "--  - KHÔNG có WHERE, KHÔNG kích hoạt trigger DELETE\n" +
+        "--  - cần khoá ACCESS EXCLUSIVE -> chặn MỌI truy cập vào bảng\n" +
+        "--  - bị chặn nếu có FK trỏ tới (trừ khi dùng CASCADE — và CASCADE ở đây\n" +
+        "--    nghĩa là TRUNCATE luôn các bảng con, rất dễ mất dữ liệu ngoài ý muốn)\n" +
+        "--  - Postgres: rollback được trong transaction. MySQL/Oracle: KHÔNG.\n" +
+        "\n" +
+        "-- DROP — DDL, xoá luôn ĐỊNH NGHĨA bảng\n" +
+        "DROP TABLE orders;\n" +
+        "DROP TABLE IF EXISTS orders CASCADE;    -- CASCADE xoá cả view/FK phụ thuộc\n" +
+        "\n" +
+        "-- CHỌN:\n" +
+        "--  xoá một phần dữ liệu        -> DELETE (theo lô nếu nhiều, xem câu batching)\n" +
+        "--  làm sạch bảng (test, staging) -> TRUNCATE\n" +
+        "--  bỏ hẳn bảng                 -> DROP\n" +
+        "-- Xoá phần LỚN của bảng lớn: nhanh hơn nhiều nếu tạo bảng mới chứa phần\n" +
+        "-- GIỮ LẠI, rồi đổi tên — thay vì DELETE hàng chục triệu dòng.",
+    },
+  ],
 },
 {
   cat: 'DDL',
@@ -415,6 +821,43 @@ SS.addQuestions('sql', [
       ['Số lượng', '—', 'nhiều (candidate keys)', 'một'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Ba ràng buộc, ba mục đích không thay thế nhau",
+      code:
+        "CREATE TABLE users (\n" +
+        "  id         BIGSERIAL PRIMARY KEY,        -- = UNIQUE + NOT NULL + khoá chính\n" +
+        "  email      TEXT NOT NULL UNIQUE,         -- định danh nghiệp vụ\n" +
+        "  username   TEXT UNIQUE,                  -- cho phép NULL (chưa đặt tên)\n" +
+        "  tenant_id  BIGINT NOT NULL,\n" +
+        "  code       TEXT,\n" +
+        "  CONSTRAINT uq_tenant_code UNIQUE (tenant_id, code)   -- unique tổ hợp\n" +
+        ");\n" +
+        "\n" +
+        "-- PRIMARY KEY:\n" +
+        "--  - MỘT bảng chỉ có MỘT\n" +
+        "--  - tự động NOT NULL + UNIQUE\n" +
+        "--  - là mục tiêu mặc định của khoá ngoại\n" +
+        "--  - trong MySQL/InnoDB nó còn quyết định THỨ TỰ VẬT LÝ của dữ liệu\n" +
+        "--    (clustered index) -> chọn PK tăng dần rất quan trọng cho hiệu năng ghi\n" +
+        "\n" +
+        "-- UNIQUE:\n" +
+        "--  - có bao nhiêu cũng được\n" +
+        "--  - CHO PHÉP NULL, và theo chuẩn SQL thì NHIỀU NULL đều hợp lệ\n" +
+        "--    (vì NULL <> NULL) -> không chống trùng được các hàng chưa có giá trị\n" +
+        "INSERT INTO users (email, username, tenant_id) VALUES (\u0027a@x.com\u0027, NULL, 1);\n" +
+        "INSERT INTO users (email, username, tenant_id) VALUES (\u0027b@x.com\u0027, NULL, 1);  -- OK!\n" +
+        "--  - Postgres 15+ có: UNIQUE NULLS NOT DISTINCT -> coi các NULL là trùng nhau\n" +
+        "\n" +
+        "-- NOT NULL:\n" +
+        "--  - ràng buộc rẻ nhất và có giá trị nhất. Nó loại bỏ cả một lớp bug NULL.\n" +
+        "--  - mặc định nên là NOT NULL; chỉ cho phép NULL khi \"không biết\" là\n" +
+        "--    trạng thái hợp lệ có ý nghĩa nghiệp vụ.\n" +
+        "\n" +
+        "-- Cả PK lẫn UNIQUE đều tự tạo INDEX -> chúng vừa là ràng buộc vừa là index.",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -441,6 +884,41 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Rẽ nhánh trong truy vấn",
+      code:
+        "-- SEARCHED CASE — điều kiện tuỳ ý, khớp cái ĐẦU TIÊN rồi dừng\n" +
+        "SELECT id, amount,\n" +
+        "  CASE\n" +
+        "    WHEN amount >= 10000000 THEN \u0027VIP\u0027\n" +
+        "    WHEN amount >= 1000000  THEN \u0027Thường\u0027\n" +
+        "    ELSE \u0027Nhỏ\u0027                          -- không có ELSE -> trả NULL\n" +
+        "  END AS phan_loai\n" +
+        "FROM orders;\n" +
+        "\n" +
+        "-- SIMPLE CASE — so sánh bằng với một biểu thức\n" +
+        "SELECT CASE status WHEN \u0027NEW\u0027 THEN \u0027Mới\u0027 WHEN \u0027PAID\u0027 THEN \u0027Đã trả\u0027 ELSE \u0027?\u0027 END\n" +
+        "FROM orders;\n" +
+        "\n" +
+        "-- COALESCE — trả về giá trị ĐẦU TIÊN KHÔNG NULL. Ngắn gọn hơn CASE cho\n" +
+        "-- đúng bài toán đó:\n" +
+        "SELECT COALESCE(nickname, username, email, \u0027Ẩn danh\u0027) AS ten_hien_thi FROM users;\n" +
+        "-- Tương đương CASE WHEN nickname IS NOT NULL THEN nickname WHEN ... END\n" +
+        "\n" +
+        "-- Khi nào dùng CASE thay COALESCE: điều kiện KHÁC \"IS NOT NULL\"\n" +
+        "SELECT CASE WHEN phone <> \u0027\u0027 THEN phone ELSE email END FROM users;\n" +
+        "-- COALESCE không xử lý được chuỗi rỗng (nó không phải NULL).\n" +
+        "\n" +
+        "-- CASE trong ORDER BY — sắp xếp theo thứ tự nghiệp vụ tuỳ ý\n" +
+        "SELECT * FROM orders\n" +
+        "ORDER BY CASE status WHEN \u0027URGENT\u0027 THEN 1 WHEN \u0027NEW\u0027 THEN 2 ELSE 3 END, created_at;\n" +
+        "\n" +
+        "-- CASE trong aggregate -> conditional aggregation (xem câu riêng)\n" +
+        "-- CẢNH BÁO HIỆU NĂNG: CASE trên cột trong WHERE làm MẤT INDEX.",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -480,6 +958,41 @@ SS.addQuestions('sql', [
       'WHERE NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id)',
     ordered: false,
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Ba cách viết, và cái nào an toàn nhất",
+      code:
+        "-- SEMI-JOIN: \"có tồn tại ít nhất một hàng khớp\" — KHÔNG nhân bản hàng\n" +
+        "SELECT c.* FROM customers c\n" +
+        "WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);\n" +
+        "-- Ưu điểm so với JOIN: không cần DISTINCT, và DB dừng ngay khi tìm thấy\n" +
+        "-- hàng khớp đầu tiên (short-circuit).\n" +
+        "\n" +
+        "-- ANTI-JOIN: \"không có hàng nào khớp\" — ba cách viết\n" +
+        "-- 1) NOT EXISTS — AN TOÀN NHẤT, luôn nên dùng\n" +
+        "SELECT c.* FROM customers c\n" +
+        "WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);\n" +
+        "\n" +
+        "-- 2) LEFT JOIN ... IS NULL — tương đương, plan thường giống\n" +
+        "SELECT c.* FROM customers c\n" +
+        "LEFT JOIN orders o ON o.customer_id = c.id\n" +
+        "WHERE o.id IS NULL;\n" +
+        "-- Lưu ý: cột kiểm tra IS NULL phải là cột KHÔNG BAO GIỜ NULL trong bảng\n" +
+        "-- phải (thường là khoá chính), nếu không kết quả sẽ sai.\n" +
+        "\n" +
+        "-- 3) NOT IN — NGUY HIỂM, tránh dùng\n" +
+        "SELECT * FROM customers\n" +
+        "WHERE id NOT IN (SELECT customer_id FROM orders);\n" +
+        "-- Chỉ cần MỘT customer_id là NULL -> toàn bộ kết quả RỖNG. Và lỗi này im lặng.\n" +
+        "\n" +
+        "-- ỨNG DỤNG thực tế:\n" +
+        "--  - khách chưa từng mua (chiến dịch marketing)\n" +
+        "--  - sản phẩm chưa có đánh giá\n" +
+        "--  - đơn hàng chưa có thanh toán -> đối soát dữ liệu\n" +
+        "--  - tìm bản ghi mồ côi sau khi migrate",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -503,6 +1016,37 @@ SS.addQuestions('sql', [
       { to: 3, label: 'MySQL đặc biệt dễ dãi: WHERE id = "5abc" có thể khớp id = 5' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "So sánh khác kiểu là index biến mất",
+      code:
+        "-- Cột id kiểu BIGINT, truyền vào chuỗi -> DB phải ép kiểu\n" +
+        "SELECT * FROM users WHERE id = \u0027123\u0027;        -- thường vẫn dùng được index\n" +
+        "                                             -- (ép hằng số sang BIGINT)\n" +
+        "\n" +
+        "-- Nhưng NGƯỢC LẠI thì hỏng: cột TEXT so với số -> phải ép TỪNG HÀNG\n" +
+        "SELECT * FROM users WHERE phone = 84901234567;\n" +
+        "-- -> DB phải chuyển phone của MỌI HÀNG sang số -> SEQ SCAN, index vô dụng.\n" +
+        "SELECT * FROM users WHERE phone = \u002784901234567\u0027;   -- đúng kiểu -> dùng index\n" +
+        "\n" +
+        "-- BUG THỰC SỰ NGUY HIỂM trong MySQL — so sánh chuỗi với số:\n" +
+        "--   SELECT * FROM users WHERE code = 0;\n" +
+        "--   MySQL ép mọi chuỗi không phải số thành 0 -> TRẢ VỀ GẦN NHƯ TOÀN BỘ BẢNG.\n" +
+        "--   Đây là một vector tấn công thật (SQL injection kiểu type juggling).\n" +
+        "\n" +
+        "-- Ép kiểu ngầm khi JOIN hai cột khác kiểu -> mất index trên cả hai\n" +
+        "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id;\n" +
+        "-- customer_id là VARCHAR còn c.id là BIGINT -> join cực chậm.\n" +
+        "-- -> Thống nhất kiểu dữ liệu giữa các bảng NGAY TỪ THIẾT KẾ.\n" +
+        "\n" +
+        "-- Kiểm tra bằng EXPLAIN: thấy cast hoặc \"Seq Scan\" ở chỗ đáng lẽ có index\n" +
+        "EXPLAIN ANALYZE SELECT * FROM users WHERE phone = 84901234567;\n" +
+        "\n" +
+        "-- Trong ứng dụng: dùng PREPARED STATEMENT với tham số đúng kiểu — nó vừa\n" +
+        "-- chống SQL injection vừa tránh ép kiểu ngoài ý muốn.",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -525,6 +1069,38 @@ SS.addQuestions('sql', [
       ['Dùng cho', 'vài trang đầu', 'trang sâu, feed, export lớn'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Vì sao trang sâu càng lúc càng chậm",
+      code:
+        "SELECT * FROM orders ORDER BY created_at DESC LIMIT 20 OFFSET 0;      -- nhanh\n" +
+        "SELECT * FROM orders ORDER BY created_at DESC LIMIT 20 OFFSET 100000; -- rất chậm\n" +
+        "-- DB phải ĐỌC RỒI VỨT BỎ 100.000 hàng để trả về 20 hàng.\n" +
+        "-- Chi phí tăng TUYẾN TÍNH theo độ sâu trang.\n" +
+        "\n" +
+        "-- VẤN ĐỀ THỨ HAI, ít người để ý: dữ liệu thay đổi giữa các trang.\n" +
+        "-- Có bản ghi mới chèn vào -> hàng ở ranh giới bị LẶP hoặc BỊ NHẢY QUA.\n" +
+        "\n" +
+        "-- KEYSET PAGINATION (seek method) — giải quyết cả hai:\n" +
+        "SELECT * FROM orders\n" +
+        "WHERE (created_at, id) < (\u00272026-09-01 10:00:00\u0027, 12345)   -- con trỏ trang trước\n" +
+        "ORDER BY created_at DESC, id DESC\n" +
+        "LIMIT 20;\n" +
+        "-- Luôn chỉ đọc 20 hàng, trang thứ 1 hay thứ 100.000 đều nhanh như nhau.\n" +
+        "CREATE INDEX idx_orders_created_id ON orders (created_at DESC, id DESC);\n" +
+        "-- Phải thêm cột UNIQUE (id) vào khoá sắp xếp để không nhập nhằng khi\n" +
+        "-- created_at trùng nhau.\n" +
+        "\n" +
+        "-- ĐÁNH ĐỔI: không nhảy tới \"trang 57\" được, không hiện tổng số trang.\n" +
+        "-- -> Hợp cho infinite scroll, API công khai, bảng dữ liệu lớn.\n" +
+        "-- OFFSET vẫn ổn cho: trang admin ít dữ liệu, hoặc cần nhảy trang tuỳ ý.\n" +
+        "\n" +
+        "-- COUNT(*) để hiện tổng số trang cũng RẤT ĐẮT trên bảng lớn.\n" +
+        "-- Ước lượng nhanh trong Postgres:\n" +
+        "SELECT reltuples::bigint FROM pg_class WHERE relname = \u0027orders\u0027;",
+    },
+  ],
 },
 {
   cat: 'DDL',
@@ -552,6 +1128,45 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Bốn nhóm lệnh SQL",
+      code:
+        "-- DDL (Data Definition Language) — định nghĩa cấu trúc\n" +
+        "CREATE TABLE orders (id BIGSERIAL PRIMARY KEY, amount NUMERIC(12,2));\n" +
+        "ALTER TABLE orders ADD COLUMN status TEXT NOT NULL DEFAULT \u0027NEW\u0027;\n" +
+        "DROP TABLE orders;\n" +
+        "TRUNCATE TABLE orders;\n" +
+        "-- Postgres: DDL nằm trong transaction được (rollback được) — rất mạnh cho migration.\n" +
+        "-- MySQL/Oracle: DDL tự COMMIT ngầm -> không rollback được.\n" +
+        "\n" +
+        "-- DML (Data Manipulation Language) — thao tác dữ liệu\n" +
+        "INSERT INTO orders (amount) VALUES (100);\n" +
+        "UPDATE orders SET status = \u0027PAID\u0027 WHERE id = 1;\n" +
+        "DELETE FROM orders WHERE id = 1;\n" +
+        "SELECT * FROM orders;              -- có tài liệu xếp SELECT vào nhóm riêng (DQL)\n" +
+        "\n" +
+        "-- DCL (Data Control Language) — phân quyền\n" +
+        "GRANT SELECT, INSERT ON orders TO app_user;\n" +
+        "REVOKE DELETE ON orders FROM app_user;\n" +
+        "CREATE ROLE readonly;\n" +
+        "GRANT USAGE ON SCHEMA public TO readonly;\n" +
+        "GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly;\n" +
+        "\n" +
+        "-- TCL (Transaction Control Language) — điều khiển giao dịch\n" +
+        "BEGIN;\n" +
+        "  UPDATE accounts SET balance = balance - 100 WHERE id = 1;\n" +
+        "  SAVEPOINT sp1;\n" +
+        "  UPDATE accounts SET balance = balance + 100 WHERE id = 2;\n" +
+        "  -- ROLLBACK TO SAVEPOINT sp1;    -- quay lui một phần\n" +
+        "COMMIT;\n" +
+        "-- ROLLBACK;\n" +
+        "\n" +
+        "-- Ý NGHĨA THỰC TẾ: phân biệt nhóm giúp hiểu quyền hạn (app chỉ nên có DML,\n" +
+        "-- không có DDL) và hiểu cái gì rollback được.",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -578,6 +1193,47 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "timestamptz và các bẫy múi giờ",
+      code:
+        "-- KIỂU DỮ LIỆU (Postgres):\n" +
+        "--   timestamp      — KHÔNG có múi giờ. Chỉ dùng khi thời điểm không gắn\n" +
+        "--                    với một mốc tuyệt đối (ví dụ \"9 giờ sáng theo giờ địa phương\").\n" +
+        "--   timestamptz    — CÓ múi giờ. Lưu nội bộ dưới dạng UTC, tự chuyển đổi\n" +
+        "--                    khi đọc theo TimeZone của phiên. GẦN NHƯ LUÔN dùng cái này.\n" +
+        "--   date, time, interval\n" +
+        "\n" +
+        "CREATE TABLE events (\n" +
+        "  id         BIGSERIAL PRIMARY KEY,\n" +
+        "  happened_at TIMESTAMPTZ NOT NULL DEFAULT now()\n" +
+        ");\n" +
+        "\n" +
+        "SHOW timezone;\n" +
+        "SET TIME ZONE \u0027Asia/Ho_Chi_Minh\u0027;\n" +
+        "SELECT happened_at AT TIME ZONE \u0027Asia/Ho_Chi_Minh\u0027 FROM events;\n" +
+        "\n" +
+        "-- SỐ HỌC\n" +
+        "SELECT now() - INTERVAL \u00277 days\u0027;\n" +
+        "SELECT now() + INTERVAL \u00271 month 3 hours\u0027;\n" +
+        "SELECT AGE(now(), created_at) FROM users;              -- khoảng cách dạng interval\n" +
+        "SELECT EXTRACT(EPOCH FROM (now() - created_at)) / 3600 AS gio_truoc FROM users;\n" +
+        "SELECT DATE_TRUNC(\u0027month\u0027, created_at) AS thang FROM orders;   -- gom theo tháng\n" +
+        "\n" +
+        "-- BẪY QUAN TRỌNG: hàm trên CỘT làm MẤT INDEX\n" +
+        "SELECT * FROM orders WHERE DATE(created_at) = \u00272026-09-05\u0027;    -- SEQ SCAN\n" +
+        "SELECT * FROM orders                                            -- dùng được index\n" +
+        "WHERE created_at >= \u00272026-09-05\u0027 AND created_at < \u00272026-09-06\u0027;\n" +
+        "-- Dùng khoảng NỬA MỞ [từ, đến) — tránh sai sót với giây/mili giây cuối ngày.\n" +
+        "\n" +
+        "-- BẪY MÚI GIỜ: \"hôm nay\" của người dùng khác \"hôm nay\" theo UTC.\n" +
+        "-- Báo cáo theo ngày phải chuyển múi giờ TRƯỚC khi cắt ngày:\n" +
+        "SELECT DATE_TRUNC(\u0027day\u0027, created_at AT TIME ZONE \u0027Asia/Ho_Chi_Minh\u0027) AS ngay,\n" +
+        "       COUNT(*)\n" +
+        "FROM orders GROUP BY 1;",
+    },
+  ],
 },
 {
   cat: 'Truy vấn',
@@ -599,5 +1255,41 @@ SS.addQuestions('sql', [
       { to: 2, label: 'sửa: thêm vào GROUP BY, dùng MAX(...), hoặc JOIN sau khi aggregate' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Quy tắc phụ thuộc hàm",
+      code:
+        "-- QUY TẮC CHUẨN: mọi cột trong SELECT phải HOẶC nằm trong GROUP BY,\n" +
+        "-- HOẶC nằm trong một hàm aggregate.\n" +
+        "SELECT customer_id, status, COUNT(*)\n" +
+        "FROM orders GROUP BY customer_id;              -- LỖI: status không thuộc nhóm nào\n" +
+        "-- Lý do: mỗi nhóm có NHIỀU giá trị status khác nhau -> DB biết chọn cái nào?\n" +
+        "\n" +
+        "SELECT customer_id, status, COUNT(*)\n" +
+        "FROM orders GROUP BY customer_id, status;      -- đúng\n" +
+        "SELECT customer_id, MAX(status), COUNT(*)\n" +
+        "FROM orders GROUP BY customer_id;              -- đúng: dùng aggregate\n" +
+        "\n" +
+        "-- PHỤ THUỘC HÀM (Postgres, chuẩn SQL): nếu đã GROUP BY khoá CHÍNH của bảng\n" +
+        "-- thì mọi cột khác của bảng đó là xác định -> được phép:\n" +
+        "SELECT c.id, c.name, c.email, COUNT(o.id)\n" +
+        "FROM customers c LEFT JOIN orders o ON o.customer_id = c.id\n" +
+        "GROUP BY c.id;                                 -- hợp lệ vì c.id là PRIMARY KEY\n" +
+        "\n" +
+        "-- MYSQL: mặc định BẬT ONLY_FULL_GROUP_BY từ 5.7. Trước đó nó cho phép chọn\n" +
+        "-- cột bất kỳ và trả về giá trị NGẪU NHIÊN từ nhóm -> nguồn của rất nhiều\n" +
+        "-- bug âm thầm trong code cũ.\n" +
+        "-- SET sql_mode = \u0027ONLY_FULL_GROUP_BY\u0027;   -- nên giữ BẬT\n" +
+        "\n" +
+        "-- GROUP BY theo VỊ TRÍ hoặc theo BIỂU THỨC:\n" +
+        "SELECT DATE_TRUNC(\u0027month\u0027, created_at) AS thang, SUM(amount)\n" +
+        "FROM orders GROUP BY 1 ORDER BY 1;             -- 1 = cột đầu trong SELECT\n" +
+        "\n" +
+        "-- GROUP BY trên tập RỖNG trả về MỘT hàng (với aggregate) hoặc KHÔNG hàng nào:\n" +
+        "SELECT COUNT(*) FROM orders WHERE 1 = 0;                    -- trả về 0\n" +
+        "SELECT customer_id, COUNT(*) FROM orders WHERE 1 = 0 GROUP BY customer_id;  -- rỗng",
+    },
+  ],
 },
 ]);

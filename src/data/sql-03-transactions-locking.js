@@ -24,6 +24,41 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Bốn đảm bảo, minh hoạ bằng chuyển tiền",
+      code:
+        "BEGIN;\n" +
+        "  UPDATE accounts SET balance = balance - 100 WHERE id = 1;\n" +
+        "  UPDATE accounts SET balance = balance + 100 WHERE id = 2;\n" +
+        "COMMIT;\n" +
+        "\n" +
+        "-- ATOMICITY (nguyên tử): cả hai UPDATE cùng thành công, hoặc KHÔNG cái nào.\n" +
+        "--   Sập giữa chừng -> khi khởi động lại, DB tự rollback bằng undo log/WAL.\n" +
+        "--   Không có trạng thái \"đã trừ mà chưa cộng\".\n" +
+        "\n" +
+        "-- CONSISTENCY (nhất quán): transaction đưa DB từ trạng thái hợp lệ này sang\n" +
+        "--   trạng thái hợp lệ khác. Mọi CONSTRAINT được tôn trọng.\n" +
+        "ALTER TABLE accounts ADD CONSTRAINT chk_balance CHECK (balance >= 0);\n" +
+        "-- Vi phạm -> transaction bị huỷ. Lưu ý: consistency phần lớn do BẠN định\n" +
+        "-- nghĩa qua constraint; DB chỉ thực thi cái bạn khai báo.\n" +
+        "\n" +
+        "-- ISOLATION (cô lập): transaction đồng thời không nhìn thấy trạng thái dở\n" +
+        "--   dang của nhau. Mức độ do ISOLATION LEVEL quyết định (xem câu sau).\n" +
+        "SHOW transaction_isolation;\n" +
+        "\n" +
+        "-- DURABILITY (bền vững): COMMIT xong là dữ liệu SỐNG SÓT qua mất điện.\n" +
+        "--   Cơ chế: WAL được fsync xuống đĩa TRƯỚC khi báo commit thành công.\n" +
+        "SHOW synchronous_commit;\n" +
+        "SET synchronous_commit = off;   -- nhanh hơn nhiều, nhưng mất tối đa vài\n" +
+        "                                -- trăm ms dữ liệu khi sập. Đây là đánh đổi\n" +
+        "                                -- có ý thức, không phải mặc định.\n" +
+        "\n" +
+        "-- TRONG HỆ PHÂN TÁN, ACID rất đắt -> nhiều hệ chọn BASE (Basically Available,\n" +
+        "-- Soft state, Eventual consistency) và bù bằng saga/idempotent.",
+    },
+  ],
 },
 {
   cat: 'Isolation',
@@ -51,6 +86,41 @@ SS.addQuestions('sql', [
       ['Default', '—', 'Postgres, Oracle', 'MySQL InnoDB', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Bốn mức, và mức nào chặn được gì",
+      code:
+        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\n" +
+        "BEGIN ISOLATION LEVEL REPEATABLE READ;\n" +
+        "\n" +
+        "-- BẢNG CHUẨN SQL (P = cho phép xảy ra):\n" +
+        "-- Level             | Dirty read | Non-repeatable | Phantom\n" +
+        "-- READ UNCOMMITTED  |     P      |       P        |    P\n" +
+        "-- READ COMMITTED    |     -      |       P        |    P\n" +
+        "-- REPEATABLE READ   |     -      |       -        |    P\n" +
+        "-- SERIALIZABLE      |     -      |       -        |    -\n" +
+        "\n" +
+        "-- THỰC TẾ KHÁC VỚI CHUẨN:\n" +
+        "--  POSTGRES: mặc định READ COMMITTED. Không có READ UNCOMMITTED thật\n" +
+        "--    (nó hành xử như READ COMMITTED). REPEATABLE READ của Postgres dùng\n" +
+        "--    snapshot nên CHẶN LUÔN phantom read — mạnh hơn chuẩn yêu cầu.\n" +
+        "--  MYSQL/InnoDB: mặc định REPEATABLE READ. Nhờ gap lock + next-key lock,\n" +
+        "--    nó cũng chặn được phantom trong phần lớn trường hợp.\n" +
+        "\n" +
+        "-- Kiểm tra và đặt mức:\n" +
+        "SELECT current_setting(\u0027transaction_isolation\u0027);\n" +
+        "ALTER DATABASE mydb SET default_transaction_isolation = \u0027read committed\u0027;\n" +
+        "\n" +
+        "-- CHỌN THẾ NÀO:\n" +
+        "--  READ COMMITTED  — mặc định tốt cho OLTP. Ít xung đột, throughput cao.\n" +
+        "--  REPEATABLE READ — khi một transaction đọc CÙNG dữ liệu nhiều lần và\n" +
+        "--                    cần thấy giá trị nhất quán (báo cáo trong transaction).\n" +
+        "--  SERIALIZABLE    — khi logic nghiệp vụ phức tạp và bạn không muốn phân\n" +
+        "--                    tích từng anomaly. Đổi lại: phải xử lý serialization\n" +
+        "--                    failure và retry.",
+    },
+  ],
 },
 {
   cat: 'Isolation',
@@ -79,6 +149,44 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Năm anomaly, mỗi cái một kịch bản cụ thể",
+      code:
+        "-- DIRTY READ: đọc dữ liệu CHƯA COMMIT của transaction khác.\n" +
+        "--   T1: UPDATE accounts SET balance = 0 WHERE id = 1;   (chưa commit)\n" +
+        "--   T2: SELECT balance FROM accounts WHERE id = 1;      -> đọc thấy 0\n" +
+        "--   T1: ROLLBACK;                                        -> số 0 kia chưa từng tồn tại\n" +
+        "--   Chặn từ READ COMMITTED trở lên.\n" +
+        "\n" +
+        "-- NON-REPEATABLE READ: đọc CÙNG một hàng hai lần, ra hai giá trị khác nhau.\n" +
+        "--   T1: SELECT balance FROM accounts WHERE id = 1;      -> 100\n" +
+        "--   T2: UPDATE accounts SET balance = 50 WHERE id = 1; COMMIT;\n" +
+        "--   T1: SELECT balance FROM accounts WHERE id = 1;      -> 50\n" +
+        "--   Chặn từ REPEATABLE READ.\n" +
+        "\n" +
+        "-- PHANTOM READ: cùng một điều kiện WHERE, lần sau ra THÊM hàng mới.\n" +
+        "--   T1: SELECT COUNT(*) FROM orders WHERE amount > 100;  -> 5\n" +
+        "--   T2: INSERT INTO orders (amount) VALUES (200); COMMIT;\n" +
+        "--   T1: SELECT COUNT(*) FROM orders WHERE amount > 100;  -> 6\n" +
+        "--   Chặn ở SERIALIZABLE (và ở REPEATABLE READ của Postgres/MySQL).\n" +
+        "\n" +
+        "-- LOST UPDATE: hai transaction cùng đọc-sửa-ghi, một bản cập nhật BIẾN MẤT.\n" +
+        "--   T1: SELECT balance -> 100        T2: SELECT balance -> 100\n" +
+        "--   T1: UPDATE SET balance = 90      T2: UPDATE SET balance = 80\n" +
+        "--   Kết quả 80: thay đổi của T1 mất hoàn toàn.\n" +
+        "--   CHẶN: SELECT ... FOR UPDATE, hoặc cập nhật nguyên tử, hoặc version column\n" +
+        "UPDATE accounts SET balance = balance - 10 WHERE id = 1;   -- nguyên tử, an toàn\n" +
+        "\n" +
+        "-- WRITE SKEW: mỗi transaction đọc và ghi hàng KHÁC NHAU, mỗi cái đúng riêng\n" +
+        "-- lẻ nhưng cùng nhau phá vỡ ràng buộc.\n" +
+        "--   Quy tắc: luôn phải có ít nhất 1 bác sĩ trực. Đang có 2 người.\n" +
+        "--   T1 (bác sĩ A): thấy 2 người trực -> xin nghỉ -> OK\n" +
+        "--   T2 (bác sĩ B): thấy 2 người trực -> xin nghỉ -> OK\n" +
+        "--   Kết quả: 0 người trực. CHỈ SERIALIZABLE mới chặn được anomaly này.",
+    },
+  ],
 },
 {
   cat: 'MVCC',
@@ -94,6 +202,38 @@ SS.addQuestions('sql', [
     'MVCC = "đọc không cần lock" bằng cách cho reader nhìn một ảnh chụp quá khứ nhất quán, trong khi writer tạo version mới. Cái giá: dọn dẹp version cũ (vacuum/undo/purge).',
   example:
     'Trong khi một job batch `UPDATE` 1 triệu hàng (transaction dài), các query đọc khác vẫn chạy bình thường trên snapshot cũ — không bị chặn. Nhưng version cũ tích tụ → Postgres cần VACUUM kịp, nếu không bảng/index bloat.',
+  demo: [
+    {
+      lang: "sql",
+      title: "Đọc không chặn ghi, ghi không chặn đọc",
+      code:
+        "-- Thay vì khoá khi đọc, DB giữ NHIỀU PHIÊN BẢN của mỗi hàng. Mỗi transaction\n" +
+        "-- nhìn thấy phiên bản phù hợp với SNAPSHOT của nó.\n" +
+        "SELECT txid_current();\n" +
+        "SELECT xmin, xmax, * FROM accounts WHERE id = 1;\n" +
+        "-- xmin = transaction đã TẠO phiên bản này\n" +
+        "-- xmax = transaction đã XOÁ/thay thế nó (0 nếu còn hiện hành)\n" +
+        "\n" +
+        "-- UPDATE trong Postgres KHÔNG sửa tại chỗ: nó CHÈN phiên bản mới và đánh\n" +
+        "-- dấu phiên bản cũ là hết hạn.\n" +
+        "UPDATE accounts SET balance = 50 WHERE id = 1;\n" +
+        "-- -> hàng cũ vẫn nằm đó (dead tuple) cho tới khi VACUUM dọn.\n" +
+        "\n" +
+        "-- HỆ QUẢ QUAN TRỌNG:\n" +
+        "-- 1) ĐỌC KHÔNG BAO GIỜ CHẶN GHI và ngược lại -> throughput cao hơn nhiều\n" +
+        "--    so với khoá đọc kiểu cũ.\n" +
+        "-- 2) Bảng PHÌNH (bloat) vì dead tuple -> cần VACUUM thường xuyên.\n" +
+        "SELECT relname, n_live_tup, n_dead_tup FROM pg_stat_user_tables\n" +
+        "ORDER BY n_dead_tup DESC LIMIT 10;\n" +
+        "-- 3) UPDATE đắt hơn tưởng: phải cập nhật MỌI INDEX trỏ tới hàng\n" +
+        "--    (trừ khi là HOT update — cột đổi không nằm trong index nào).\n" +
+        "-- 4) Transaction chạy lâu GIỮ snapshot cũ -> VACUUM không dọn được dead\n" +
+        "--    tuple mới hơn -> bloat tăng (xem câu về long-running transaction).\n" +
+        "\n" +
+        "-- MYSQL/InnoDB làm khác: sửa tại chỗ và lưu phiên bản cũ trong UNDO LOG.\n" +
+        "-- -> ít bloat ở bảng chính hơn, nhưng undo log có thể phình to.",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -118,6 +258,43 @@ SS.addQuestions('sql', [
       ['Ngoài ra', '—', '—', 'gap lock / predicate lock cho phantom prevention'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Ai chặn ai",
+      code:
+        "-- SHARED (S) — nhiều transaction cùng giữ được. Dùng khi đọc và muốn chặn\n" +
+        "--   người khác SỬA.\n" +
+        "SELECT * FROM accounts WHERE id = 1 FOR SHARE;\n" +
+        "\n" +
+        "-- EXCLUSIVE (X) — chỉ MỘT transaction giữ, chặn mọi khoá khác trên hàng đó.\n" +
+        "SELECT * FROM accounts WHERE id = 1 FOR UPDATE;\n" +
+        "UPDATE accounts SET balance = 50 WHERE id = 1;      -- tự lấy khoá X\n" +
+        "\n" +
+        "-- MA TRẬN TƯƠNG THÍCH:\n" +
+        "--        S      X\n" +
+        "--   S   OK     chặn\n" +
+        "--   X  chặn    chặn\n" +
+        "\n" +
+        "-- ROW-LEVEL: chỉ khoá hàng liên quan -> song song cao. Là mức dùng chính.\n" +
+        "-- TABLE-LEVEL: khoá cả bảng -> hầu như chỉ dùng cho DDL.\n" +
+        "LOCK TABLE accounts IN EXCLUSIVE MODE;    -- hiếm khi cần trong code ứng dụng\n" +
+        "\n" +
+        "-- DDL lấy khoá ACCESS EXCLUSIVE (chặn cả SELECT):\n" +
+        "ALTER TABLE orders ADD COLUMN note TEXT;  -- Postgres 11+: thêm cột có DEFAULT\n" +
+        "                                          -- không phải viết lại bảng -> rất nhanh\n" +
+        "-- Nhưng nó vẫn phải CHỜ lấy được khoá. Một transaction dài đang mở là\n" +
+        "-- ALTER TABLE xếp hàng, và MỌI truy vấn tới sau CŨNG xếp hàng theo nó\n" +
+        "-- -> bảng bị khoá cứng. Luôn đặt lock_timeout khi chạy DDL:\n" +
+        "SET lock_timeout = \u00273s\u0027;\n" +
+        "\n" +
+        "-- XEM KHOÁ đang giữ và ai đang chờ ai:\n" +
+        "SELECT l.pid, l.mode, l.granted, a.query, a.state\n" +
+        "FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid\n" +
+        "WHERE NOT l.granted;\n" +
+        "SELECT pg_blocking_pids(pid), * FROM pg_stat_activity WHERE wait_event_type = \u0027Lock\u0027;",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -139,6 +316,43 @@ SS.addQuestions('sql', [
       ['Options', 'NOWAIT (lỗi ngay nếu bị khoá), SKIP LOCKED (bỏ qua hàng khoá — cho queue)', 'như trái'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Khoá bi quan ở mức hàng",
+      code:
+        "-- FOR UPDATE — khoá hàng để ĐỌC RỒI GHI mà không ai chen vào giữa.\n" +
+        "BEGIN;\n" +
+        "  SELECT balance FROM accounts WHERE id = 1 FOR UPDATE;   -- khoá hàng\n" +
+        "  -- tính toán ở phía ứng dụng...\n" +
+        "  UPDATE accounts SET balance = 50 WHERE id = 1;\n" +
+        "COMMIT;                                                    -- nhả khoá\n" +
+        "-- Không có FOR UPDATE thì hai transaction cùng đọc 100 và cùng ghi\n" +
+        "-- -> LOST UPDATE.\n" +
+        "\n" +
+        "-- CÁC BIẾN THỂ:\n" +
+        "SELECT * FROM accounts WHERE id = 1 FOR UPDATE NOWAIT;\n" +
+        "-- -> LỖI NGAY nếu hàng đang bị khoá. Dùng khi không muốn chờ.\n" +
+        "SELECT * FROM jobs WHERE status = \u0027PENDING\u0027\n" +
+        "ORDER BY created_at LIMIT 10 FOR UPDATE SKIP LOCKED;\n" +
+        "-- -> BỎ QUA hàng đang bị khoá. Đây là nền tảng của hàng đợi job trong SQL.\n" +
+        "SELECT * FROM orders o JOIN customers c ON c.id = o.customer_id\n" +
+        "FOR UPDATE OF o;                                     -- chỉ khoá bảng orders\n" +
+        "\n" +
+        "-- FOR SHARE — cho phép người khác cùng đọc, nhưng CHẶN sửa. Dùng khi cần\n" +
+        "-- đảm bảo hàng tham chiếu không đổi trong lúc mình làm việc.\n" +
+        "SELECT * FROM products WHERE id = 1 FOR SHARE;\n" +
+        "\n" +
+        "-- LUÔN ĐẶT TIMEOUT — khoá chờ vô hạn là công thức gây sự cố dây chuyền:\n" +
+        "SET lock_timeout = \u00273s\u0027;\n" +
+        "\n" +
+        "-- BA CẠM BẪY:\n" +
+        "-- 1) Khoá quá NHIỀU hàng (thiếu WHERE chọn lọc) -> chặn cả hệ thống.\n" +
+        "-- 2) Giữ khoá QUÁ LÂU: gọi API bên ngoài trong lúc đang giữ khoá.\n" +
+        "-- 3) THỨ TỰ khoá không nhất quán giữa các đoạn code -> DEADLOCK.\n" +
+        "-- Xung đột hiếm -> dùng optimistic locking thay vì FOR UPDATE.",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -164,6 +378,43 @@ SS.addQuestions('sql', [
       { to: 4, label: 'phòng: khoá hàng theo CÙNG thứ tự (ORDER BY id), transaction ngắn, khoá ít hàng' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Chờ vòng tròn, và cách phá",
+      code:
+        "-- KỊCH BẢN: hai transaction khoá hai hàng theo thứ tự NGƯỢC nhau.\n" +
+        "--   T1: UPDATE accounts SET ... WHERE id = 1;   -- khoá hàng 1\n" +
+        "--   T2: UPDATE accounts SET ... WHERE id = 2;   -- khoá hàng 2\n" +
+        "--   T1: UPDATE accounts SET ... WHERE id = 2;   -- chờ T2\n" +
+        "--   T2: UPDATE accounts SET ... WHERE id = 1;   -- chờ T1 -> DEADLOCK\n" +
+        "\n" +
+        "-- DB TỰ PHÁT HIỆN và HUỶ một transaction (nạn nhân):\n" +
+        "--   ERROR: deadlock detected\n" +
+        "--   Postgres: SQLSTATE 40P01. MySQL: error 1213.\n" +
+        "SHOW deadlock_timeout;              -- Postgres kiểm tra sau 1 giây chờ\n" +
+        "\n" +
+        "-- PHÒNG TRÁNH:\n" +
+        "-- 1) THỨ TỰ KHOÁ NHẤT QUÁN — cách hiệu quả nhất. Luôn khoá theo id tăng dần:\n" +
+        "UPDATE accounts SET balance = balance + CASE id WHEN 1 THEN -100 ELSE 100 END\n" +
+        "WHERE id IN (1, 2);                 -- một câu lệnh, DB tự khoá theo thứ tự\n" +
+        "-- Hoặc trong ứng dụng: sắp xếp id trước khi khoá.\n" +
+        "SELECT * FROM accounts WHERE id IN (1, 2) ORDER BY id FOR UPDATE;\n" +
+        "\n" +
+        "-- 2) TRANSACTION NGẮN: giữ khoá càng lâu, xác suất deadlock càng cao.\n" +
+        "-- 3) Giảm isolation level nếu nghiệp vụ cho phép.\n" +
+        "-- 4) Đánh index cột FK — thiếu index làm DB khoá phạm vi rộng hơn cần thiết.\n" +
+        "-- 5) RETRY: deadlock là chuyện BÌNH THƯỜNG trong hệ tải cao. Ứng dụng\n" +
+        "--    PHẢI có retry cho SQLSTATE 40P01/40001 (xem câu về retry).\n" +
+        "\n" +
+        "-- ĐIỀU TRA: Postgres ghi chi tiết vào log server\n" +
+        "--   log_lock_waits = on\n" +
+        "--   deadlock_timeout = \u00271s\u0027\n" +
+        "SELECT pg_blocking_pids(pid), query FROM pg_stat_activity\n" +
+        "WHERE wait_event_type = \u0027Lock\u0027;\n" +
+        "-- MySQL: SHOW ENGINE INNODB STATUS  -> mục LATEST DETECTED DEADLOCK",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -190,6 +441,42 @@ SS.addQuestions('sql', [
       { to: 3, label: 'tranh chấp cao → pessimistic (FOR UPDATE) tránh retry storm' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Không khoá, chỉ kiểm tra lúc ghi",
+      code:
+        "CREATE TABLE products (\n" +
+        "  id      BIGINT PRIMARY KEY,\n" +
+        "  stock   INT NOT NULL,\n" +
+        "  version INT NOT NULL DEFAULT 0\n" +
+        ");\n" +
+        "\n" +
+        "-- Đọc (KHÔNG khoá gì cả)\n" +
+        "SELECT id, stock, version FROM products WHERE id = 1;   -- version = 5\n" +
+        "\n" +
+        "-- Ghi: chỉ thành công nếu version CHƯA ĐỔI\n" +
+        "UPDATE products\n" +
+        "SET stock = stock - 1, version = version + 1\n" +
+        "WHERE id = 1 AND version = 5;\n" +
+        "-- 0 dòng bị ảnh hưởng -> ai đó đã sửa trước -> ứng dụng ĐỌC LẠI và THỬ LẠI.\n" +
+        "-- Kiểm tra số dòng ảnh hưởng là BẮT BUỘC, nếu không lỗi sẽ trôi qua im lặng.\n" +
+        "\n" +
+        "-- JPA làm việc này tự động với @Version -> ném OptimisticLockException.\n" +
+        "\n" +
+        "-- SO SÁNH VỚI PESSIMISTIC (FOR UPDATE):\n" +
+        "--  OPTIMISTIC  — không khoá -> song song cao, không deadlock, không chờ.\n" +
+        "--                Chi phí chỉ phát sinh KHI CÓ xung đột (phải thử lại).\n" +
+        "--                Hợp khi xung đột HIẾM — tức là đa số trường hợp.\n" +
+        "--                BẮT BUỘC cho giao dịch kéo dài qua nhiều request (người\n" +
+        "--                dùng mở form sửa rồi lưu sau vài phút).\n" +
+        "--  PESSIMISTIC — khoá ngay, người khác chờ. Hợp khi xung đột NHIỀU trên\n" +
+        "--                cùng một hàng (retry liên tục còn tệ hơn chờ).\n" +
+        "\n" +
+        "-- Không muốn thêm cột version: dùng updated_at, hoặc so sánh chính giá trị cũ\n" +
+        "UPDATE products SET stock = 9 WHERE id = 1 AND stock = 10;",
+    },
+  ],
 },
 {
   cat: 'Giao dịch',
@@ -217,6 +504,43 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Một transaction quên đóng có thể làm hỏng cả database",
+      code:
+        "-- BỐN HẬU QUẢ:\n" +
+        "-- 1) GIỮ KHOÁ -> mọi transaction khác cần khoá đó phải chờ. Và trong\n" +
+        "--    Postgres, một DDL đang chờ sẽ chặn TOÀN BỘ truy vấn tới sau.\n" +
+        "-- 2) CHẶN VACUUM: dead tuple mới hơn snapshot của nó không được dọn\n" +
+        "--    -> bảng và index PHÌNH LÊN không kiểm soát.\n" +
+        "-- 3) UNDO LOG / WAL tích tụ -> đầy đĩa.\n" +
+        "-- 4) Nguy cơ transaction ID wraparound (Postgres).\n" +
+        "\n" +
+        "-- TÌM TRANSACTION DÀI:\n" +
+        "SELECT pid, now() - xact_start AS thoi_gian, state, wait_event_type, query\n" +
+        "FROM pg_stat_activity\n" +
+        "WHERE state <> \u0027idle\u0027 AND xact_start IS NOT NULL\n" +
+        "ORDER BY xact_start LIMIT 10;\n" +
+        "\n" +
+        "-- ĐẶC BIỆT NGUY HIỂM: \"idle in transaction\" — ứng dụng mở BEGIN rồi đi làm\n" +
+        "-- việc khác (gọi API, chờ người dùng) mà không commit.\n" +
+        "SELECT pid, now() - state_change AS idle_time, query\n" +
+        "FROM pg_stat_activity WHERE state = \u0027idle in transaction\u0027\n" +
+        "ORDER BY state_change;\n" +
+        "\n" +
+        "-- PHÒNG: đặt timeout ở cấp database, đừng trông chờ ứng dụng luôn đúng\n" +
+        "ALTER DATABASE mydb SET idle_in_transaction_session_timeout = \u002760s\u0027;\n" +
+        "ALTER DATABASE mydb SET statement_timeout = \u002730s\u0027;\n" +
+        "ALTER DATABASE mydb SET lock_timeout = \u00275s\u0027;\n" +
+        "\n" +
+        "SELECT pg_terminate_backend(12345);    -- xử lý khẩn cấp\n" +
+        "\n" +
+        "-- NGUYÊN TẮC THIẾT KẾ: KHÔNG gọi API bên ngoài, không chờ người dùng,\n" +
+        "-- không xử lý file trong khi transaction đang mở. Mở transaction MUỘN nhất\n" +
+        "-- và đóng SỚM nhất có thể.",
+    },
+  ],
 },
 {
   cat: 'Giao dịch',
@@ -241,6 +565,44 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Ranh giới transaction và điểm quay lui",
+      code:
+        "-- AUTOCOMMIT (mặc định ở hầu hết client): MỖI câu lệnh là một transaction\n" +
+        "-- riêng, tự commit ngay.\n" +
+        "UPDATE accounts SET balance = 50 WHERE id = 1;   -- commit ngay lập tức\n" +
+        "\n" +
+        "-- Gom nhiều câu vào MỘT transaction:\n" +
+        "BEGIN;                                  -- hoặc START TRANSACTION\n" +
+        "  UPDATE accounts SET balance = balance - 100 WHERE id = 1;\n" +
+        "  UPDATE accounts SET balance = balance + 100 WHERE id = 2;\n" +
+        "COMMIT;                                 -- hoặc ROLLBACK để huỷ tất cả\n" +
+        "\n" +
+        "-- SAVEPOINT — điểm quay lui BÊN TRONG transaction\n" +
+        "BEGIN;\n" +
+        "  INSERT INTO orders (id, amount) VALUES (1, 100);\n" +
+        "  SAVEPOINT sp1;\n" +
+        "  INSERT INTO order_lines (order_id, sku) VALUES (1, \u0027SKU-XX\u0027);   -- có thể lỗi\n" +
+        "  ROLLBACK TO SAVEPOINT sp1;            -- huỷ RIÊNG phần sau sp1\n" +
+        "  INSERT INTO order_lines (order_id, sku) VALUES (1, \u0027SKU-OK\u0027);\n" +
+        "  RELEASE SAVEPOINT sp1;\n" +
+        "COMMIT;                                 -- order và line hợp lệ đều được lưu\n" +
+        "\n" +
+        "-- LƯU Ý QUAN TRỌNG (Postgres): khi một câu lệnh LỖI, transaction chuyển\n" +
+        "-- sang trạng thái ABORTED và MỌI câu sau đều lỗi\n" +
+        "--   \"current transaction is aborted, commands ignored until end\"\n" +
+        "-- -> SAVEPOINT là cách duy nhất để tiếp tục sau lỗi.\n" +
+        "-- (Đây cũng là cơ chế Spring dùng cho @Transactional(propagation = NESTED).)\n" +
+        "\n" +
+        "-- CHI PHÍ: mỗi SAVEPOINT tốn tài nguyên; hàng nghìn savepoint trong một\n" +
+        "-- transaction làm hiệu năng giảm rõ rệt. Dùng có chừng mực.\n" +
+        "\n" +
+        "-- Kiểm tra trạng thái hiện tại:\n" +
+        "SELECT txid_current_if_assigned();",
+    },
+  ],
 },
 {
   cat: 'Isolation',
@@ -262,6 +624,42 @@ SS.addQuestions('sql', [
       ['Đánh đổi', 'đơn giản, ít abort — cẩn thận đọc-rồi-ghi', 'đọc nhất quán — dễ gặp serialization/lock conflict + gap lock'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Cùng tên, hành vi khác nhau",
+      code:
+        "-- POSTGRES — mặc định READ COMMITTED\n" +
+        "--   Mỗi CÂU LỆNH lấy một snapshot MỚI -> hai SELECT trong cùng transaction\n" +
+        "--   có thể ra kết quả khác nhau.\n" +
+        "BEGIN;\n" +
+        "  SELECT balance FROM accounts WHERE id = 1;   -- 100\n" +
+        "  -- transaction khác commit balance = 50\n" +
+        "  SELECT balance FROM accounts WHERE id = 1;   -- 50  (non-repeatable read)\n" +
+        "COMMIT;\n" +
+        "\n" +
+        "-- POSTGRES — REPEATABLE READ\n" +
+        "--   Snapshot lấy MỘT LẦN ở câu lệnh đầu tiên, giữ nguyên tới hết transaction.\n" +
+        "--   Chặn luôn cả PHANTOM (mạnh hơn chuẩn SQL yêu cầu).\n" +
+        "--   Nhưng: ghi vào hàng đã bị transaction khác sửa -> LỖI 40001\n" +
+        "--   \"could not serialize access due to concurrent update\" -> phải RETRY.\n" +
+        "BEGIN ISOLATION LEVEL REPEATABLE READ;\n" +
+        "  SELECT balance FROM accounts WHERE id = 1;   -- 100\n" +
+        "  SELECT balance FROM accounts WHERE id = 1;   -- vẫn 100\n" +
+        "COMMIT;\n" +
+        "\n" +
+        "-- MYSQL/InnoDB — mặc định REPEATABLE READ, và hành vi KHÁC HẲN Postgres:\n" +
+        "--  1) SELECT thường đọc từ snapshot (consistent read)\n" +
+        "--  2) NHƯNG SELECT ... FOR UPDATE và UPDATE đọc bản MỚI NHẤT\n" +
+        "--     -> có thể thấy dữ liệu mới hơn snapshot của chính mình (hơi bất ngờ)\n" +
+        "--  3) Dùng GAP LOCK + NEXT-KEY LOCK để chặn phantom -> nhiều khoá hơn,\n" +
+        "--     dễ deadlock hơn Postgres\n" +
+        "--  4) MySQL KHÔNG ném lỗi serialization ở mức này; nó chờ khoá.\n" +
+        "\n" +
+        "-- HỆ QUẢ THỰC TẾ: code chuyển từ MySQL sang Postgres (hoặc ngược lại)\n" +
+        "-- có thể đổi hành vi âm thầm. Luôn kiểm tra lại logic đồng thời khi đổi DB.",
+    },
+  ],
 },
 {
   cat: 'Isolation',
@@ -282,6 +680,43 @@ SS.addQuestions('sql', [
       { to: 4, label: 'đổi "viết lock thủ công cẩn thận" lấy "viết code retry"' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Serializable mà không cần khoá",
+      code:
+        "BEGIN ISOLATION LEVEL SERIALIZABLE;\n" +
+        "  SELECT COUNT(*) FROM doctors WHERE on_call = true;   -- 2\n" +
+        "  UPDATE doctors SET on_call = false WHERE id = 1;\n" +
+        "COMMIT;\n" +
+        "-- Nếu một transaction khác làm điều tương tự với bác sĩ 2, MỘT trong hai\n" +
+        "-- sẽ bị huỷ:\n" +
+        "--   ERROR: could not serialize access due to read/write dependencies\n" +
+        "--   SQLSTATE 40001\n" +
+        "\n" +
+        "-- CƠ CHẾ: SSI KHÔNG khoá khi đọc. Nó THEO DÕI phụ thuộc đọc/ghi giữa các\n" +
+        "-- transaction và tìm \"dangerous structure\" — mẫu phụ thuộc có thể dẫn tới\n" +
+        "-- kết quả không tương đương với việc chạy TUẦN TỰ. Phát hiện được thì\n" +
+        "-- huỷ một transaction.\n" +
+        "-- -> Đây là mức cô lập DUY NHẤT chặn được WRITE SKEW mà không cần bạn\n" +
+        "--    phải tự thêm khoá.\n" +
+        "\n" +
+        "-- CÁI GIÁ:\n" +
+        "--  1) BẮT BUỘC phải có RETRY trong ứng dụng. Không retry thì hệ thống\n" +
+        "--     thỉnh thoảng lỗi ngẫu nhiên dưới tải cao.\n" +
+        "--  2) Tốn bộ nhớ để theo dõi (predicate lock).\n" +
+        "--  3) Tỉ lệ huỷ tăng theo mức độ tranh chấp.\n" +
+        "SHOW max_pred_locks_per_transaction;\n" +
+        "\n" +
+        "-- TỐI ƯU: khai báo transaction chỉ đọc -> SSI bỏ qua theo dõi, gần như\n" +
+        "-- không tốn gì:\n" +
+        "BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE;\n" +
+        "\n" +
+        "-- KHI NÀO DÙNG: logic nghiệp vụ có ràng buộc phức tạp giữa nhiều hàng\n" +
+        "-- (đặt lịch, phân bổ tài nguyên, kế toán) mà việc phân tích từng anomaly\n" +
+        "-- quá dễ sai. SSI cho bạn đảm bảo đúng đắn, đổi lại là retry.",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -302,6 +737,45 @@ SS.addQuestions('sql', [
       { to: 3, label: 'dùng cho: đảm bảo một instance chạy cron/migration, serialize luồng xử lý — không cần bảng lock riêng' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Khoá do ứng dụng tự định nghĩa, không gắn với hàng nào",
+      code:
+        "-- Advisory lock không liên quan tới bảng/hàng nào. Nó chỉ là một con số\n" +
+        "-- mà ứng dụng tự quy ước -> dùng để đồng bộ giữa các tiến trình.\n" +
+        "\n" +
+        "-- KHOÁ THEO PHIÊN — giữ tới khi nhả tay hoặc đóng kết nối\n" +
+        "SELECT pg_advisory_lock(12345);\n" +
+        "SELECT pg_try_advisory_lock(12345);      -- KHÔNG chờ, trả true/false ngay\n" +
+        "SELECT pg_advisory_unlock(12345);\n" +
+        "SELECT pg_advisory_unlock_all();\n" +
+        "\n" +
+        "-- KHOÁ THEO TRANSACTION — TỰ ĐỘNG nhả khi COMMIT/ROLLBACK.\n" +
+        "-- An toàn hơn nhiều vì không bao giờ quên nhả:\n" +
+        "BEGIN;\n" +
+        "  SELECT pg_advisory_xact_lock(12345);\n" +
+        "  -- làm việc...\n" +
+        "COMMIT;                                   -- khoá tự nhả\n" +
+        "\n" +
+        "-- ỨNG DỤNG THỰC TẾ:\n" +
+        "-- 1) Chỉ cho MỘT instance chạy job định kỳ (thay cho ShedLock/Quartz)\n" +
+        "SELECT pg_try_advisory_lock(hashtext(\u0027daily-report-job\u0027));\n" +
+        "-- false -> instance khác đang chạy -> bỏ qua lần này.\n" +
+        "\n" +
+        "-- 2) Khoá theo thực thể mà không cần khoá hàng (tránh chặn truy vấn khác)\n" +
+        "SELECT pg_advisory_xact_lock(hashtext(\u0027order\u0027), order_id);   -- khoá hai phần\n" +
+        "\n" +
+        "-- 3) Chống chạy migration đồng thời từ nhiều pod khi khởi động.\n" +
+        "\n" +
+        "-- ƯU ĐIỂM so với khoá phân tán bằng Redis: nó dùng CHÍNH database đang có\n" +
+        "-- (không thêm hạ tầng), và tự nhả khi kết nối đứt -> không kẹt vĩnh viễn.\n" +
+        "SELECT * FROM pg_locks WHERE locktype = \u0027advisory\u0027;\n" +
+        "\n" +
+        "-- LƯU Ý: với PgBouncer ở chế độ transaction pooling, khoá theo PHIÊN không\n" +
+        "-- dùng được (kết nối bị chia sẻ) -> chỉ dùng advisory_xact_lock.",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -324,6 +798,41 @@ SS.addQuestions('sql', [
       ['Hệ quả', 'SELECT ... BETWEEN 10 AND 20 FOR UPDATE có thể chặn INSERT x=15 dù hàng chưa tồn tại', 'nguồn deadlock/blocking "khó hiểu" khi lock một range dựa trên index'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Khoá cả khoảng trống để chặn phantom",
+      code:
+        "-- InnoDB ở REPEATABLE READ khoá không chỉ HÀNG mà cả KHOẢNG TRỐNG giữa\n" +
+        "-- các hàng -> chặn INSERT vào khoảng đó -> không có phantom read.\n" +
+        "\n" +
+        "-- Bảng có id: 10, 20, 30\n" +
+        "BEGIN;\n" +
+        "SELECT * FROM t WHERE id BETWEEN 15 AND 25 FOR UPDATE;\n" +
+        "-- Khoá: hàng 20 (record lock) + khoảng (10, 20) và (20, 30) (gap lock)\n" +
+        "-- -> transaction khác KHÔNG chèn được id = 15, 18, 25 vào các khoảng đó.\n" +
+        "-- NEXT-KEY LOCK = record lock + gap lock trước nó.\n" +
+        "\n" +
+        "-- HỆ QUẢ THỰC TẾ:\n" +
+        "-- 1) Nhiều khoá hơn Postgres đáng kể -> DEADLOCK xảy ra thường xuyên hơn.\n" +
+        "-- 2) Truy vấn KHÔNG DÙNG INDEX sẽ khoá... TOÀN BỘ BẢNG (vì phải quét hết\n" +
+        "--    và khoá mọi khoảng). Đây là lý do index rất quan trọng với MySQL\n" +
+        "--    không chỉ vì tốc độ mà còn vì mức độ khoá.\n" +
+        "UPDATE t SET x = 1 WHERE non_indexed_col = 5;   -- khoá cả bảng!\n" +
+        "\n" +
+        "-- 3) INSERT vào khoảng đang bị khoá -> chờ, và dễ deadlock khi nhiều\n" +
+        "--    tiến trình cùng chèn giá trị gần nhau.\n" +
+        "\n" +
+        "-- GIẢM KHOÁ:\n" +
+        "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;\n" +
+        "-- READ COMMITTED TẮT gap lock (chỉ còn record lock) -> ít deadlock hơn nhiều.\n" +
+        "-- Nhiều hệ thống MySQL tải cao chọn READ COMMITTED chính vì lý do này\n" +
+        "-- (và vì nó giống hành vi mặc định của Postgres/Oracle).\n" +
+        "\n" +
+        "SHOW ENGINE INNODB STATUS;          -- xem khoá đang giữ và deadlock gần nhất\n" +
+        "SELECT * FROM performance_schema.data_locks;",
+    },
+  ],
 },
 {
   cat: 'Giao dịch',
@@ -355,6 +864,45 @@ SS.addQuestions('sql', [
       { to: 4, label: 'kèm: idempotency key cho request; ghi bảng transactions (audit)' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Bài toán kinh điển, làm đúng từng bước",
+      code:
+        "-- CÁCH 1 (tốt nhất): cập nhật NGUYÊN TỬ, không cần đọc trước\n" +
+        "BEGIN;\n" +
+        "  UPDATE accounts SET balance = balance - 100\n" +
+        "  WHERE id = 1 AND balance >= 100;               -- điều kiện nằm TRONG câu lệnh\n" +
+        "  -- Kiểm tra số dòng ảnh hưởng: 0 -> không đủ tiền -> ROLLBACK\n" +
+        "  UPDATE accounts SET balance = balance + 100 WHERE id = 2;\n" +
+        "COMMIT;\n" +
+        "-- Không có race condition vì DB tự khoá hàng khi UPDATE, và điều kiện\n" +
+        "-- được đánh giá trên giá trị mới nhất.\n" +
+        "\n" +
+        "-- CÁCH 2: khoá bi quan khi cần tính toán phức tạp ở ứng dụng\n" +
+        "BEGIN;\n" +
+        "  SELECT id, balance FROM accounts WHERE id IN (1, 2)\n" +
+        "  ORDER BY id FOR UPDATE;          -- ORDER BY id: THỨ TỰ NHẤT QUÁN -> chống deadlock\n" +
+        "  -- tính phí, tỉ giá... ở phía ứng dụng\n" +
+        "  UPDATE accounts SET balance = balance - 100 WHERE id = 1;\n" +
+        "  UPDATE accounts SET balance = balance + 100 WHERE id = 2;\n" +
+        "COMMIT;\n" +
+        "\n" +
+        "-- LƯỚI AN TOÀN ở tầng schema — đừng chỉ tin vào code:\n" +
+        "ALTER TABLE accounts ADD CONSTRAINT chk_balance CHECK (balance >= 0);\n" +
+        "\n" +
+        "-- GHI SỔ KÉP thay vì chỉ cập nhật số dư — chuẩn mực trong hệ thống tài chính:\n" +
+        "CREATE TABLE ledger (\n" +
+        "  id          BIGSERIAL PRIMARY KEY,\n" +
+        "  transfer_id UUID NOT NULL,\n" +
+        "  account_id  BIGINT NOT NULL,\n" +
+        "  amount      NUMERIC(18,2) NOT NULL,        -- âm = ghi nợ, dương = ghi có\n" +
+        "  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()\n" +
+        ");\n" +
+        "-- Số dư = SUM(amount). Có LỊCH SỬ đầy đủ, đối soát được, không mất dấu vết.\n" +
+        "-- Thêm UNIQUE (transfer_id, account_id) -> idempotent, chống ghi trùng khi retry.",
+    },
+  ],
 },
 {
   cat: 'Giao dịch',
@@ -384,6 +932,47 @@ SS.addQuestions('sql', [
       { to: 3, label: 'work bên trong phải KHÔNG có side effect ngoài DB (hoặc idempotent) — nó chạy lại từ đầu' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Bắt đúng mã lỗi và thử lại có backoff",
+      code:
+        "// Ở SERIALIZABLE hoặc REPEATABLE READ (Postgres), xung đột là chuyện BÌNH\n" +
+        "// THƯỜNG, không phải bug. Ứng dụng BẮT BUỘC phải retry.\n" +
+        "@Retryable(\n" +
+        "    retryFor = { CannotSerializeTransactionException.class,   // SQLSTATE 40001\n" +
+        "                 DeadlockLoserDataAccessException.class },    // SQLSTATE 40P01\n" +
+        "    maxAttempts = 3,\n" +
+        "    backoff = @Backoff(delay = 50, multiplier = 2, random = true))  // có jitter\n" +
+        "@Transactional(isolation = Isolation.SERIALIZABLE)\n" +
+        "public void transfer(long from, long to, BigDecimal amount) {\n" +
+        "    accountRepo.debit(from, amount);\n" +
+        "    accountRepo.credit(to, amount);\n" +
+        "}\n" +
+        "\n" +
+        "@Recover\n" +
+        "public void recover(DataAccessException e, long from, long to, BigDecimal amount) {\n" +
+        "    log.error(\"chuyển tiền thất bại sau 3 lần thử\", e);\n" +
+        "    throw new TransferFailedException(e);\n" +
+        "}\n" +
+        "\n" +
+        "// BỐN NGUYÊN TẮC:\n" +
+        "// 1) RETRY PHẢI BAO TRỌN CẢ TRANSACTION — mở transaction MỚI mỗi lần thử.\n" +
+        "//    Retry bên trong transaction đã hỏng là vô nghĩa (Postgres đã abort nó).\n" +
+        "//    -> Đặt @Retryable Ở NGOÀI @Transactional, đúng như thứ tự trên.\n" +
+        "// 2) CÓ JITTER: nhiều client cùng retry đúng lúc -> lại đụng nhau.\n" +
+        "// 3) GIỚI HẠN số lần thử và có nhánh xử lý thất bại cuối cùng.\n" +
+        "// 4) CHỈ retry lỗi TẠM THỜI. Vi phạm ràng buộc (23505 unique violation)\n" +
+        "//    thì retry bao nhiêu lần cũng lỗi.\n" +
+        "\n" +
+        "// MÃ LỖI CẦN NHỚ (SQLSTATE):\n" +
+        "//   40001 — serialization failure       -> retry\n" +
+        "//   40P01 — deadlock detected           -> retry\n" +
+        "//   55P03 — lock not available          -> retry\n" +
+        "//   23505 — unique violation            -> KHÔNG retry (trừ khi do race và\n" +
+        "//                                          logic của bạn là upsert)",
+    },
+  ],
 },
 {
   cat: 'Giao dịch',
@@ -411,6 +1000,43 @@ SS.addQuestions('sql', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Tách tải phân tích khỏi tải giao dịch",
+      code:
+        "-- CÁCH 1: READ REPLICA — cách phổ biến và hiệu quả nhất\n" +
+        "-- Trỏ mọi truy vấn báo cáo sang replica; OLTP không bị ảnh hưởng gì.\n" +
+        "-- Đánh đổi: replica có ĐỘ TRỄ -> báo cáo có thể thiếu vài giây dữ liệu.\n" +
+        "SELECT now() - pg_last_xact_replay_timestamp() AS replication_lag;   -- trên replica\n" +
+        "\n" +
+        "-- CÁCH 2: GIỚI HẠN TÀI NGUYÊN cho phiên báo cáo\n" +
+        "SET statement_timeout = \u00275min\u0027;\n" +
+        "SET work_mem = \u0027256MB\u0027;                 -- báo cáo cần sắp xếp/băm nhiều\n" +
+        "SET LOCAL synchronous_commit = off;\n" +
+        "\n" +
+        "-- CÁCH 3: MATERIALIZED VIEW — tính trước, đọc rất nhanh\n" +
+        "CREATE MATERIALIZED VIEW mv_daily_revenue AS\n" +
+        "SELECT DATE_TRUNC(\u0027day\u0027, created_at) AS ngay, SUM(amount) AS doanh_thu\n" +
+        "FROM orders GROUP BY 1;\n" +
+        "CREATE UNIQUE INDEX ON mv_daily_revenue (ngay);        -- cần cho CONCURRENTLY\n" +
+        "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_revenue;   -- không khoá người đọc\n" +
+        "\n" +
+        "-- CÁCH 4: TRANSACTION CHỈ ĐỌC — báo cáo không giữ khoá ghi\n" +
+        "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n" +
+        "  -- ...\n" +
+        "COMMIT;\n" +
+        "-- Nhưng CẢNH BÁO: transaction dài vẫn CHẶN VACUUM trên master. Đây chính\n" +
+        "-- là lý do nên đẩy báo cáo sang replica.\n" +
+        "-- Trên replica, chỉnh hai tham số này để báo cáo dài không bị huỷ:\n" +
+        "--   max_standby_streaming_delay = 300s\n" +
+        "--   hot_standby_feedback = on   (đổi lại: replica lại chặn vacuum ở master)\n" +
+        "\n" +
+        "-- CÁCH 5: khi dữ liệu đủ lớn -> tách hẳn sang DATA WAREHOUSE (ClickHouse,\n" +
+        "-- BigQuery, Redshift) qua CDC/ETL. OLTP và OLAP có mô hình lưu trữ khác\n" +
+        "-- nhau về bản chất (hàng vs cột).",
+    },
+  ],
 },
 {
   cat: 'Giao dịch',
@@ -436,6 +1062,41 @@ SS.addQuestions('sql', [
       ['Hệ hiện đại', 'thường TRÁNH', 'chọn cái này + idempotency'],
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "2PC hoạt động thế nào và cái giá của nó",
+      code:
+        "-- Postgres có hỗ trợ 2PC:\n" +
+        "BEGIN;\n" +
+        "  UPDATE accounts SET balance = balance - 100 WHERE id = 1;\n" +
+        "PREPARE TRANSACTION \u0027transfer-abc-123\u0027;   -- PHA 1: chuẩn bị, GIỮ KHOÁ, ghi bền\n" +
+        "\n" +
+        "-- Coordinator hỏi mọi bên; tất cả OK thì:\n" +
+        "COMMIT PREPARED \u0027transfer-abc-123\u0027;       -- PHA 2: commit\n" +
+        "-- ROLLBACK PREPARED \u0027transfer-abc-123\u0027;\n" +
+        "\n" +
+        "SELECT * FROM pg_prepared_xacts;          -- transaction đang treo ở pha 1\n" +
+        "SHOW max_prepared_transactions;           -- mặc định 0 = TẮT\n" +
+        "\n" +
+        "-- VÌ SAO TRÁNH:\n" +
+        "-- 1) COORDINATOR LÀ ĐIỂM LỖI: nó chết giữa hai pha -> transaction bị TREO,\n" +
+        "--    GIỮ KHOÁ VÔ THỜI HẠN. Phải có người vào dọn tay.\n" +
+        "--    Transaction prepared bị quên còn CHẶN VACUUM -> bloat và nguy cơ wraparound.\n" +
+        "-- 2) KHOÁ suốt cả hai pha -> throughput thấp, độ trễ cao.\n" +
+        "-- 3) Mọi bên tham gia phải hỗ trợ 2PC — nhiều API/dịch vụ hiện đại thì không.\n" +
+        "-- 4) Không mở rộng được: càng nhiều bên, xác suất một bên chậm/chết càng cao.\n" +
+        "\n" +
+        "-- THAY THẾ THỰC DỤNG:\n" +
+        "--  a) OUTBOX PATTERN — chỉ MỘT transaction database, sự kiện đẩy đi sau\n" +
+        "CREATE TABLE outbox (\n" +
+        "  id UUID PRIMARY KEY, aggregate_id TEXT, payload JSONB,\n" +
+        "  created_at TIMESTAMPTZ DEFAULT now(), published_at TIMESTAMPTZ\n" +
+        ");\n" +
+        "--  b) SAGA — chuỗi transaction cục bộ + bước bù trừ\n" +
+        "--  c) IDEMPOTENT + retry — đơn giản nhất và bền nhất trong thực tế",
+    },
+  ],
 },
 {
   cat: 'Locking',
@@ -466,6 +1127,54 @@ SS.addQuestions('sql', [
       { to: 3, label: 'worker chết → transaction rollback → job về QUEUED, worker khác lấy' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Dùng database làm hàng đợi, đúng cách",
+      code:
+        "CREATE TABLE jobs (\n" +
+        "  id           BIGSERIAL PRIMARY KEY,\n" +
+        "  payload      JSONB NOT NULL,\n" +
+        "  status       TEXT NOT NULL DEFAULT \u0027PENDING\u0027,\n" +
+        "  attempts     INT NOT NULL DEFAULT 0,\n" +
+        "  run_after    TIMESTAMPTZ NOT NULL DEFAULT now(),\n" +
+        "  locked_at    TIMESTAMPTZ,\n" +
+        "  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()\n" +
+        ");\n" +
+        "-- Partial index: chỉ đánh index việc CHƯA làm -> index luôn nhỏ và nhanh\n" +
+        "CREATE INDEX idx_jobs_pending ON jobs (run_after)\n" +
+        "WHERE status = \u0027PENDING\u0027;\n" +
+        "\n" +
+        "-- LẤY VIỆC: SKIP LOCKED là mấu chốt — worker khác BỎ QUA hàng đang bị khoá\n" +
+        "-- thay vì xếp hàng chờ.\n" +
+        "BEGIN;\n" +
+        "  SELECT id, payload FROM jobs\n" +
+        "  WHERE status = \u0027PENDING\u0027 AND run_after <= now()\n" +
+        "  ORDER BY run_after\n" +
+        "  LIMIT 10\n" +
+        "  FOR UPDATE SKIP LOCKED;                 -- N worker chạy song song không giẫm nhau\n" +
+        "\n" +
+        "  UPDATE jobs SET status = \u0027PROCESSING\u0027, locked_at = now(), attempts = attempts + 1\n" +
+        "  WHERE id = ANY($1);\n" +
+        "COMMIT;\n" +
+        "\n" +
+        "-- Gộp cả hai bước bằng CTE (một lần round-trip):\n" +
+        "UPDATE jobs SET status = \u0027PROCESSING\u0027, locked_at = now()\n" +
+        "WHERE id IN (\n" +
+        "  SELECT id FROM jobs WHERE status = \u0027PENDING\u0027 AND run_after <= now()\n" +
+        "  ORDER BY run_after LIMIT 10 FOR UPDATE SKIP LOCKED\n" +
+        ") RETURNING id, payload;\n" +
+        "\n" +
+        "-- THU HỒI việc treo (worker chết giữa chừng):\n" +
+        "UPDATE jobs SET status = \u0027PENDING\u0027\n" +
+        "WHERE status = \u0027PROCESSING\u0027 AND locked_at < now() - INTERVAL \u00275 minutes\u0027;\n" +
+        "\n" +
+        "-- KHI NÀO ĐỦ DÙNG: dưới vài nghìn job/giây, và bạn muốn job nằm CÙNG\n" +
+        "-- transaction với dữ liệu nghiệp vụ (không có dual-write).\n" +
+        "-- KHI NÀO CẦN MQ THẬT: throughput rất cao, fanout, retention dài, hoặc\n" +
+        "-- nhiều consumer group độc lập.",
+    },
+  ],
 },
 {
   cat: 'Vận hành',
@@ -487,5 +1196,41 @@ SS.addQuestions('sql', [
       { to: 3, label: 'transaction dài + autovacuum tụt hậu = nguyên nhân chính; theo dõi age(datfrozenxid)' },
     ],
   },
+  demo: [
+    {
+      lang: "sql",
+      title: "Dọn dead tuple và một sự cố có thể làm dừng database",
+      code:
+        "-- MVCC để lại DEAD TUPLE sau mỗi UPDATE/DELETE. VACUUM dọn chúng.\n" +
+        "VACUUM orders;                    -- dọn, KHÔNG khoá bảng, KHÔNG trả đĩa về OS\n" +
+        "VACUUM ANALYZE orders;            -- dọn + cập nhật statistics\n" +
+        "VACUUM FULL orders;               -- viết lại bảng, TRẢ đĩa về OS,\n" +
+        "                                  -- nhưng KHOÁ ACCESS EXCLUSIVE -> chỉ làm\n" +
+        "                                  -- trong cửa sổ bảo trì. Cân nhắc pg_repack.\n" +
+        "\n" +
+        "SELECT relname, n_dead_tup, n_live_tup, last_autovacuum, last_autoanalyze\n" +
+        "FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 10;\n" +
+        "\n" +
+        "-- TRANSACTION ID WRAPAROUND:\n" +
+        "-- Postgres dùng transaction id 32 BIT (~4 tỉ). Khi cạn, id quay vòng và\n" +
+        "-- transaction CŨ sẽ trông như đến từ TƯƠNG LAI -> dữ liệu cũ \"biến mất\".\n" +
+        "-- Để ngăn điều đó, VACUUM \"đóng băng\" (freeze) các hàng đủ cũ.\n" +
+        "SELECT datname, age(datfrozenxid) AS tuoi FROM pg_database ORDER BY 2 DESC;\n" +
+        "-- autovacuum_freeze_max_age mặc định 200 triệu -> autovacuum khẩn cấp chạy.\n" +
+        "-- Tới ~1 tỉ: Postgres CẢNH BÁO liên tục.\n" +
+        "-- Tới ~2 tỉ: Postgres TỪ CHỐI MỌI GHI để tự bảo vệ -> database dừng hoạt động.\n" +
+        "\n" +
+        "-- NGUYÊN NHÂN GỐC thường là: transaction chạy lâu, replication slot bị bỏ\n" +
+        "-- quên, hoặc prepared transaction treo — tất cả đều CHẶN việc freeze.\n" +
+        "SELECT slot_name, active, age(xmin) FROM pg_replication_slots;\n" +
+        "SELECT * FROM pg_prepared_xacts;\n" +
+        "SELECT pid, age(backend_xmin), query FROM pg_stat_activity\n" +
+        "ORDER BY age(backend_xmin) DESC NULLS LAST LIMIT 5;\n" +
+        "\n" +
+        "-- PHÒNG: theo dõi age(datfrozenxid), dọn replication slot không dùng,\n" +
+        "-- đặt idle_in_transaction_session_timeout, và chỉnh autovacuum cho bảng nóng.\n" +
+        "ALTER TABLE orders SET (autovacuum_vacuum_scale_factor = 0.05);",
+    },
+  ],
 },
 ]);
