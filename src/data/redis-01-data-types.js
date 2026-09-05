@@ -26,6 +26,31 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Nút thắt là RAM và mạng, không phải CPU",
+      code:
+        "# Redis xử lý lệnh trên MỘT thread duy nhất. Vẫn đạt hàng trăm nghìn ops/s vì:\n" +
+        "#  1) toàn bộ dữ liệu trong RAM -> không đụng đĩa khi đọc\n" +
+        "#  2) đơn luồng -> KHÔNG lock, KHÔNG context switch, mỗi lệnh tự nhiên NGUYÊN TỬ\n" +
+        "#  3) I/O multiplexing (epoll) -> một thread phục vụ hàng chục nghìn kết nối\n" +
+        "#  4) giao thức RESP đơn giản, phân tích rất nhanh\n" +
+        "\n" +
+        "redis-benchmark -h localhost -p 6379 -t get,set -n 100000 -c 50\n" +
+        "# SET: ~120.000 requests/s   GET: ~130.000 requests/s\n" +
+        "\n" +
+        "# HỆ QUẢ QUAN TRỌNG NHẤT của đơn luồng: MỘT lệnh chậm CHẶN TẤT CẢ.\n" +
+        "redis-cli KEYS \u0027*\u0027                 # O(N) trên 10 triệu key -> treo cả server vài giây\n" +
+        "redis-cli SLOWLOG GET 10           # xem lệnh nào đang làm nghẽn\n" +
+        "\n" +
+        "# Vì CPU không phải nút thắt, thêm core KHÔNG giúp gì. Muốn scale thì:\n" +
+        "#  - chạy nhiều instance trên cùng máy (mỗi instance một core)\n" +
+        "#  - hoặc dùng Redis Cluster\n" +
+        "# io-threads (6.0+) chỉ đa luồng phần ĐỌC/GHI SOCKET, việc thực thi lệnh\n" +
+        "# vẫn đơn luồng — đừng nhầm là Redis đã thành đa luồng.",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -54,6 +79,40 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "String là \"ô nhớ nguyên tử\", tối đa 512MB",
+      code:
+        "# 1) COUNTER nguyên tử — đây là use case dùng nhiều nhất, không phải lưu text\n" +
+        "redis-cli INCR page:views:2026-09-05          # nguyên tử, không cần lock\n" +
+        "redis-cli INCRBY user:1:points 50\n" +
+        "redis-cli INCRBYFLOAT account:1:balance 10.5\n" +
+        "\n" +
+        "# 2) CACHE blob (JSON, HTML, kết quả tính toán) kèm TTL\n" +
+        "redis-cli SET user:1 \u0027{\"name\":\"An\",\"tier\":\"gold\"}\u0027 EX 3600\n" +
+        "\n" +
+        "# 3) LOCK phân tán\n" +
+        "redis-cli SET lock:order:1 \"token-abc\" NX EX 30\n" +
+        "\n" +
+        "# 4) BITMAP — String thao tác ở mức bit, cực tiết kiệm cho trạng thái nhị phân\n" +
+        "redis-cli SETBIT user:active:2026-09-05 12345 1     # user 12345 hoạt động\n" +
+        "redis-cli BITCOUNT user:active:2026-09-05           # đếm user hoạt động\n" +
+        "# 1 triệu user chỉ tốn 125KB.\n" +
+        "\n" +
+        "# 5) Thao tác trên một phần chuỗi\n" +
+        "redis-cli SETRANGE key 5 \"xyz\"\n" +
+        "redis-cli GETRANGE key 0 9\n" +
+        "redis-cli APPEND log:1 \"dòng mới\\n\"\n" +
+        "\n" +
+        "# 6) Lấy giá trị cũ trong một lệnh (Redis 6.2+)\n" +
+        "redis-cli SET config:v2 \"new\" GET      # trả về giá trị cũ, đặt giá trị mới\n" +
+        "\n" +
+        "# Nhiều key một lệnh -> ít round-trip mạng hơn hẳn:\n" +
+        "redis-cli MSET k1 v1 k2 v2\n" +
+        "redis-cli MGET k1 k2",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -78,6 +137,36 @@ SS.addQuestions('redis', [
       ['Là gì', '"object/record" trong Redis', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Một object = một key, sửa từng field",
+      code:
+        "# Thay vì nhiều String rời rạc:\n" +
+        "#   user:1:name, user:1:email, user:1:tier   -> 3 key, 3 lần round-trip\n" +
+        "# Dùng Hash:\n" +
+        "redis-cli HSET user:1 name \"An\" email \"an@x.com\" tier \"gold\" points 120\n" +
+        "redis-cli HGET user:1 tier                  # lấy MỘT field, không phải cả object\n" +
+        "redis-cli HMGET user:1 name tier            # lấy vài field\n" +
+        "redis-cli HGETALL user:1                    # O(N) — cẩn thận với hash lớn\n" +
+        "redis-cli HINCRBY user:1 points 10          # tăng field NGUYÊN TỬ\n" +
+        "redis-cli HDEL user:1 email\n" +
+        "redis-cli HEXISTS user:1 tier\n" +
+        "\n" +
+        "# ƯU ĐIỂM SO VỚI JSON TRONG STRING:\n" +
+        "#  - sửa MỘT field không phải đọc-parse-ghi lại cả object (tránh race condition)\n" +
+        "#  - HINCRBY nguyên tử ngay trên field\n" +
+        "#  - hash NHỎ (dưới hash-max-listpack-entries=128 và\n" +
+        "#    hash-max-listpack-value=64) được mã hoá thành LISTPACK -> tiết kiệm\n" +
+        "#    bộ nhớ tới vài lần so với các String riêng lẻ\n" +
+        "redis-cli OBJECT ENCODING user:1            # listpack hoặc hashtable\n" +
+        "\n" +
+        "# HẠN CHẾ QUAN TRỌNG: KHÔNG đặt TTL cho từng FIELD được (chỉ cả key).\n" +
+        "# (Redis 7.4 mới thêm HEXPIRE.) Cần TTL từng phần -> tách thành key riêng.\n" +
+        "# Và HGETALL trên hash hàng chục nghìn field sẽ chặn server -> dùng HSCAN.\n" +
+        "redis-cli HSCAN user:1 0 COUNT 100",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -106,6 +195,37 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Danh sách liên kết hai đầu (quicklist)",
+      code:
+        "# Cấu trúc: quicklist (danh sách liên kết của các listpack) -> thêm/xoá ở\n" +
+        "# HAI ĐẦU là O(1), nhưng truy cập GIỮA là O(N).\n" +
+        "redis-cli LPUSH queue:jobs \"job1\" \"job2\"    # đẩy vào đầu\n" +
+        "redis-cli RPUSH queue:jobs \"job3\"           # đẩy vào cuối\n" +
+        "redis-cli LPOP queue:jobs                   # lấy từ đầu\n" +
+        "redis-cli RPOP queue:jobs\n" +
+        "redis-cli LLEN queue:jobs\n" +
+        "redis-cli LRANGE queue:jobs 0 9             # 10 phần tử đầu — O(N)\n" +
+        "\n" +
+        "# 1) HÀNG ĐỢI công việc đơn giản (FIFO): LPUSH + BRPOP\n" +
+        "redis-cli BRPOP queue:jobs 30               # CHẶN tối đa 30s, không cần polling\n" +
+        "# An toàn hơn — không mất job khi consumer chết giữa chừng:\n" +
+        "redis-cli LMOVE queue:jobs queue:processing RIGHT LEFT\n" +
+        "# (BRPOPLPUSH là bản cũ; LMOVE/BLMOVE là bản mới nên dùng)\n" +
+        "\n" +
+        "# 2) DANH SÁCH GIỚI HẠN — timeline, log gần nhất, hoạt động gần đây\n" +
+        "redis-cli LPUSH user:1:timeline \"post-99\"\n" +
+        "redis-cli LTRIM user:1:timeline 0 99        # chỉ giữ 100 mục mới nhất\n" +
+        "# Cặp LPUSH + LTRIM là mẫu rất hay dùng để danh sách không phình vô hạn.\n" +
+        "\n" +
+        "# 3) STACK (LIFO): LPUSH + LPOP\n" +
+        "\n" +
+        "# LƯU Ý: dùng List làm message queue có hạn chế thật sự — không có consumer\n" +
+        "# group, không ack, không phát lại. Cần những thứ đó thì dùng STREAMS.",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -131,6 +251,36 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Tập hợp không trùng, và các phép toán tập hợp",
+      code:
+        "redis-cli SADD post:1:tags \"redis\" \"cache\" \"database\"\n" +
+        "redis-cli SISMEMBER post:1:tags \"redis\"     # O(1) — kiểm tra thành viên\n" +
+        "redis-cli SCARD post:1:tags                 # đếm, O(1)\n" +
+        "redis-cli SMEMBERS post:1:tags              # O(N) — cẩn thận với set lớn\n" +
+        "redis-cli SRANDMEMBER post:1:tags 2         # lấy ngẫu nhiên (bốc thăm, gợi ý)\n" +
+        "redis-cli SPOP post:1:tags                  # lấy VÀ xoá ngẫu nhiên\n" +
+        "\n" +
+        "# PHÉP TOÁN TẬP HỢP — đây là thứ làm Set đáng giá\n" +
+        "redis-cli SINTER user:1:friends user:2:friends       # bạn chung\n" +
+        "redis-cli SUNION tag:redis tag:cache                 # hợp\n" +
+        "redis-cli SDIFF user:1:friends user:2:friends        # có ở 1 mà không có ở 2\n" +
+        "redis-cli SINTERSTORE result user:1:friends user:2:friends   # lưu kết quả\n" +
+        "\n" +
+        "# USE CASE thực tế:\n" +
+        "#  - khử trùng lặp (id đã xử lý, IP đã thấy)\n" +
+        "#  - quan hệ nhiều-nhiều (tag, người theo dõi, quyền)\n" +
+        "#  - \"bạn chung\", \"sản phẩm cùng danh mục\" bằng SINTER\n" +
+        "#  - lấy ngẫu nhiên có kiểm soát (SRANDMEMBER)\n" +
+        "\n" +
+        "# CẢNH BÁO: SINTER/SUNION trên set hàng triệu phần tử là O(N*M) và CHẶN\n" +
+        "# server (đơn luồng). Set lớn thì tính trước hoặc chia nhỏ.\n" +
+        "# SSCAN để duyệt an toàn thay cho SMEMBERS:\n" +
+        "redis-cli SSCAN post:1:tags 0 COUNT 100",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -153,6 +303,36 @@ SS.addQuestions('redis', [
       { to: 3, label: 'cùng cấu trúc giải quyết: leaderboard (score=điểm), sliding window rate limit (score=timestamp), top-N' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Skip list + hash table -> vừa xếp hạng vừa tra cứu O(1)",
+      code:
+        "# Mỗi phần tử có một SCORE (số thực) quyết định thứ tự.\n" +
+        "redis-cli ZADD leaderboard 1500 \"player1\" 2300 \"player2\" 1800 \"player3\"\n" +
+        "redis-cli ZINCRBY leaderboard 100 \"player1\"        # cộng điểm nguyên tử\n" +
+        "redis-cli ZSCORE leaderboard \"player1\"             # O(1)\n" +
+        "redis-cli ZREVRANK leaderboard \"player1\"           # hạng (0 = cao nhất) — O(log N)\n" +
+        "redis-cli ZREVRANGE leaderboard 0 9 WITHSCORES     # top 10 — O(log N + M)\n" +
+        "redis-cli ZRANGEBYSCORE leaderboard 1000 2000      # lọc theo khoảng điểm\n" +
+        "redis-cli ZCOUNT leaderboard 1000 2000\n" +
+        "\n" +
+        "# BỐN USE CASE KINH ĐIỂN:\n" +
+        "# 1) BẢNG XẾP HẠNG — đúng bài toán mà ZSet sinh ra\n" +
+        "# 2) HÀNG ĐỢI ƯU TIÊN / hẹn giờ: score = timestamp\n" +
+        "redis-cli ZADD delayed:jobs 1757030400 \"job-1\"\n" +
+        "redis-cli ZRANGEBYSCORE delayed:jobs 0 $(date +%s) LIMIT 0 10   # job tới hạn\n" +
+        "redis-cli ZPOPMIN delayed:jobs                                  # lấy sớm nhất\n" +
+        "# 3) RATE LIMITING sliding window: score = timestamp, xoá phần ngoài cửa sổ\n" +
+        "redis-cli ZREMRANGEBYSCORE rate:user:1 0 $(($(date +%s) - 60))\n" +
+        "redis-cli ZCARD rate:user:1\n" +
+        "# 4) DỮ LIỆU CHUỖI THỜI GIAN: score = thời điểm, lấy theo khoảng\n" +
+        "\n" +
+        "# ZRANGEBYLEX — khi MỌI phần tử có CÙNG score, sắp xếp theo từ điển\n" +
+        "redis-cli ZADD autocomplete 0 \"redis\" 0 \"redisearch\" 0 \"redistribute\"\n" +
+        "redis-cli ZRANGEBYLEX autocomplete \"[redis\" \"[redis\\xff\"     # gợi ý tiền tố",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -175,6 +355,34 @@ SS.addQuestions('redis', [
       ['Dùng khi', 'cần danh sách + kiểm tra thành viên', 'chỉ cần con số đếm distinct gần đúng'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đếm phần tử duy nhất với 12KB cố định",
+      code:
+        "# BÀI TOÁN: đếm số user duy nhất truy cập trong ngày. Dùng Set thì 10 triệu\n" +
+        "# user tốn hàng trăm MB. HyperLogLog luôn tốn 12KB, bất kể bao nhiêu phần tử.\n" +
+        "redis-cli PFADD visitors:2026-09-05 \"user1\" \"user2\" \"user3\"\n" +
+        "redis-cli PFCOUNT visitors:2026-09-05\n" +
+        "\n" +
+        "# GỘP nhiều ngày — đây là điểm mạnh thật sự, Set không làm được rẻ như vậy\n" +
+        "redis-cli PFMERGE visitors:week visitors:2026-09-01 visitors:2026-09-02 \\\n" +
+        "  visitors:2026-09-03 visitors:2026-09-04 visitors:2026-09-05\n" +
+        "redis-cli PFCOUNT visitors:week\n" +
+        "# Gộp KHÔNG đếm trùng: user vào cả 5 ngày vẫn chỉ tính một lần.\n" +
+        "\n" +
+        "# ĐÁNH ĐỔI phải chấp nhận:\n" +
+        "#  - SAI SỐ ~0,81% (đếm 1.000.000 có thể ra 1.008.000)\n" +
+        "#  - KHÔNG lấy ra được danh sách phần tử — chỉ biết SỐ LƯỢNG\n" +
+        "#  - không kiểm tra được \"user X đã có trong đó chưa\"\n" +
+        "\n" +
+        "# KHI NÀO DÙNG: đếm UV, số IP duy nhất, số từ khoá tìm kiếm duy nhất —\n" +
+        "# những chỗ mà sai lệch 1% không ảnh hưởng quyết định.\n" +
+        "# KHI NÀO KHÔNG: đếm tiền, đếm tồn kho, hoặc cần lấy danh sách -> dùng Set.\n" +
+        "\n" +
+        "# So sánh bộ nhớ 10 triệu phần tử: Set ~400MB, HyperLogLog 12KB.",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -197,6 +405,39 @@ SS.addQuestions('redis', [
       ['Là gì', 'broadcast không đảm bảo', 'queue một chiều đơn giản', '"Kafka mini trong Redis"'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Log có thứ tự, giữ lại được, có consumer group",
+      code:
+        "# PUB/SUB — fire-and-forget: ai không online lúc gửi thì MẤT message vĩnh viễn.\n" +
+        "# LIST — giữ được, nhưng không có consumer group, không ack, đọc là mất.\n" +
+        "# STREAMS — log append-only: giữ lại, nhiều consumer group độc lập, có ACK.\n" +
+        "\n" +
+        "redis-cli XADD orders \u0027*\u0027 orderId 1001 total 500000   # * = tự sinh id theo thời gian\n" +
+        "redis-cli XLEN orders\n" +
+        "redis-cli XRANGE orders - +                            # đọc toàn bộ\n" +
+        "redis-cli XREAD COUNT 10 BLOCK 5000 STREAMS orders 0   # đọc từ đầu, chặn 5s\n" +
+        "\n" +
+        "# CONSUMER GROUP — chia việc và theo dõi cái nào đã xử lý\n" +
+        "redis-cli XGROUP CREATE orders billing 0\n" +
+        "redis-cli XREADGROUP GROUP billing worker-1 COUNT 10 BLOCK 5000 STREAMS orders \u0027>\u0027\n" +
+        "redis-cli XACK orders billing 1757030400000-0          # báo đã xử lý xong\n" +
+        "\n" +
+        "# Message đã đọc mà chưa ACK nằm trong PEL (pending entries list) -> KHÔNG mất\n" +
+        "redis-cli XPENDING orders billing\n" +
+        "# Consumer chết -> consumer khác GIÀNH LẤY việc dở của nó:\n" +
+        "redis-cli XAUTOCLAIM orders billing worker-2 60000 0   # quá 60s chưa ack\n" +
+        "\n" +
+        "# GIỚI HẠN ĐỘ DÀI — stream không tự xoá, phải chủ động cắt:\n" +
+        "redis-cli XADD orders MAXLEN \u0027~\u0027 1000000 \u0027*\u0027 orderId 1002\n" +
+        "# ~ nghĩa là \"xấp xỉ\" -> rẻ hơn nhiều so với cắt chính xác.\n" +
+        "\n" +
+        "# CHỌN: thông báo tức thời không cần bền -> PUB/SUB.\n" +
+        "# Hàng đợi đơn giản một consumer -> LIST.\n" +
+        "# Cần ack, consumer group, phát lại -> STREAMS.",
+    },
+  ],
 },
 {
   cat: 'TTL & key',
@@ -221,6 +462,38 @@ SS.addQuestions('redis', [
       { to: 3, label: 'cẩn thận: ghi đè giá trị bằng SET làm mất TTL đã đặt → rò rỉ bộ nhớ' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Hai cơ chế xoá và các bẫy hay gặp",
+      code:
+        "redis-cli SET session:abc \"data\" EX 3600      # đặt TTL ngay lúc SET (nên dùng)\n" +
+        "redis-cli EXPIRE session:abc 1800             # đặt TTL cho key đã có\n" +
+        "redis-cli TTL session:abc                     # giây còn lại; -1 = không TTL; -2 = không tồn tại\n" +
+        "redis-cli PERSIST session:abc                 # gỡ TTL\n" +
+        "redis-cli EXPIREAT session:abc 1757030400     # hết hạn tại một thời điểm\n" +
+        "\n" +
+        "# HAI CƠ CHẾ XOÁ:\n" +
+        "#  1) LAZY — chỉ kiểm tra khi key được TRUY CẬP. Key hết hạn mà không ai đụng\n" +
+        "#     tới thì vẫn CHIẾM BỘ NHỚ.\n" +
+        "#  2) ACTIVE — mỗi 100ms lấy NGẪU NHIÊN 20 key có TTL, xoá cái đã hết hạn;\n" +
+        "#     nếu hơn 25% đã hết hạn thì lặp lại ngay.\n" +
+        "# -> Đây là lý do bộ nhớ không giảm ngay sau khi hàng loạt key hết hạn,\n" +
+        "#    và vì sao không nên dựa vào thời điểm hết hạn để tính toán chính xác.\n" +
+        "\n" +
+        "# BẪY 1: các lệnh GHI ĐÈ giá trị sẽ XOÁ TTL\n" +
+        "redis-cli SET k v EX 60\n" +
+        "redis-cli SET k v2              # TTL BIẾN MẤT -> key sống mãi\n" +
+        "redis-cli SET k v2 KEEPTTL      # Redis 6.0+: giữ nguyên TTL\n" +
+        "# Ngược lại: INCR, HSET, LPUSH... KHÔNG làm mất TTL của key.\n" +
+        "\n" +
+        "# BẪY 2: hàng loạt key cùng TTL -> hết hạn cùng lúc -> cache avalanche.\n" +
+        "# Thêm ngẫu nhiên: EX (3600 + random(0..300))\n" +
+        "\n" +
+        "# BẪY 3: keyspace notification \"expired\" gửi khi key BỊ XOÁ THẬT, có thể\n" +
+        "# trễ hơn thời điểm hết hạn nhiều -> đừng dùng cho logic cần chính xác thời gian.",
+    },
+  ],
 },
 {
   cat: 'TTL & key',
@@ -243,6 +516,38 @@ SS.addQuestions('redis', [
       ['Tương tự cho collection', '—', 'HSCAN, SSCAN, ZSCAN'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "KEYS chặn cả server, SCAN thì không",
+      code:
+        "# KEYS quét TOÀN BỘ keyspace, O(N), và vì Redis đơn luồng nên nó CHẶN\n" +
+        "# mọi client khác. 10 triệu key -> treo vài giây -> timeout hàng loạt.\n" +
+        "redis-cli KEYS \u0027user:*\u0027          # ĐỪNG BAO GIỜ chạy ở production\n" +
+        "\n" +
+        "# SCAN — con trỏ, trả về từng phần nhỏ, KHÔNG chặn\n" +
+        "redis-cli SCAN 0 MATCH \u0027user:*\u0027 COUNT 100\n" +
+        "# Trả về [cursor_mới, [keys...]]. Lặp tới khi cursor = 0.\n" +
+        "redis-cli --scan --pattern \u0027user:*\u0027 | head -20    # tiện dụng từ CLI\n" +
+        "\n" +
+        "# ĐẢM BẢO CỦA SCAN (phải hiểu để dùng đúng):\n" +
+        "#  - key tồn tại suốt quá trình quét CHẮC CHẮN được trả về\n" +
+        "#  - key có thể bị trả về TRÙNG -> code phải chịu được trùng\n" +
+        "#  - key thêm/xoá trong lúc quét thì không đảm bảo gì\n" +
+        "#  - COUNT chỉ là GỢI Ý, không phải số lượng chính xác mỗi lần\n" +
+        "\n" +
+        "# Biến thể cho từng kiểu dữ liệu — dùng khi collection lớn:\n" +
+        "redis-cli HSCAN user:1 0 COUNT 100\n" +
+        "redis-cli SSCAN post:1:tags 0 COUNT 100\n" +
+        "redis-cli ZSCAN leaderboard 0 COUNT 100\n" +
+        "\n" +
+        "# CÁC LỆNH NGUY HIỂM KHÁC (đều O(N) và chặn): FLUSHALL, FLUSHDB, SMEMBERS,\n" +
+        "# HGETALL, LRANGE 0 -1 trên collection lớn.\n" +
+        "# Chặn hẳn ở production:\n" +
+        "#   rename-command KEYS \"\"\n" +
+        "#   rename-command FLUSHALL \"\"",
+    },
+  ],
 },
 {
   cat: 'Hiệu năng',
@@ -265,6 +570,36 @@ SS.addQuestions('redis', [
       ['Dùng khi', 'batch lệnh nhỏ (thường xuyên hơn)', 'cần đảm bảo nhóm lệnh không bị chen ngang'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Gộp round-trip mạng, KHÔNG phải nguyên tử",
+      code:
+        "# VẤN ĐỀ: 1.000 lệnh tuần tự = 1.000 round-trip. Với RTT 1ms là mất 1 giây,\n" +
+        "# trong khi Redis chỉ tốn vài mili giây để thực thi.\n" +
+        "# PIPELINE: gửi hết một lượt, đọc hết một lượt -> 1 round-trip.\n" +
+        "redis-cli --pipe < commands.txt\n" +
+        "(echo -en \"SET k1 v1\\r\\nSET k2 v2\\r\\nGET k1\\r\\n\"; sleep 1) | nc localhost 6379\n" +
+        "\n" +
+        "# Trong client Java (Lettuce/Jedis):\n" +
+        "#   pipeline.set(\"k1\",\"v1\"); pipeline.set(\"k2\",\"v2\"); pipeline.sync();\n" +
+        "\n" +
+        "# KHÁC TRANSACTION (MULTI/EXEC) — đây là điểm hay nhầm:\n" +
+        "#  PIPELINE     — chỉ gom mạng. Lệnh của client KHÁC CÓ THỂ chen vào giữa.\n" +
+        "#                 Không nguyên tử. Lỗi ở lệnh này không ảnh hưởng lệnh kia.\n" +
+        "#  MULTI/EXEC   — nguyên tử: toàn bộ khối chạy liền mạch, không ai chen vào.\n" +
+        "#                 Nhưng KHÔNG có rollback nếu một lệnh lỗi lúc thực thi.\n" +
+        "redis-cli MULTI\n" +
+        "redis-cli SET k1 v1\n" +
+        "redis-cli EXEC\n" +
+        "\n" +
+        "# LƯU Ý KHI DÙNG PIPELINE:\n" +
+        "#  - đừng gom quá lớn (hàng trăm nghìn lệnh) -> chiếm nhiều RAM ở cả hai phía\n" +
+        "#    và giữ server bận lâu. Chia lô 100-1.000 lệnh là hợp lý.\n" +
+        "#  - trong Redis Cluster, pipeline chỉ gom được các key CÙNG một node\n" +
+        "#  - cần vừa nguyên tử vừa có logic điều kiện -> dùng LUA thay vì pipeline",
+    },
+  ],
 },
 {
   cat: 'Nguyên tử',
@@ -287,6 +622,42 @@ SS.addQuestions('redis', [
       { to: 4, label: 'phải tự kiểm tra điều kiện trước; hoặc dùng Lua cho đơn giản' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Transaction Redis: nguyên tử nhưng KHÔNG rollback",
+      code:
+        "redis-cli MULTI                      # bắt đầu: các lệnh sau được XẾP HÀNG\n" +
+        "redis-cli SET account:1 100\n" +
+        "redis-cli INCRBY account:2 50\n" +
+        "redis-cli EXEC                       # thực thi TẤT CẢ liền mạch, không ai chen vào\n" +
+        "redis-cli DISCARD                    # huỷ hàng đợi\n" +
+        "\n" +
+        "# KHÔNG CÓ ROLLBACK: nếu một lệnh lỗi lúc THỰC THI (ví dụ INCR trên chuỗi),\n" +
+        "# các lệnh khác VẪN chạy. Redis coi đó là lỗi lập trình, không phải lỗi runtime.\n" +
+        "# (Lỗi CÚ PHÁP lúc xếp hàng thì cả khối bị huỷ.)\n" +
+        "\n" +
+        "# WATCH — khoá lạc quan (CAS): huỷ transaction nếu key bị NGƯỜI KHÁC sửa\n" +
+        "redis-cli WATCH account:1\n" +
+        "# đọc giá trị, tính toán ở phía client\n" +
+        "redis-cli MULTI\n" +
+        "redis-cli SET account:1 <giá_trị_mới>\n" +
+        "redis-cli EXEC       # trả về nil nếu account:1 đã bị sửa từ lúc WATCH -> thử lại\n" +
+        "\n" +
+        "# Mẫu chuẩn trong ứng dụng:\n" +
+        "#   while (true) {\n" +
+        "#     watch(key);\n" +
+        "#     var v = get(key);\n" +
+        "#     if (!ok(v)) { unwatch(); break; }\n" +
+        "#     var r = multi().set(key, f(v)).exec();\n" +
+        "#     if (r != null) break;          // thành công\n" +
+        "#   }                                 // null -> có xung đột, lặp lại\n" +
+        "\n" +
+        "# EXEC và DISCARD đều tự gỡ WATCH.\n" +
+        "# THỰC TẾ: vòng lặp WATCH dài dòng và tốn round-trip -> phần lớn trường hợp\n" +
+        "# dùng LUA gọn hơn và nhanh hơn, vì script chạy nguyên tử ngay trên server.",
+    },
+  ],
 },
 {
   cat: 'Nguyên tử',
@@ -314,6 +685,58 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "lua",
+      title: "Nguyên tử hoá logic đọc-quyết định-ghi",
+      code:
+        "-- Script chạy NGUYÊN TỬ trên server: không lệnh nào chen vào giữa.\n" +
+        "-- Giải quyết đúng bài toán mà pipeline và MULTI không làm được:\n" +
+        "-- cần ĐỌC rồi QUYẾT ĐỊNH rồi GHI mà không ai xen vào.\n" +
+        "\n" +
+        "-- Ví dụ: rate limit token bucket\n" +
+        "local key      = KEYS[1]\n" +
+        "local capacity = tonumber(ARGV[1])\n" +
+        "local rate     = tonumber(ARGV[2])   -- token mỗi giây\n" +
+        "local now      = tonumber(ARGV[3])\n" +
+        "local cost     = tonumber(ARGV[4])\n" +
+        "\n" +
+        "local bucket = redis.call(\u0027HMGET\u0027, key, \u0027tokens\u0027, \u0027ts\u0027)\n" +
+        "local tokens = tonumber(bucket[1]) or capacity\n" +
+        "local ts     = tonumber(bucket[2]) or now\n" +
+        "\n" +
+        "-- nạp lại token theo thời gian đã trôi qua\n" +
+        "tokens = math.min(capacity, tokens + (now - ts) * rate)\n" +
+        "\n" +
+        "if tokens < cost then\n" +
+        "  return 0                            -- từ chối\n" +
+        "end\n" +
+        "\n" +
+        "tokens = tokens - cost\n" +
+        "redis.call(\u0027HMSET\u0027, key, \u0027tokens\u0027, tokens, \u0027ts\u0027, now)\n" +
+        "redis.call(\u0027EXPIRE\u0027, key, math.ceil(capacity / rate) * 2)\n" +
+        "return 1                              -- cho phép",
+    },
+    {
+      lang: "bash",
+      title: "Quy tắc bắt buộc khi viết Lua",
+      code:
+        "redis-cli SCRIPT LOAD \"$(cat rate_limit.lua)\"       # trả về SHA1\n" +
+        "redis-cli EVALSHA <sha1> 1 rate:user:1 10 1 $(date +%s) 1\n" +
+        "# Dùng EVALSHA thay vì EVAL: không phải gửi cả script mỗi lần.\n" +
+        "# Client phải xử lý lỗi NOSCRIPT (script cache bị xoá khi restart) bằng cách\n" +
+        "# gửi lại EVAL — mọi client tốt đều làm sẵn việc này.\n" +
+        "\n" +
+        "# QUY TẮC BẮT BUỘC:\n" +
+        "#  1) MỌI key phải truyền qua KEYS[], KHÔNG hardcode trong script.\n" +
+        "#     Redis Cluster cần biết trước key để định tuyến; vi phạm là script\n" +
+        "#     chạy sai node.\n" +
+        "#  2) KHÔNG dùng nguồn ngẫu nhiên/thời gian trong script — truyền từ ngoài\n" +
+        "#     qua ARGV để script TẤT ĐỊNH (cần cho replication và AOF).\n" +
+        "#  3) Script phải NGẮN. Nó chặn toàn bộ server khi chạy.\n" +
+        "redis-cli SCRIPT KILL          # cứu khi script chạy quá lâu (chỉ khi chưa ghi gì)",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -339,6 +762,39 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Trạng thái nhị phân của hàng triệu đối tượng trong vài trăm KB",
+      code:
+        "# Bitmap không phải kiểu riêng — nó là String thao tác ở mức BIT.\n" +
+        "redis-cli SETBIT active:2026-09-05 12345 1     # user id 12345 hoạt động hôm nay\n" +
+        "redis-cli GETBIT active:2026-09-05 12345\n" +
+        "redis-cli BITCOUNT active:2026-09-05           # tổng số user hoạt động\n" +
+        "redis-cli BITPOS active:2026-09-05 1           # id nhỏ nhất có bit = 1\n" +
+        "\n" +
+        "# PHÉP TOÁN BIT giữa các bitmap — đây là điểm mạnh thật sự\n" +
+        "redis-cli BITOP AND active:both active:2026-09-04 active:2026-09-05  # hoạt động CẢ 2 ngày\n" +
+        "redis-cli BITOP OR  active:week active:2026-09-01 active:2026-09-02\n" +
+        "redis-cli BITCOUNT active:both\n" +
+        "\n" +
+        "# USE CASE:\n" +
+        "#  - điểm danh / retention theo ngày (user hoạt động ngày nào)\n" +
+        "#  - trạng thái bật/tắt cho hàng triệu đối tượng (đã đọc thông báo, đã nhận quà)\n" +
+        "#  - A/B testing: user nào thuộc nhóm nào\n" +
+        "#  - bloom filter thủ công\n" +
+        "\n" +
+        "# BỘ NHỚ: 1 triệu user = 1 triệu bit = 125KB. So với Set (~40MB) là gấp ~320 lần.\n" +
+        "\n" +
+        "# GIỚI HẠN QUAN TRỌNG:\n" +
+        "#  1) offset phải là SỐ NGUYÊN liên tục và NHỎ. id kiểu UUID không dùng được\n" +
+        "#     -> phải có bảng ánh xạ UUID sang số nguyên tăng dần.\n" +
+        "#  2) SETBIT ở offset lớn CẤP PHÁT NGAY toàn bộ vùng nhớ tới đó:\n" +
+        "#     SETBIT k 4000000000 1 -> cấp 512MB ngay lập tức. Rất dễ gây sự cố.\n" +
+        "#  3) Tối đa 512MB (2^32 bit).\n" +
+        "#  4) Dữ liệu THƯA (chỉ vài nghìn user trong dải id tới hàng tỉ) thì Set rẻ hơn.",
+    },
+  ],
 },
 {
   cat: 'Nguyên tử',
@@ -366,6 +822,43 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Một lệnh nguyên tử, có TTL, có định danh chủ sở hữu",
+      code:
+        "redis-cli SET lock:order:123 \"token-uuid-abc\" NX EX 30\n" +
+        "# NX  — chỉ đặt khi key CHƯA tồn tại -> đúng một client thắng\n" +
+        "# EX  — TTL: client chết thì lock TỰ NHẢ, không kẹt vĩnh viễn\n" +
+        "# value = TOKEN DUY NHẤT -> để biết ai là chủ lock\n" +
+        "\n" +
+        "# VÌ SAO PHẢI LÀ MỘT LỆNH: cách cũ SETNX rồi EXPIRE là HAI lệnh.\n" +
+        "# Client chết giữa hai lệnh -> lock KHÔNG có TTL -> kẹt vĩnh viễn.\n" +
+        "\n" +
+        "# VÌ SAO PHẢI CÓ TOKEN: nếu không, kịch bản này làm hỏng dữ liệu:\n" +
+        "#   A lấy lock 30s -> A chạy chậm mất 35s -> lock hết hạn -> B lấy được lock\n" +
+        "#   -> A xong và gọi DEL -> A XOÁ NHẦM LOCK CỦA B -> C cũng vào được -> hai\n" +
+        "#   client cùng chạy trong vùng tới hạn.\n" +
+        "\n" +
+        "# NHẢ LOCK phải NGUYÊN TỬ: kiểm tra token rồi mới xoá -> bắt buộc dùng Lua\n" +
+        "redis-cli EVAL \"\n" +
+        "  if redis.call(\u0027GET\u0027, KEYS[1]) == ARGV[1] then\n" +
+        "    return redis.call(\u0027DEL\u0027, KEYS[1])\n" +
+        "  else\n" +
+        "    return 0\n" +
+        "  end\" 1 lock:order:123 \"token-uuid-abc\"\n" +
+        "\n" +
+        "# GIA HẠN lock khi việc chưa xong (watchdog):\n" +
+        "redis-cli EVAL \"\n" +
+        "  if redis.call(\u0027GET\u0027, KEYS[1]) == ARGV[1] then\n" +
+        "    return redis.call(\u0027EXPIRE\u0027, KEYS[1], ARGV[2])\n" +
+        "  else return 0 end\" 1 lock:order:123 \"token-uuid-abc\" 30\n" +
+        "\n" +
+        "# GIỚI HẠN CÒN LẠI: với replication BẤT ĐỒNG BỘ, master chết sau khi cấp\n" +
+        "# lock nhưng trước khi sao chép -> replica lên làm master và cấp lại lock\n" +
+        "# cho client khác. Muốn chặt hơn -> Redlock, hoặc fencing token.",
+    },
+  ],
 },
 {
   cat: 'Tổng quan',
@@ -393,6 +886,38 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Mở rộng Redis thành nhiều loại database",
+      code:
+        "# REDISJSON — lưu và sửa JSON tại chỗ theo JSONPath, không phải đọc-parse-ghi\n" +
+        "redis-cli JSON.SET user:1 \u0027$\u0027 \u0027{\"name\":\"An\",\"address\":{\"city\":\"HCM\"},\"tags\":[\"a\",\"b\"]}\u0027\n" +
+        "redis-cli JSON.GET user:1 \u0027$.address.city\u0027\n" +
+        "redis-cli JSON.SET user:1 \u0027$.address.city\u0027 \u0027\"HN\"\u0027      # sửa MỘT trường\n" +
+        "redis-cli JSON.ARRAPPEND user:1 \u0027$.tags\u0027 \u0027\"c\"\u0027\n" +
+        "redis-cli JSON.NUMINCRBY user:1 \u0027$.points\u0027 10\n" +
+        "\n" +
+        "# REDISEARCH — index thứ cấp và full-text search trên Hash/JSON.\n" +
+        "# Giải quyết hạn chế lớn nhất của Redis: chỉ truy vấn được theo key.\n" +
+        "redis-cli FT.CREATE idx:users ON JSON PREFIX 1 user: SCHEMA \\\n" +
+        "  \u0027$.name\u0027 AS name TEXT \u0027$.address.city\u0027 AS city TAG \u0027$.points\u0027 AS points NUMERIC SORTABLE\n" +
+        "redis-cli FT.SEARCH idx:users \u0027@city:{HCM} @points:[100 +inf]\u0027 SORTBY points DESC\n" +
+        "redis-cli FT.AGGREGATE idx:users \u0027*\u0027 GROUPBY 1 @city REDUCE COUNT 0 AS total\n" +
+        "\n" +
+        "# REDISBLOOM — cấu trúc xác suất, tiết kiệm bộ nhớ khủng khiếp\n" +
+        "redis-cli BF.ADD seen:urls \"https://a.com\"\n" +
+        "redis-cli BF.EXISTS seen:urls \"https://a.com\"   # 0 = CHẮC CHẮN chưa có\n" +
+        "                                                # 1 = CÓ THỂ đã có (dương tính giả)\n" +
+        "# Dùng chống cache penetration, khử trùng URL crawler, lọc email đã gửi.\n" +
+        "redis-cli CMS.INCRBY traffic ip1 1              # Count-Min Sketch: đếm xấp xỉ\n" +
+        "redis-cli TOPK.ADD trending \"keyword\"           # Top-K: tìm phần tử nóng nhất\n" +
+        "redis-cli TS.ADD temperature \u0027*\u0027 25.3           # RedisTimeSeries\n" +
+        "\n" +
+        "# LƯU Ý: module cần được CÀI trên server. Redis Stack đóng gói sẵn tất cả;\n" +
+        "# ElastiCache thì KHÔNG hỗ trợ module (MemoryDB/Redis Enterprise mới có).",
+    },
+  ],
 },
 {
   cat: 'Hiệu năng',
@@ -419,6 +944,39 @@ SS.addQuestions('redis', [
       ['Ngưỡng', 'hash-max-listpack-entries 128 / -value 64', 'chia nhỏ key để giữ dưới ngưỡng'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Collection nhỏ dùng cách lưu tiết kiệm hơn nhiều",
+      code:
+        "redis-cli OBJECT ENCODING mykey\n" +
+        "# Cùng một kiểu dữ liệu, Redis chọn cách lưu KHÁC nhau tuỳ kích thước:\n" +
+        "#  String  — int (số nguyên) | embstr (<= 44 byte) | raw\n" +
+        "#  Hash    — listpack (nhỏ) | hashtable\n" +
+        "#  List    — listpack | quicklist\n" +
+        "#  Set     — intset (toàn số nguyên) | listpack | hashtable\n" +
+        "#  ZSet    — listpack | skiplist\n" +
+        "\n" +
+        "# NGƯỠNG chuyển đổi (cấu hình trong redis.conf):\n" +
+        "redis-cli CONFIG GET hash-max-listpack-entries      # 128\n" +
+        "redis-cli CONFIG GET hash-max-listpack-value        # 64 (byte)\n" +
+        "redis-cli CONFIG GET zset-max-listpack-entries      # 128\n" +
+        "redis-cli CONFIG GET set-max-intset-entries         # 512\n" +
+        "redis-cli CONFIG GET list-max-listpack-size         # 128\n" +
+        "\n" +
+        "# LISTPACK lưu liền mạch trong một khối bộ nhớ -> tiết kiệm gấp NHIỀU LẦN\n" +
+        "# so với hashtable (không có con trỏ, không có overhead mỗi phần tử).\n" +
+        "# Đổi lại: thao tác là O(N), nhưng N nhỏ nên vẫn rất nhanh.\n" +
+        "\n" +
+        "# CHIẾN THUẬT THỰC TẾ: chia nhỏ hash lớn thành nhiều hash nhỏ dưới ngưỡng.\n" +
+        "# Ví dụ thay vì một hash 1 triệu field, dùng 10.000 hash mỗi cái 100 field\n" +
+        "# (bucket = id % 10000) -> tiết kiệm bộ nhớ rất đáng kể.\n" +
+        "\n" +
+        "# MỘT CHIỀU: khi đã chuyển sang hashtable/skiplist thì KHÔNG quay lại listpack\n" +
+        "# dù sau đó xoá bớt phần tử.\n" +
+        "redis-cli MEMORY USAGE mykey        # đo bộ nhớ thật của một key",
+    },
+  ],
 },
 {
   cat: 'Kiểu dữ liệu',
@@ -440,6 +998,38 @@ SS.addQuestions('redis', [
       { to: 3, label: 'truy vấn không gian (bán kính, gần nhất) latency ms — không cần PostGIS' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Toạ độ và truy vấn theo bán kính, xây trên Sorted Set",
+      code:
+        "# GEO không phải kiểu riêng — nó là Sorted Set với score là geohash 52-bit.\n" +
+        "redis-cli GEOADD drivers 106.700 10.776 \"driver:1\" 106.660 10.762 \"driver:2\"\n" +
+        "\n" +
+        "# Tìm trong bán kính — dùng cho \"tài xế gần tôi\", \"cửa hàng gần đây\"\n" +
+        "redis-cli GEOSEARCH drivers FROMLONLAT 106.695 10.770 \\\n" +
+        "  BYRADIUS 3 km ASC COUNT 10 WITHCOORD WITHDIST\n" +
+        "# GEOSEARCH (6.2+) thay cho GEORADIUS đã deprecated.\n" +
+        "\n" +
+        "# Tìm trong một HÌNH CHỮ NHẬT (hợp với khung nhìn bản đồ)\n" +
+        "redis-cli GEOSEARCH drivers FROMLONLAT 106.695 10.770 BYBOX 5 5 km ASC\n" +
+        "\n" +
+        "redis-cli GEODIST drivers \"driver:1\" \"driver:2\" km     # khoảng cách\n" +
+        "redis-cli GEOPOS drivers \"driver:1\"                    # lấy toạ độ\n" +
+        "redis-cli ZSCORE drivers \"driver:1\"                    # thấy rõ: vẫn là ZSet\n" +
+        "redis-cli ZREM drivers \"driver:1\"                      # xoá bằng lệnh ZSet\n" +
+        "\n" +
+        "# USE CASE: gọi xe, giao đồ ăn, tìm chi nhánh gần nhất, geofencing,\n" +
+        "# ghép người chơi theo khu vực.\n" +
+        "\n" +
+        "# GIỚI HẠN:\n" +
+        "#  - chỉ hỗ trợ điểm, KHÔNG có đa giác/đường đi phức tạp\n" +
+        "#  - độ chính xác ~0,5m (đủ cho mọi ứng dụng thực tế)\n" +
+        "#  - không hoạt động ở vùng cực\n" +
+        "#  - GEOSEARCH là O(N + log M) -> tập dữ liệu rất lớn thì nên chia key\n" +
+        "#    theo vùng (ví dụ theo thành phố) để giảm N",
+    },
+  ],
 },
 {
   cat: 'TTL & key',
@@ -469,6 +1059,41 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Key là API của dữ liệu — đặt tên có hệ thống",
+      code:
+        "# QUY ƯỚC: <ứng-dụng>:<thực-thể>:<id>:<thuộc-tính>\n" +
+        "#   app:user:1001:profile\n" +
+        "#   app:user:1001:sessions\n" +
+        "#   app:order:5001:items\n" +
+        "#   app:cache:product:200:v3\n" +
+        "# Dấu \u0027:\u0027 là quy ước chuẩn của cộng đồng, và các công cụ GUI (RedisInsight)\n" +
+        "# dùng nó để hiển thị dạng cây.\n" +
+        "\n" +
+        "# NGUYÊN TẮC:\n" +
+        "#  1) CÓ TIỀN TỐ ứng dụng/môi trường -> nhiều hệ thống dùng chung Redis\n" +
+        "#     không giẫm lên nhau, và xoá theo nhóm được.\n" +
+        "#  2) ĐỦ MÔ TẢ nhưng KHÔNG QUÁ DÀI — mỗi key tốn bộ nhớ cho chính tên nó.\n" +
+        "#     Hàng triệu key thì tên dài 50 byte tốn thêm hàng chục MB.\n" +
+        "#  3) CÓ VERSION trong key cho dữ liệu cache -> đổi cấu trúc thì tăng version,\n" +
+        "#     không cần xoá key cũ (chúng tự hết hạn):\n" +
+        "redis-cli SET app:cache:product:200:v3 \u0027{\"schema\":\"new\"}\u0027 EX 3600\n" +
+        "#  4) KHÔNG dùng khoảng trắng và ký tự đặc biệt.\n" +
+        "#  5) NHẤT QUÁN số ít/số nhiều — chọn một kiểu cho cả hệ thống.\n" +
+        "\n" +
+        "# HASH TAG cho Redis Cluster: phần trong {} quyết định slot -> đưa các key\n" +
+        "# cần thao tác chung về CÙNG một node\n" +
+        "redis-cli SET \u0027app:user:{1001}:profile\u0027 \"...\"\n" +
+        "redis-cli SET \u0027app:user:{1001}:sessions\u0027 \"...\"\n" +
+        "redis-cli MGET \u0027app:user:{1001}:profile\u0027 \u0027app:user:{1001}:sessions\u0027   # chạy được\n" +
+        "\n" +
+        "# Kiểm tra key nào chiếm bộ nhớ:\n" +
+        "redis-cli --bigkeys\n" +
+        "redis-cli --memkeys",
+    },
+  ],
 },
 {
   cat: 'Tổng quan',
@@ -493,5 +1118,42 @@ SS.addQuestions('redis', [
       ['Cách đúng', '—', 'luôn giới hạn phạm vi: SCAN, LRANGE 0 99, ZRANGEBYSCORE ... LIMIT'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Vì sao Big-O quan trọng hơn ở Redis so với nơi khác",
+      code:
+        "# Redis ĐƠN LUỒNG: một lệnh O(N) chậm không chỉ chậm cho client đó — nó\n" +
+        "# CHẶN TOÀN BỘ server. Đây là điểm khác biệt căn bản so với database khác.\n" +
+        "\n" +
+        "# AN TOÀN — O(1):\n" +
+        "#   GET SET INCR EXPIRE TTL EXISTS TYPE\n" +
+        "#   HGET HSET HDEL HEXISTS\n" +
+        "#   LPUSH RPUSH LPOP RPOP LLEN\n" +
+        "#   SADD SREM SISMEMBER SCARD\n" +
+        "#   ZADD ZSCORE ZCARD              (ZADD/ZSCORE là O(log N), coi như rẻ)\n" +
+        "\n" +
+        "# CẨN TRỌNG — O(N) theo kích thước COLLECTION:\n" +
+        "#   HGETALL HKEYS HVALS            -> dùng HSCAN\n" +
+        "#   SMEMBERS                       -> dùng SSCAN\n" +
+        "#   LRANGE 0 -1                    -> giới hạn khoảng\n" +
+        "#   ZRANGE 0 -1                    -> giới hạn khoảng\n" +
+        "#   DEL trên collection lớn        -> dùng UNLINK (xoá ở thread nền)\n" +
+        "\n" +
+        "# NGUY HIỂM — O(N) theo TOÀN BỘ keyspace:\n" +
+        "#   KEYS       -> SCAN\n" +
+        "#   FLUSHALL FLUSHDB (đồng bộ)  -> thêm ASYNC\n" +
+        "#   SORT trên tập lớn, SINTER/SUNION trên set lớn: O(N*M)\n" +
+        "\n" +
+        "# PHÁT HIỆN lệnh chậm đang chạy trong hệ thống:\n" +
+        "redis-cli CONFIG SET slowlog-log-slower-than 10000    # ghi lệnh > 10ms\n" +
+        "redis-cli SLOWLOG GET 10\n" +
+        "redis-cli --latency-history -h localhost\n" +
+        "redis-cli INFO commandstats | sort -t= -k2 -rn | head  # lệnh nào tốn tổng thời gian nhất\n" +
+        "\n" +
+        "# NGUYÊN TẮC: mọi lệnh O(N) phải có GIỚI HẠN N biết trước. Không kiểm soát\n" +
+        "# được N thì phải chuyển sang biến thể SCAN hoặc chia nhỏ dữ liệu.",
+    },
+  ],
 },
 ]);

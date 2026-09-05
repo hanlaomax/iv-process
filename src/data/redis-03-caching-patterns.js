@@ -20,6 +20,44 @@ SS.addQuestions('redis', [
       { to: 4, label: 'cache độc lập với DB (Redis chết vẫn chạy, chỉ chậm); có cửa sổ stale + nguy cơ stampede' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Mẫu cache phổ biến nhất, và điểm yếu của nó",
+      code:
+        "public Product get(String id) {\n" +
+        "    String key = \"product:\" + id;\n" +
+        "\n" +
+        "    // 1) ĐỌC cache trước\n" +
+        "    String cached = redis.opsForValue().get(key);\n" +
+        "    if (cached != null) return parse(cached);        // HIT\n" +
+        "\n" +
+        "    // 2) MISS -> đọc database\n" +
+        "    Product p = repository.findById(id).orElseThrow();\n" +
+        "\n" +
+        "    // 3) GHI vào cache kèm TTL — TTL là bắt buộc, không có TTL thì dữ liệu\n" +
+        "    //    cũ sẽ nằm mãi khi có lỗi invalidate\n" +
+        "    redis.opsForValue().set(key, json(p), Duration.ofMinutes(30));\n" +
+        "    return p;\n" +
+        "}\n" +
+        "\n" +
+        "public void update(String id, Product p) {\n" +
+        "    repository.save(p);                              // ghi DB TRƯỚC\n" +
+        "    redis.delete(\"product:\" + id);                   // rồi XOÁ cache\n" +
+        "}\n" +
+        "\n" +
+        "// ƯU:\n" +
+        "//  - chỉ cache thứ THỰC SỰ được đọc -> tiết kiệm bộ nhớ\n" +
+        "//  - cache chết thì hệ thống vẫn chạy (chậm hơn), không phụ thuộc cứng\n" +
+        "//  - đơn giản, dễ hiểu, dễ debug\n" +
+        "\n" +
+        "// NHƯỢC (phải biết để xử lý):\n" +
+        "//  1) request đầu tiên luôn CHẬM (cache miss)\n" +
+        "//  2) STAMPEDE: cache hết hạn -> hàng nghìn request cùng miss cùng lúc\n" +
+        "//     -> tất cả cùng đập vào DB (xem câu về stampede)\n" +
+        "//  3) có cửa sổ dữ liệu CŨ giữa lúc ghi DB và lúc xoá cache",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -41,6 +79,39 @@ SS.addQuestions('redis', [
       ['Dùng cho', 'phổ biến nhất', 'cache & DB luôn khớp', 'counter/metric chịu mất mát nhỏ'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ai chịu trách nhiệm nói chuyện với database",
+      code:
+        "// CACHE-ASIDE: ỨNG DỤNG tự lo cả cache lẫn DB (xem câu trước).\n" +
+        "\n" +
+        "// READ-THROUGH: ứng dụng CHỈ nói chuyện với cache; cache tự đi lấy từ DB khi miss.\n" +
+        "@Cacheable(value = \"products\", key = \"#id\")     // Spring Cache = read-through\n" +
+        "public Product get(String id) {\n" +
+        "    return repository.findById(id).orElseThrow();   // chỉ chạy khi MISS\n" +
+        "}\n" +
+        "// + code sạch, logic cache tập trung một chỗ\n" +
+        "// - phải có cache provider hỗ trợ; khó kiểm soát chi tiết\n" +
+        "\n" +
+        "// WRITE-THROUGH: ghi vào cache VÀ database ĐỒNG BỘ, trong cùng thao tác.\n" +
+        "@CachePut(value = \"products\", key = \"#p.id\")\n" +
+        "public Product save(Product p) {\n" +
+        "    return repository.save(p);\n" +
+        "}\n" +
+        "// + cache LUÔN nhất quán với DB, đọc sau ghi luôn đúng\n" +
+        "// - mọi lần ghi đều chậm hơn; cache đầy dữ liệu có thể không ai đọc\n" +
+        "\n" +
+        "// WRITE-BEHIND (write-back): ghi vào CACHE rồi trả về ngay; một tiến trình\n" +
+        "// nền ghi xuống DB sau (thường theo lô).\n" +
+        "redis.opsForValue().set(key, json(p));\n" +
+        "redis.opsForList().leftPush(\"write:queue\", id);     // job nền xử lý\n" +
+        "// + ghi CỰC NHANH, gom được nhiều lần ghi thành một (đếm view, log)\n" +
+        "// - RỦI RO MẤT DỮ LIỆU nếu cache chết trước khi kịp ghi xuống DB\n" +
+        "// - phức tạp: phải xử lý retry, thứ tự, và xung đột\n" +
+        "// -> chỉ dùng cho dữ liệu chấp nhận mất (bộ đếm, thống kê)",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -56,6 +127,50 @@ SS.addQuestions('redis', [
     'Stampede = "cả đám cùng cache miss một lúc". Chống bằng cách đảm bảo **chỉ một** request tính lại (lock), hoặc tính lại **trước hạn** để không bao giờ có khoảnh khắc key vắng mặt.',
   example:
     'Trang chủ cache 60s, 20k req/s. Lúc key hết hạn: dùng Lua/`SET NX` lock — request đầu tiên nạp (giữ lock 5s), 19.999 request kia đọc lại cache (giờ đã có) hoặc nhận stale-while-revalidate. DB chỉ thấy 1 query thay vì 20k.',
+  demo: [
+    {
+      lang: "java",
+      title: "Một key hết hạn, hàng nghìn request cùng đập vào DB",
+      code:
+        "// VẤN ĐỀ: key nóng hết hạn lúc 10:00:00. 5.000 request đang chạy cùng miss,\n" +
+        "// cả 5.000 cùng query DB. DB sập, và khi cache được ghi lại thì đã quá muộn.\n" +
+        "\n" +
+        "// CÁCH 1: KHOÁ MUTEX — chỉ một request được đi lấy dữ liệu\n" +
+        "public Product get(String id) {\n" +
+        "    String key = \"product:\" + id;\n" +
+        "    String cached = redis.opsForValue().get(key);\n" +
+        "    if (cached != null) return parse(cached);\n" +
+        "\n" +
+        "    String lockKey = \"lock:\" + key;\n" +
+        "    boolean got = redis.opsForValue()\n" +
+        "            .setIfAbsent(lockKey, \"1\", Duration.ofSeconds(10));\n" +
+        "    if (got) {\n" +
+        "        try {\n" +
+        "            Product p = repository.findById(id).orElseThrow();\n" +
+        "            redis.opsForValue().set(key, json(p), Duration.ofMinutes(30));\n" +
+        "            return p;\n" +
+        "        } finally {\n" +
+        "            redis.delete(lockKey);\n" +
+        "        }\n" +
+        "    }\n" +
+        "    // không lấy được khoá -> chờ ngắn rồi đọc lại cache\n" +
+        "    Thread.sleep(50);\n" +
+        "    return get(id);\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH 2: LÀM MỚI SỚM XÁC SUẤT (probabilistic early expiration) — tốt nhất\n" +
+        "// vì không có thời điểm nào toàn bộ cùng miss.\n" +
+        "long ttl = redis.getExpire(key);\n" +
+        "if (ttl < 300 && ThreadLocalRandom.current().nextDouble() < 0.1) {\n" +
+        "    asyncRefresh(id);            // 10% request làm mới sớm, số còn lại dùng bản cũ\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH 3: TTL NGẪU NHIÊN — trải thời điểm hết hạn ra\n" +
+        "int ttlSeconds = 1800 + ThreadLocalRandom.current().nextInt(300);\n" +
+        "\n" +
+        "// CÁCH 4: KHÔNG BAO GIỜ hết hạn, job nền làm mới định kỳ (dữ liệu rất nóng).",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -82,6 +197,42 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Request tìm thứ không tồn tại, cache không đỡ được",
+      code:
+        "// VẤN ĐỀ: kẻ tấn công (hoặc bug) query id không tồn tại liên tục.\n" +
+        "// Cache luôn MISS (vì không có gì để cache), mọi request đều xuống DB.\n" +
+        "\n" +
+        "// CÁCH 1: NEGATIVE CACHING — cache cả kết quả \"không tồn tại\", TTL NGẮN\n" +
+        "public Product get(String id) {\n" +
+        "    String key = \"product:\" + id;\n" +
+        "    String cached = redis.opsForValue().get(key);\n" +
+        "    if (\"__NULL__\".equals(cached)) return null;      // biết chắc không tồn tại\n" +
+        "    if (cached != null) return parse(cached);\n" +
+        "\n" +
+        "    Product p = repository.findById(id).orElse(null);\n" +
+        "    if (p == null) {\n" +
+        "        // TTL NGẮN: nếu sau đó bản ghi được tạo thật thì cache sai không kéo dài\n" +
+        "        redis.opsForValue().set(key, \"__NULL__\", Duration.ofMinutes(2));\n" +
+        "        return null;\n" +
+        "    }\n" +
+        "    redis.opsForValue().set(key, json(p), Duration.ofMinutes(30));\n" +
+        "    return p;\n" +
+        "}\n" +
+        "\n" +
+        "// CÁCH 2: BLOOM FILTER — chặn ngay trước khi chạm cache lẫn DB\n" +
+        "// (RedisBloom module). Rất hiệu quả khi tập id hợp lệ lớn và cố định.\n" +
+        "//   BF.EXISTS products:filter <id>\n" +
+        "//   trả về 0 -> CHẮC CHẮN không tồn tại -> từ chối ngay, không đụng DB\n" +
+        "//   trả về 1 -> CÓ THỂ tồn tại -> đi tiếp bình thường\n" +
+        "if (Boolean.FALSE.equals(bloomFilter.mightContain(id))) return null;\n" +
+        "\n" +
+        "// CÁCH 3: KIỂM TRA ĐỊNH DẠNG id ở tầng API trước khi vào logic\n" +
+        "//   id phải khớp regex/khoảng giá trị hợp lệ -> loại phần lớn request rác.",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -111,6 +262,39 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Nhiều key cùng hết hạn, hoặc cache chết hẳn",
+      code:
+        "// HAI KỊCH BẢN KHÁC NHAU:\n" +
+        "// A) Hàng loạt key cùng TTL -> hết hạn CÙNG LÚC -> DB nhận toàn bộ tải.\n" +
+        "//    Điển hình: nạp cache hàng loạt lúc khởi động với cùng TTL 1 giờ.\n" +
+        "// B) Redis CHẾT hoàn toàn -> 100% request xuống DB -> DB sập theo.\n" +
+        "\n" +
+        "// CHỐNG (A): TTL ngẫu nhiên — cách đơn giản và hiệu quả nhất\n" +
+        "int ttl = 3600 + ThreadLocalRandom.current().nextInt(600);   // 60-70 phút\n" +
+        "redis.opsForValue().set(key, value, Duration.ofSeconds(ttl));\n" +
+        "\n" +
+        "// CHỐNG (B): nhiều lớp phòng thủ\n" +
+        "// 1) CIRCUIT BREAKER trước database — thà trả lỗi/dữ liệu suy giảm cho một\n" +
+        "//    phần request còn hơn để DB sập và mất tất cả\n" +
+        "@CircuitBreaker(name = \"db\", fallbackMethod = \"degraded\")\n" +
+        "public Product get(String id) { ... }\n" +
+        "public Product degraded(String id, Throwable t) {\n" +
+        "    return Product.placeholder();       // dữ liệu tối thiểu, hoặc thông báo lỗi mềm\n" +
+        "}\n" +
+        "\n" +
+        "// 2) CACHE CỤC BỘ (L1) làm lớp đỡ khi Redis chết\n" +
+        "private final Cache<String, Product> local = Caffeine.newBuilder()\n" +
+        "        .maximumSize(10_000).expireAfterWrite(Duration.ofSeconds(30)).build();\n" +
+        "\n" +
+        "// 3) BULKHEAD/giới hạn số kết nối tới DB -> DB chỉ nhận lượng nó chịu được,\n" +
+        "//    phần dư bị từ chối nhanh thay vì xếp hàng làm sập cả hệ thống\n" +
+        "// 4) Redis phải có REPLICA + failover tự động (Sentinel/Cluster)\n" +
+        "// 5) CACHE WARMING sau khi khôi phục, trước khi mở lại lưu lượng",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -133,6 +317,37 @@ SS.addQuestions('redis', [
       ['Thứ tự an toàn', 'update DB TRƯỚC, rồi xoá cache', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Xoá (invalidate) gần như luôn đúng hơn ghi đè",
+      code:
+        "// XOÁ CACHE (cache invalidation) — nên dùng\n" +
+        "@Transactional\n" +
+        "public void update(Product p) {\n" +
+        "    repository.save(p);\n" +
+        "    redis.delete(\"product:\" + p.getId());     // lần đọc sau sẽ nạp lại bản mới nhất\n" +
+        "}\n" +
+        "\n" +
+        "// GHI ĐÈ CACHE (cache update) — có vẻ hiệu quả hơn nhưng nguy hiểm\n" +
+        "redis.opsForValue().set(\"product:\" + p.getId(), json(p), TTL);\n" +
+        "\n" +
+        "// VÌ SAO XOÁ TỐT HƠN:\n" +
+        "// 1) RACE CONDITION khi ghi đè: hai request cập nhật đồng thời\n" +
+        "//      A ghi DB (v1) -> B ghi DB (v2) -> B ghi cache (v2) -> A ghi cache (v1)\n" +
+        "//      -> cache giữ v1 CŨ trong khi DB là v2. Sai lệch kéo dài tới hết TTL.\n" +
+        "//    Xoá cache không có vấn đề này (xoá hai lần cũng vô hại).\n" +
+        "// 2) Ghi đè cache những thứ có thể KHÔNG AI ĐỌC -> lãng phí bộ nhớ.\n" +
+        "// 3) Giá trị trong cache thường KHÁC dạng với entity DB (đã join, đã tính\n" +
+        "//    toán) -> ghi đè phải dựng lại đúng dạng đó, dễ sai.\n" +
+        "\n" +
+        "// THỨ TỰ CŨNG QUAN TRỌNG: ghi DB TRƯỚC, xoá cache SAU.\n" +
+        "// Xoá trước rồi ghi DB -> có cửa sổ để request khác nạp lại GIÁ TRỊ CŨ vào cache.\n" +
+        "\n" +
+        "// Vẫn còn một khe hẹp: request đọc nạp giá trị cũ ngay trước khi xoá.\n" +
+        "// -> Cache-Aside + DELAYED DOUBLE DELETE: xoá, ghi DB, chờ ~500ms rồi xoá lần nữa.",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -159,6 +374,37 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ghi hai nơi luôn có khe hở",
+      code:
+        "// VẤN ĐỀ: DB và Redis không có transaction chung. Bất kỳ thứ tự nào cũng\n" +
+        "// có kịch bản để lại dữ liệu không nhất quán.\n" +
+        "repository.save(p);              // thành công\n" +
+        "redis.delete(key);               // Redis timeout -> cache giữ dữ liệu CŨ\n" +
+        "\n" +
+        "// GIẢM THIỂU (không triệt để):\n" +
+        "// 1) TTL NGẮN -> sai lệch tự hết sau TTL. Đơn giản và hiệu quả nhất trong\n" +
+        "//    thực tế; phần lớn hệ thống chỉ cần đến mức này.\n" +
+        "// 2) Xoá cache SAU KHI transaction commit, không phải trong transaction:\n" +
+        "@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)\n" +
+        "public void onUpdated(ProductUpdated e) { redis.delete(\"product:\" + e.id()); }\n" +
+        "//    Xoá trong transaction mà transaction rollback -> đã xoá cache oan\n" +
+        "//    (không sai dữ liệu, nhưng gây miss vô ích).\n" +
+        "// 3) RETRY + hàng đợi: xoá thất bại -> đẩy vào queue để thử lại.\n" +
+        "\n" +
+        "// TRIỆT ĐỂ: CDC — để DATABASE là nguồn sự thật duy nhất\n" +
+        "// Debezium đọc WAL/binlog -> Kafka -> consumer xoá cache.\n" +
+        "@KafkaListener(topics = \"cdc.public.products\")\n" +
+        "public void onDbChange(ChangeEvent e) {\n" +
+        "    redis.delete(\"product:\" + e.after().get(\"id\"));\n" +
+        "}\n" +
+        "// + KHÔNG BAO GIỜ bỏ sót thay đổi (kể cả sửa trực tiếp trong DB, migration)\n" +
+        "// + ứng dụng không phải nghĩ tới cache nữa\n" +
+        "// - thêm hạ tầng (Kafka + Debezium) và độ trễ vài trăm mili giây",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -182,6 +428,47 @@ SS.addQuestions('redis', [
       { to: 3, label: 'invalidation L1: pub/sub Redis "key X đã đổi" → mọi instance xoá; hoặc L1 TTL rất ngắn (1–5s)' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cache trong process + cache dùng chung",
+      code:
+        "// L1 (Caffeine trong JVM): độ trễ NANO giây, không qua mạng.\n" +
+        "// L2 (Redis): dùng chung mọi instance, sống sót qua restart ứng dụng.\n" +
+        "private final Cache<String, Product> l1 = Caffeine.newBuilder()\n" +
+        "        .maximumSize(10_000)\n" +
+        "        .expireAfterWrite(Duration.ofSeconds(30))   // TTL NGẮN — mấu chốt\n" +
+        "        .recordStats()\n" +
+        "        .build();\n" +
+        "\n" +
+        "public Product get(String id) {\n" +
+        "    Product p = l1.getIfPresent(id);\n" +
+        "    if (p != null) return p;                        // L1 hit\n" +
+        "\n" +
+        "    String cached = redis.opsForValue().get(\"product:\" + id);\n" +
+        "    if (cached != null) {\n" +
+        "        p = parse(cached);\n" +
+        "        l1.put(id, p);                              // nạp ngược lên L1\n" +
+        "        return p;\n" +
+        "    }\n" +
+        "    p = repository.findById(id).orElseThrow();\n" +
+        "    redis.opsForValue().set(\"product:\" + id, json(p), Duration.ofMinutes(30));\n" +
+        "    l1.put(id, p);\n" +
+        "    return p;\n" +
+        "}\n" +
+        "\n" +
+        "// VẤN ĐỀ CỐT LÕI: không xoá được L1 của các instance KHÁC.\n" +
+        "// -> Dùng Pub/Sub để phát lệnh xoá tới mọi instance:\n" +
+        "@EventListener\n" +
+        "public void onInvalidate(String id) { l1.invalidate(id); }\n" +
+        "redis.convertAndSend(\"cache:invalidate\", id);      // mọi instance đều nghe\n" +
+        "\n" +
+        "// KHI NÀO DÙNG: key CỰC NÓNG (cấu hình, bảng tra cứu, feature flag) mà\n" +
+        "// dữ liệu cũ vài giây là chấp nhận được.\n" +
+        "// KHI NÀO KHÔNG: dữ liệu phải chính xác tức thì (số dư, tồn kho).\n" +
+        "// LUÔN để TTL L1 rất ngắn — đó là giới hạn trên của mức \"cũ\" mà bạn chấp nhận.",
+    },
+  ],
 },
 {
   cat: 'Rate limiting',
@@ -204,6 +491,53 @@ SS.addQuestions('redis', [
       ['Chi phí', 'rẻ nhất', 'tốn RAM (mọi timestamp)', 'rẻ', 'rẻ, phổ biến cho API'],
     ],
   },
+  demo: [
+    {
+      lang: "lua",
+      title: "Ba thuật toán, và vì sao phải viết bằng Lua",
+      code:
+        "-- FIXED WINDOW — đơn giản nhất, nhưng cho phép GẤP ĐÔI ở ranh giới cửa sổ\n" +
+        "-- (100 request lúc 10:00:59 và 100 request lúc 10:01:00)\n" +
+        "--   local c = redis.call(\u0027INCR\u0027, KEYS[1])\n" +
+        "--   if c == 1 then redis.call(\u0027EXPIRE\u0027, KEYS[1], ARGV[1]) end\n" +
+        "--   return c <= tonumber(ARGV[2]) and 1 or 0\n" +
+        "\n" +
+        "-- SLIDING WINDOW LOG — chính xác nhất, dùng Sorted Set với score = timestamp\n" +
+        "local key    = KEYS[1]\n" +
+        "local now    = tonumber(ARGV[1])      -- mili giây\n" +
+        "local window = tonumber(ARGV[2])\n" +
+        "local limit  = tonumber(ARGV[3])\n" +
+        "\n" +
+        "redis.call(\u0027ZREMRANGEBYSCORE\u0027, key, 0, now - window)   -- bỏ phần ngoài cửa sổ\n" +
+        "local count = redis.call(\u0027ZCARD\u0027, key)\n" +
+        "if count >= limit then\n" +
+        "  return 0                                              -- từ chối\n" +
+        "end\n" +
+        "redis.call(\u0027ZADD\u0027, key, now, now .. \u0027-\u0027 .. math.random())\n" +
+        "redis.call(\u0027PEXPIRE\u0027, key, window)\n" +
+        "return 1\n" +
+        "-- Chính xác nhưng tốn bộ nhớ: lưu MỘT phần tử cho MỖI request.\n" +
+        "-- Giới hạn cao (hàng nghìn/giây) thì dùng sliding window COUNTER thay thế.",
+    },
+    {
+      lang: "bash",
+      title: "Chạy script và vì sao không tách lệnh",
+      code:
+        "redis-cli --eval sliding_window.lua rate:user:1 , $(date +%s%3N) 60000 100\n" +
+        "\n" +
+        "# VÌ SAO PHẢI DÙNG LUA: các bước \"đọc số hiện tại -> so sánh -> ghi\" phải\n" +
+        "# NGUYÊN TỬ. Tách thành nhiều lệnh thì hai request đồng thời cùng đọc thấy\n" +
+        "# 99 và cùng cho qua -> vượt hạn mức.\n" +
+        "\n" +
+        "# TOKEN BUCKET (xem script ở câu về Lua) — cho phép BURST có kiểm soát:\n" +
+        "# giỏ đầy dần theo thời gian, mỗi request tiêu một token.\n" +
+        "# Đây là lựa chọn tốt nhất cho API công khai: mượt, cho phép đột biến ngắn,\n" +
+        "# và tham số (capacity, rate) dễ giải thích cho người dùng.\n" +
+        "\n" +
+        "# TRẢ VỀ CHO CLIENT header chuẩn để họ tự điều tiết:\n" +
+        "#   X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After",
+    },
+  ],
 },
 {
   cat: 'Distributed lock',
@@ -225,6 +559,49 @@ SS.addQuestions('redis', [
       ['Cho', 'cron một-node', 'chịu mất vài node Redis', 'tuyệt đối không hai writer — tài nguyên từ chối token cũ'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Ba mức độ chặt chẽ",
+      code:
+        "// MỨC 1: SET NX EX — đủ cho phần lớn trường hợp\n" +
+        "String token = UUID.randomUUID().toString();\n" +
+        "boolean locked = redis.opsForValue()\n" +
+        "        .setIfAbsent(\"lock:job\", token, Duration.ofSeconds(30));\n" +
+        "if (!locked) return;\n" +
+        "try {\n" +
+        "    doWork();\n" +
+        "} finally {\n" +
+        "    // Nhả lock phải NGUYÊN TỬ: kiểm tra token rồi mới xoá\n" +
+        "    redis.execute(RedisScript.of(\n" +
+        "        \"if redis.call(\u0027GET\u0027,KEYS[1])==ARGV[1] then return redis.call(\u0027DEL\u0027,KEYS[1]) else return 0 end\",\n" +
+        "        Long.class), List.of(\"lock:job\"), token);\n" +
+        "}\n" +
+        "\n" +
+        "// ĐIỂM YẾU: replication BẤT ĐỒNG BỘ. Master cấp lock rồi chết trước khi\n" +
+        "// sao chép -> replica lên làm master, không biết gì về lock -> cấp cho\n" +
+        "// client thứ hai -> HAI client cùng vào vùng tới hạn.\n" +
+        "\n" +
+        "// MỨC 2: REDLOCK — lấy lock trên N instance ĐỘC LẬP (thường 5), thành công\n" +
+        "// khi chiếm được đa số (3/5) trong thời gian ngắn hơn TTL.\n" +
+        "RedissonClient redisson = Redisson.create(config);\n" +
+        "RLock lock = redisson.getLock(\"lock:job\");\n" +
+        "if (lock.tryLock(5, 30, TimeUnit.SECONDS)) {        // Redisson có watchdog tự gia hạn\n" +
+        "    try { doWork(); } finally { lock.unlock(); }\n" +
+        "}\n" +
+        "// Redlock vẫn bị tranh cãi: nó giả định đồng hồ các node không lệch nhiều\n" +
+        "// và không có GC pause dài. Martin Kleppmann đã chỉ ra các kịch bản hỏng.\n" +
+        "\n" +
+        "// MỨC 3: FENCING TOKEN — cách DUY NHẤT thật sự an toàn\n" +
+        "long fence = redis.opsForValue().increment(\"lock:job:fence\");   // tăng dần\n" +
+        "// Truyền fence xuống hệ thống ĐÍCH; đích TỪ CHỐI mọi ghi có fence NHỎ HƠN\n" +
+        "// cái nó đã thấy -> client \"zombie\" tỉnh dậy muộn không ghi đè được.\n" +
+        "storage.write(data, fence);\n" +
+        "\n" +
+        "// KẾT LUẬN: cần đúng đắn TUYỆT ĐỐI (tiền bạc) thì đừng dùng khoá Redis —\n" +
+        "// dùng khoá của database giao dịch, hoặc thiết kế idempotent.",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -246,6 +623,36 @@ SS.addQuestions('redis', [
       ['Ví dụ', 'profile, catalog, config, "sản phẩm liên quan"', 'feed cá nhân hoá realtime, số dư tài khoản'],
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Tiêu chí quyết định",
+      code:
+        "// NÊN CACHE:\n" +
+        "// 1) ĐỌC NHIỀU, GHI ÍT — tỉ lệ đọc/ghi càng cao càng đáng\n" +
+        "redis.opsForValue().set(\"product:1\", json, Duration.ofMinutes(30));\n" +
+        "// 2) TỐN KÉM để tạo ra: join nhiều bảng, tính toán nặng, gọi API bên ngoài\n" +
+        "// 3) DÙNG CHUNG giữa nhiều người dùng: danh mục, cấu hình, bảng giá\n" +
+        "// 4) CHẤP NHẬN ĐƯỢC dữ liệu cũ vài giây/phút\n" +
+        "// 5) KÍCH THƯỚC hợp lý (dưới vài trăm KB mỗi giá trị)\n" +
+        "\n" +
+        "// KHÔNG NÊN CACHE:\n" +
+        "// 1) Dữ liệu phải CHÍNH XÁC TỨC THÌ: số dư tài khoản, tồn kho lúc thanh toán\n" +
+        "if (needsExactBalance) return repository.getBalance(id);   // đọc thẳng DB\n" +
+        "// 2) GHI NHIỀU HƠN ĐỌC -> cache liên tục bị xoá, chỉ tốn công\n" +
+        "// 3) Dữ liệu riêng của TỪNG người dùng mà mỗi người chỉ đọc một lần\n" +
+        "//    -> tỉ lệ hit gần 0, chỉ tốn bộ nhớ\n" +
+        "// 4) Dữ liệu RẤT LỚN (blob hàng chục MB) -> dùng CDN/object storage\n" +
+        "// 5) Dữ liệu NHẠY CẢM chưa mã hoá (số thẻ, thông tin y tế)\n" +
+        "// 6) Kết quả truy vấn có PHÂN TRANG/SẮP XẾP tuỳ ý -> tổ hợp key bùng nổ\n" +
+        "\n" +
+        "// ĐO TRƯỚC KHI CACHE: cache làm hệ thống PHỨC TẠP HƠN (thêm điểm lỗi,\n" +
+        "// thêm bài toán nhất quán). Query 5ms chạy 10 lần/phút thì cache không\n" +
+        "// giải quyết vấn đề gì cả.\n" +
+        "// Theo dõi hit rate: dưới 80% thì xem lại TTL và chiến lược key.\n" +
+        "redis.opsForValue().get(\"stats\");   // INFO stats: keyspace_hits / keyspace_misses",
+    },
+  ],
 },
 {
   cat: 'Rate limiting',
@@ -273,6 +680,45 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Session ngoài process để scale ngang",
+      code:
+        "// VẤN ĐỀ: session trong bộ nhớ JVM -> phải dùng sticky session, và restart\n" +
+        "// là mọi người bị đăng xuất.\n" +
+        "@Configuration\n" +
+        "@EnableRedisHttpSession(maxInactiveIntervalInSeconds = 1800)\n" +
+        "public class SessionConfig {\n" +
+        "    @Bean\n" +
+        "    public LettuceConnectionFactory connectionFactory() {\n" +
+        "        return new LettuceConnectionFactory(\n" +
+        "                new RedisStandaloneConfiguration(\"redis\", 6379));\n" +
+        "    }\n" +
+        "    @Bean                                    // JSON dễ đọc/debug hơn JDK serialization\n" +
+        "    public RedisSerializer<Object> springSessionDefaultRedisSerializer() {\n" +
+        "        return new GenericJackson2JsonRedisSerializer();\n" +
+        "    }\n" +
+        "}\n" +
+        "\n" +
+        "// Spring Session lưu mỗi session thành một HASH:\n" +
+        "//   spring:session:sessions:<id>          -> dữ liệu session\n" +
+        "//   spring:session:sessions:expires:<id>  -> để dọn dẹp\n" +
+        "//   spring:session:expirations:<phút>     -> tập hợp session hết hạn theo phút\n" +
+        "\n" +
+        "// NGUYÊN TẮC THIẾT KẾ:\n" +
+        "//  1) GIỮ SESSION NHỎ (dưới vài KB): chỉ userId, role, vài cờ. Đừng nhét\n" +
+        "//     giỏ hàng hay danh sách quyền chi tiết vào đó — mỗi request đều phải\n" +
+        "//     đọc và ghi lại toàn bộ.\n" +
+        "//  2) TTL trượt: mỗi request gia hạn -> người dùng đang hoạt động không bị đăng xuất.\n" +
+        "//  3) ĐỔI SESSION ID sau khi đăng nhập -> chống session fixation.\n" +
+        "//  4) Cookie: HttpOnly + Secure + SameSite=Lax/Strict.\n" +
+        "//  5) Redis chết = mọi người đăng xuất -> cần replica và failover, hoặc\n" +
+        "//     chấp nhận đây là sự cố có thể xảy ra.\n" +
+        "//  6) Đăng xuất mọi thiết bị: lưu tập session id theo user\n" +
+        "redis.opsForSet().add(\"user:1:sessions\", sessionId);",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -298,6 +744,43 @@ SS.addQuestions('redis', [
       { to: 3, label: 'kèm stampede protection để cold start không sập DB' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Nạp trước dữ liệu nóng để tránh đợt miss đồng loạt",
+      code:
+        "// KHI NÀO CẦN:\n" +
+        "//  1) sau khi Redis restart / failover -> cache rỗng, DB nhận toàn bộ tải\n" +
+        "//  2) trước SỰ KIỆN biết trước: flash sale, mở bán vé, ra mắt sản phẩm\n" +
+        "//  3) sau khi deploy nếu đổi định dạng key (cache cũ vô dụng)\n" +
+        "//  4) hệ thống có tập dữ liệu nóng NHỎ và ổn định\n" +
+        "\n" +
+        "@EventListener(ApplicationReadyEvent.class)\n" +
+        "public void warmUp() {\n" +
+        "    // Chỉ nạp thứ THỰC SỰ nóng — nạp hết là vô nghĩa và tốn bộ nhớ\n" +
+        "    List<Product> hot = repository.findTop1000ByOrderByViewCountDesc();\n" +
+        "    hot.forEach(p -> redis.opsForValue().set(\n" +
+        "            \"product:\" + p.getId(), json(p),\n" +
+        "            Duration.ofMinutes(30 + random.nextInt(10))));   // TTL rải ra\n" +
+        "}\n" +
+        "\n" +
+        "// LÀM MỚI ĐỊNH KỲ cho dữ liệu nóng, để nó không bao giờ hết hạn đột ngột:\n" +
+        "@Scheduled(fixedDelay = 600_000)\n" +
+        "public void refreshHot() {\n" +
+        "    repository.findTop1000ByOrderByViewCountDesc()\n" +
+        "              .forEach(p -> redis.opsForValue().set(\"product:\" + p.getId(), json(p), TTL));\n" +
+        "}\n" +
+        "\n" +
+        "// PHỐI HỢP VỚI TRIỂN KHAI: đừng mở lưu lượng vào ngay khi instance sẵn sàng.\n" +
+        "// Warm cache TRƯỚC, rồi mới báo readiness -> load balancer mới gửi request.\n" +
+        "AvailabilityChangeEvent.publish(publisher, this, ReadinessState.REFUSING_TRAFFIC);\n" +
+        "warmUp();\n" +
+        "AvailabilityChangeEvent.publish(publisher, this, ReadinessState.ACCEPTING_TRAFFIC);\n" +
+        "\n" +
+        "// LƯU Ý: warm bằng cách quét toàn bộ DB có thể tự nó làm sập DB.\n" +
+        "// Chia lô, thêm độ trễ giữa các lô, và chạy ngoài giờ cao điểm.",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -324,6 +807,46 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cache cả kết quả \"không tồn tại\"",
+      code:
+        "// MỤC ĐÍCH: chặn cache penetration — request tìm thứ không tồn tại lặp đi\n" +
+        "// lặp lại sẽ luôn miss cache và luôn xuống DB.\n" +
+        "private static final String NULL_MARKER = \"\u0000NULL\";\n" +
+        "\n" +
+        "public Product get(String id) {\n" +
+        "    String cached = redis.opsForValue().get(\"product:\" + id);\n" +
+        "    if (NULL_MARKER.equals(cached)) return null;     // biết chắc không có\n" +
+        "    if (cached != null) return parse(cached);\n" +
+        "\n" +
+        "    Product p = repository.findById(id).orElse(null);\n" +
+        "    if (p == null) {\n" +
+        "        redis.opsForValue().set(\"product:\" + id, NULL_MARKER,\n" +
+        "                Duration.ofMinutes(2));              // TTL NGẮN — điểm mấu chốt\n" +
+        "        return null;\n" +
+        "    }\n" +
+        "    redis.opsForValue().set(\"product:\" + id, json(p), Duration.ofMinutes(30));\n" +
+        "    return p;\n" +
+        "}\n" +
+        "\n" +
+        "// RỦI RO:\n" +
+        "// 1) DỮ LIỆU CŨ SAI HƯỚNG NGUY HIỂM: bản ghi được TẠO ngay sau khi cache\n" +
+        "//    \"không tồn tại\" -> người dùng thấy 404 dù dữ liệu đã có.\n" +
+        "//    -> TTL phải NGẮN (1-5 phút), và khi TẠO bản ghi phải XOÁ marker:\n" +
+        "@Transactional\n" +
+        "public Product create(Product p) {\n" +
+        "    Product saved = repository.save(p);\n" +
+        "    redis.delete(\"product:\" + saved.getId());        // dọn marker null\n" +
+        "    return saved;\n" +
+        "}\n" +
+        "// 2) TỐN BỘ NHỚ nếu bị tấn công bằng hàng triệu id ngẫu nhiên -> mỗi id\n" +
+        "//    tạo một entry. -> kết hợp Bloom filter và giới hạn tốc độ.\n" +
+        "// 3) Phải phân biệt rõ \"chưa cache\" (null) và \"đã cache là không tồn tại\"\n" +
+        "//    -> dùng marker đặc biệt, đừng dùng chuỗi rỗng (dễ trùng dữ liệu thật).",
+    },
+  ],
 },
 {
   cat: 'Rate limiting',
@@ -348,6 +871,49 @@ SS.addQuestions('redis', [
       { to: 4, label: 'TTL đủ dài để bao phủ mọi lần client có thể retry' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Chống xử lý trùng ở biên hệ thống",
+      code:
+        "public PaymentResult pay(String idempotencyKey, PaymentRequest req) {\n" +
+        "    String key = \"idem:\" + idempotencyKey;\n" +
+        "\n" +
+        "    // 1) GIÀNH CHỖ nguyên tử — SET NX là mấu chốt, hai request đồng thời\n" +
+        "    //    chỉ một cái thắng\n" +
+        "    boolean acquired = redis.opsForValue().setIfAbsent(\n" +
+        "            key, \"IN_PROGRESS:\" + hash(req), Duration.ofHours(24));\n" +
+        "\n" +
+        "    if (!acquired) {\n" +
+        "        String existing = redis.opsForValue().get(key);\n" +
+        "        if (existing == null) return pay(idempotencyKey, req);   // vừa hết hạn\n" +
+        "\n" +
+        "        // 2) Cùng key nhưng payload KHÁC -> client dùng sai, phải báo lỗi\n" +
+        "        if (!existing.endsWith(hash(req)))\n" +
+        "            throw new ConflictException(\"Idempotency key đã dùng cho request khác\");\n" +
+        "\n" +
+        "        // 3) Đang xử lý -> bảo client thử lại, KHÔNG xử lý song song\n" +
+        "        if (existing.startsWith(\"IN_PROGRESS\"))\n" +
+        "            throw new RetryLaterException(2);\n" +
+        "\n" +
+        "        // 4) Đã xong -> trả về ĐÚNG kết quả cũ\n" +
+        "        return parse(existing.substring(\"DONE:\".length()));\n" +
+        "    }\n" +
+        "\n" +
+        "    try {\n" +
+        "        PaymentResult result = process(req);\n" +
+        "        redis.opsForValue().set(key, \"DONE:\" + json(result), Duration.ofHours(24));\n" +
+        "        return result;\n" +
+        "    } catch (Exception e) {\n" +
+        "        redis.delete(key);        // thất bại -> cho phép thử lại\n" +
+        "        throw e;\n" +
+        "    }\n" +
+        "}\n" +
+        "// LƯU Ý: Redis không bền tuyệt đối. Với giao dịch tiền bạc, khoá idempotency\n" +
+        "// nên nằm ở DATABASE (cùng transaction với nghiệp vụ); Redis chỉ là lớp\n" +
+        "// chặn nhanh phía trước để giảm tải.",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -375,6 +941,40 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bài toán mà ZSet sinh ra để giải",
+      code:
+        "redis-cli ZADD leaderboard:global 1500 \"user:1\"\n" +
+        "redis-cli ZINCRBY leaderboard:global 100 \"user:1\"      # cộng điểm nguyên tử\n" +
+        "\n" +
+        "redis-cli ZREVRANGE leaderboard:global 0 9 WITHSCORES  # top 10 — O(log N + M)\n" +
+        "redis-cli ZREVRANK leaderboard:global \"user:1\"         # hạng của một người — O(log N)\n" +
+        "redis-cli ZSCORE leaderboard:global \"user:1\"           # O(1)\n" +
+        "\n" +
+        "# \"Quanh tôi\" — hiển thị 5 người trên và 5 người dưới\n" +
+        "rank=$(redis-cli ZREVRANK leaderboard:global \"user:1\")\n" +
+        "redis-cli ZREVRANGE leaderboard:global $((rank-5)) $((rank+5)) WITHSCORES\n" +
+        "\n" +
+        "# BẢNG THEO KỲ — key theo thời gian, TTL tự dọn\n" +
+        "redis-cli ZINCRBY leaderboard:2026-09 100 \"user:1\"\n" +
+        "redis-cli EXPIRE leaderboard:2026-09 5184000            # 60 ngày\n" +
+        "# Gộp nhiều tuần thành bảng tháng:\n" +
+        "redis-cli ZUNIONSTORE leaderboard:month 4 lb:w1 lb:w2 lb:w3 lb:w4\n" +
+        "\n" +
+        "# XỬ LÝ ĐỒNG ĐIỂM (rất hay gặp và hay bị bỏ qua): cùng điểm thì ai trước?\n" +
+        "# Mẹo: gộp thời gian vào score. score = điểm * 10^10 + (thời_gian_còn_lại)\n" +
+        "# -> cùng điểm thì người đạt SỚM HƠN xếp trên.\n" +
+        "\n" +
+        "# QUY MÔ LỚN (hàng chục triệu người chơi):\n" +
+        "#  - ZSet 10 triệu phần tử tốn ~1GB và mọi thao tác vẫn O(log N) -> vẫn ổn\n" +
+        "#  - nhưng ZREVRANGE lấy 10.000 phần tử là O(N) -> giới hạn kích thước trang\n" +
+        "#  - CHIA theo khu vực/hạng đấu để mỗi ZSet nhỏ lại\n" +
+        "#  - chỉ giữ TOP N trong ZSet, phần còn lại tính hạng xấp xỉ từ DB\n" +
+        "redis-cli ZREMRANGEBYRANK leaderboard:global 0 -10001   # chỉ giữ top 10.000",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -400,6 +1000,52 @@ SS.addQuestions('redis', [
       { to: 5, label: 'reload định kỳ — bảo hiểm cho tính không tin cậy của pub/sub' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Cấu hình đọc rất nhiều, đổi rất ít",
+      code:
+        "// Feature flag được đọc ở MỌI request -> phải nằm trong bộ nhớ process (L1).\n" +
+        "// Nhưng đổi cờ phải có hiệu lực NGAY trên mọi instance -> dùng Pub/Sub.\n" +
+        "@Component\n" +
+        "public class FeatureFlags {\n" +
+        "    private volatile Map<String, Boolean> flags = Map.of();\n" +
+        "\n" +
+        "    @PostConstruct\n" +
+        "    void load() {                                   // nạp lần đầu từ Redis\n" +
+        "        flags = redis.opsForHash().entries(\"config:flags\");\n" +
+        "    }\n" +
+        "\n" +
+        "    public boolean isEnabled(String name) {\n" +
+        "        return flags.getOrDefault(name, false);     // đọc từ RAM, không chạm mạng\n" +
+        "    }\n" +
+        "\n" +
+        "    // Nghe kênh invalidate -> nạp lại\n" +
+        "    @EventListener\n" +
+        "    public void onConfigChanged(String message) { load(); }\n" +
+        "}\n" +
+        "\n" +
+        "@Configuration\n" +
+        "class PubSubConfig {\n" +
+        "    @Bean\n" +
+        "    RedisMessageListenerContainer container(RedisConnectionFactory f, FeatureFlags flags) {\n" +
+        "        var c = new RedisMessageListenerContainer();\n" +
+        "        c.setConnectionFactory(f);\n" +
+        "        c.addMessageListener((msg, p) -> flags.load(),\n" +
+        "                new ChannelTopic(\"config:changed\"));\n" +
+        "        return c;\n" +
+        "    }\n" +
+        "}\n" +
+        "// Khi admin đổi cờ:\n" +
+        "redis.opsForHash().put(\"config:flags\", \"new-checkout\", \"true\");\n" +
+        "redis.convertAndSend(\"config:changed\", \"flags\");   // mọi instance nạp lại ngay\n" +
+        "\n" +
+        "// LƯU Ý: Pub/Sub là FIRE-AND-FORGET — instance đang restart sẽ BỎ LỠ thông báo.\n" +
+        "// -> Luôn kèm một chu kỳ nạp lại định kỳ làm lưới an toàn:\n" +
+        "@Scheduled(fixedDelay = 60_000)\n" +
+        "public void periodicReload() { load(); }",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -425,6 +1071,41 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đổi version thay vì đi xoá từng key",
+      code:
+        "# BÀI TOÁN: đổi cấu trúc dữ liệu cache, hoặc cần xoá toàn bộ cache của một\n" +
+        "# danh mục. Không thể dùng KEYS để tìm rồi xoá (chặn server).\n" +
+        "\n" +
+        "# CÁCH 1: VERSION TRONG KEY — tăng version là toàn bộ cache cũ thành mồ côi\n" +
+        "# và tự hết hạn theo TTL. Không cần xoá gì cả.\n" +
+        "redis-cli SET \"product:v2:1001\" \u0027{\"schema\":\"new\"}\u0027 EX 3600\n" +
+        "# Deploy đổi tiền tố từ v1 sang v2 -> mọi lần đọc đều miss và nạp lại đúng\n" +
+        "# định dạng mới; key v1 tự biến mất sau TTL.\n" +
+        "\n" +
+        "# CÁCH 2: VERSION TRONG REDIS — invalidate hàng loạt mà không cần deploy\n" +
+        "redis-cli INCR \"cache:version:product\"          # trả về 5\n" +
+        "# Ứng dụng đọc version rồi ghép vào key:\n" +
+        "#   key = \"product:v\" + version + \":\" + id\n" +
+        "# Tăng version -> mọi key cũ lập tức không được dùng nữa.\n" +
+        "\n" +
+        "# CÁCH 3: XOÁ THEO NHÓM bằng SCAN (khi không có version)\n" +
+        "redis-cli --scan --pattern \u0027product:*\u0027 | xargs -L 100 redis-cli UNLINK\n" +
+        "# An toàn hơn KEYS vì SCAN không chặn, và UNLINK giải phóng ở thread nền.\n" +
+        "\n" +
+        "# CÁCH 4: TAG hoá — giữ một Set các key thuộc mỗi nhóm\n" +
+        "redis-cli SADD \"tag:category:5\" \"product:100\" \"product:101\"\n" +
+        "redis-cli SMEMBERS \"tag:category:5\" | xargs redis-cli UNLINK\n" +
+        "redis-cli UNLINK \"tag:category:5\"\n" +
+        "# Tốn thêm bộ nhớ và phải bảo trì tập tag, nhưng xoá chính xác theo nhóm.\n" +
+        "\n" +
+        "# NGUYÊN TẮC: key phải MÔ TẢ ĐỦ mọi thứ ảnh hưởng tới giá trị —\n" +
+        "# id, version schema, ngôn ngữ, quyền xem, tham số phân trang.\n" +
+        "# Thiếu một chiều là hai người dùng khác nhau nhận cùng một giá trị SAI.",
+    },
+  ],
 },
 {
   cat: 'Nhất quán',
@@ -453,6 +1134,39 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Một key nóng làm nghẽn một node",
+      code:
+        "# PHÁT HIỆN\n" +
+        "redis-cli --hotkeys                       # cần maxmemory-policy allkeys-lfu\n" +
+        "redis-cli OBJECT FREQ product:hot         # counter LFU của một key\n" +
+        "redis-cli MONITOR | head -5000 | awk \u0027{print $4}\u0027 | sort | uniq -c | sort -rn | head\n" +
+        "# (MONITOR làm chậm server đáng kể — chỉ chạy vài giây ở môi trường có tải)\n" +
+        "redis-cli INFO commandstats\n" +
+        "# Trong Cluster: một node có CPU/băng thông cao hơn hẳn các node khác\n" +
+        "# là dấu hiệu điển hình của hot key.\n" +
+        "\n" +
+        "# GIẢM TẢI — ba cách, theo thứ tự nên thử:\n" +
+        "# 1) CACHE CỤC BỘ (L1) với TTL rất ngắn — hiệu quả nhất và đơn giản nhất.\n" +
+        "#    99% request không còn chạm Redis nữa.\n" +
+        "#    Caffeine: maximumSize(1000).expireAfterWrite(Duration.ofSeconds(5))\n" +
+        "\n" +
+        "# 2) NHÂN BẢN KEY — chia tải ra nhiều key (và nhiều node trong Cluster)\n" +
+        "for i in $(seq 0 9); do\n" +
+        "  redis-cli SET \"product:hot:copy$i\" \"$(redis-cli GET product:hot)\" EX 300\n" +
+        "done\n" +
+        "# Client chọn ngẫu nhiên copy0..copy9 -> tải chia đều 10 phần.\n" +
+        "# Đổi lại: cập nhật phải ghi cả 10 bản.\n" +
+        "\n" +
+        "# 3) ĐỌC TỪ REPLICA — chia tải đọc, chấp nhận dữ liệu trễ một chút\n" +
+        "redis-cli -h replica-1 READONLY\n" +
+        "\n" +
+        "# 4) Trong Cluster, dùng HASH TAG để chủ động phân bố key nóng sang các slot\n" +
+        "#    khác nhau thay vì để chúng dồn về một node.",
+    },
+  ],
 },
 {
   cat: 'Pattern',
@@ -476,5 +1190,44 @@ SS.addQuestions('redis', [
       { to: 2, label: 'một request giành lock để refresh — chỉ một request tính lại' },
     ],
   },
+  demo: [
+    {
+      lang: "java",
+      title: "Trả bản cũ ngay, làm mới ở nền",
+      code:
+        "// Ý tưởng: người dùng KHÔNG BAO GIỜ phải chờ nạp lại cache. Hết hạn \"mềm\"\n" +
+        "// thì vẫn trả bản cũ và kích hoạt làm mới ở nền.\n" +
+        "public Product get(String id) {\n" +
+        "    String key = \"product:\" + id;\n" +
+        "    Entry e = parse(redis.opsForValue().get(key));\n" +
+        "\n" +
+        "    if (e == null) {\n" +
+        "        return loadAndCache(id);                 // miss thật -> phải chờ\n" +
+        "    }\n" +
+        "    if (e.isStale()) {                           // quá softTtl nhưng chưa quá hardTtl\n" +
+        "        // Chỉ MỘT request được đi làm mới, số còn lại dùng bản cũ\n" +
+        "        boolean got = redis.opsForValue()\n" +
+        "                .setIfAbsent(\"refresh:\" + key, \"1\", Duration.ofSeconds(30));\n" +
+        "        if (got) asyncExecutor.submit(() -> loadAndCache(id));\n" +
+        "    }\n" +
+        "    return e.value();                            // luôn trả về ngay lập tức\n" +
+        "}\n" +
+        "\n" +
+        "private Product loadAndCache(String id) {\n" +
+        "    Product p = repository.findById(id).orElseThrow();\n" +
+        "    // Lưu KÈM thời điểm hết hạn MỀM; TTL thật (hard) dài hơn nhiều\n" +
+        "    Entry e = new Entry(p, Instant.now().plus(Duration.ofMinutes(5)));   // soft\n" +
+        "    redis.opsForValue().set(\"product:\" + id, json(e), Duration.ofHours(1)); // hard\n" +
+        "    return p;\n" +
+        "}\n" +
+        "\n" +
+        "// LỢI ÍCH:\n" +
+        "//  - độ trễ p99 ổn định: không request nào phải chờ nạp lại\n" +
+        "//  - chống stampede tự nhiên (chỉ một request làm mới)\n" +
+        "//  - DB chết tạm thời -> vẫn phục vụ được bằng dữ liệu cũ tới hết hard TTL\n" +
+        "// ĐÁNH ĐỔI: người dùng có thể thấy dữ liệu cũ trong khoảng soft-to-hard.\n" +
+        "// -> Chọn softTtl theo mức \"cũ\" mà nghiệp vụ chấp nhận được.",
+    },
+  ],
 },
 ]);

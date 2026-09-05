@@ -21,6 +21,39 @@ SS.addQuestions('redis', [
       ['Production', 'không dùng', 'dùng; cân nhắc save trên replica'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ảnh chụp toàn bộ dataset tại một thời điểm",
+      code:
+        "# Cấu hình trong redis.conf: lưu khi đủ số thay đổi trong khoảng thời gian\n" +
+        "#   save 900 1      # 900 giây mà có ít nhất 1 key đổi\n" +
+        "#   save 300 10\n" +
+        "#   save 60 10000\n" +
+        "redis-cli CONFIG SET save \"900 1 300 10 60 10000\"\n" +
+        "\n" +
+        "# SAVE — chạy ĐỒNG BỘ trên thread chính -> CHẶN TOÀN BỘ server tới khi xong.\n" +
+        "# TUYỆT ĐỐI không dùng ở production.\n" +
+        "redis-cli SAVE\n" +
+        "\n" +
+        "# BGSAVE — fork tiến trình con, tiến trình con ghi file, tiến trình cha vẫn\n" +
+        "# phục vụ bình thường. Đây là cách luôn dùng.\n" +
+        "redis-cli BGSAVE\n" +
+        "redis-cli LASTSAVE                        # timestamp lần lưu thành công cuối\n" +
+        "redis-cli INFO persistence | grep rdb_\n" +
+        "\n" +
+        "# CHI PHÍ CỦA FORK — điểm quan trọng nhất phải hiểu:\n" +
+        "#  - fork() dùng copy-on-write: ban đầu cha và con CHIA SẺ bộ nhớ\n" +
+        "#  - nhưng mỗi trang bộ nhớ bị GHI trong lúc lưu sẽ được SAO CHÉP\n" +
+        "#  - dataset 10GB với tỉ lệ ghi cao có thể tốn thêm vài GB RAM\n" +
+        "#  - bản thân lời gọi fork() gây LATENCY SPIKE tỉ lệ với kích thước bộ nhớ\n" +
+        "redis-cli INFO stats | grep latest_fork_usec    # fork gần nhất mất bao lâu\n" +
+        "\n" +
+        "# ƯU: file nhỏ gọn (nén), khôi phục NHANH, hợp làm backup và làm bản sao\n" +
+        "# để dựng replica.\n" +
+        "# NHƯỢC: MẤT DỮ LIỆU giữa hai lần snapshot (có thể tới vài phút).",
+    },
+  ],
 },
 {
   cat: 'Persistence',
@@ -45,6 +78,37 @@ SS.addQuestions('redis', [
       ['Tốc độ', 'chậm (giới hạn bởi fsync đĩa)', 'cân bằng tốt', 'nhanh nhất'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Ghi nhật ký mọi lệnh ghi",
+      code:
+        "redis-cli CONFIG SET appendonly yes\n" +
+        "# AOF ghi lại từng lệnh GHI vào file. Khôi phục = phát lại toàn bộ lệnh.\n" +
+        "\n" +
+        "# BA MỨC appendfsync — đây là đánh đổi bền vững/hiệu năng cốt lõi:\n" +
+        "redis-cli CONFIG SET appendfsync always      # fsync MỖI lệnh ghi\n" +
+        "#   -> gần như không mất dữ liệu, nhưng CHẬM (mỗi ghi phải chờ đĩa)\n" +
+        "redis-cli CONFIG SET appendfsync everysec    # fsync MỖI GIÂY — MẶC ĐỊNH\n" +
+        "#   -> mất tối đa 1 giây dữ liệu; cân bằng tốt nhất, gần như luôn chọn cái này\n" +
+        "redis-cli CONFIG SET appendfsync no          # để OS tự quyết (~30 giây)\n" +
+        "#   -> nhanh nhất, mất nhiều nhất\n" +
+        "\n" +
+        "# AOF REWRITE — file AOF phình to (ghi 1 key 1000 lần = 1000 dòng).\n" +
+        "# Rewrite viết lại file tối giản: chỉ đủ lệnh để dựng lại trạng thái HIỆN TẠI.\n" +
+        "redis-cli BGREWRITEAOF\n" +
+        "redis-cli CONFIG SET auto-aof-rewrite-percentage 100    # phình gấp đôi thì rewrite\n" +
+        "redis-cli CONFIG SET auto-aof-rewrite-min-size 64mb\n" +
+        "\n" +
+        "# Redis 7 đổi sang MULTI-PART AOF: một file base (RDB) + nhiều file\n" +
+        "# incremental trong thư mục appendonlydir/ -> rewrite an toàn và nhẹ hơn.\n" +
+        "ls /var/lib/redis/appendonlydir/\n" +
+        "\n" +
+        "# ƯU: mất ít dữ liệu hơn RDB rất nhiều; file dạng text nên đọc/sửa được khi\n" +
+        "# cần cứu dữ liệu (ví dụ xoá lệnh FLUSHALL vô tình).\n" +
+        "# NHƯỢC: file lớn hơn, khôi phục CHẬM hơn (phải phát lại lệnh).",
+    },
+  ],
 },
 {
   cat: 'Persistence',
@@ -67,6 +131,37 @@ SS.addQuestions('redis', [
       ['Cache thuần', 'có thể tắt cả hai (save "", appendonly no)', '—', '—'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bật cả hai, và hiểu cái nào được dùng khi khởi động",
+      code:
+        "# BẬT CẢ HAI là cấu hình khuyến nghị cho production:\n" +
+        "redis-cli CONFIG SET save \"900 1 300 10 60 10000\"\n" +
+        "redis-cli CONFIG SET appendonly yes\n" +
+        "redis-cli CONFIG SET appendfsync everysec\n" +
+        "\n" +
+        "# KHI KHỞI ĐỘNG LẠI: nếu AOF được bật, Redis dùng AOF (mới hơn RDB) và\n" +
+        "# BỎ QUA file RDB. Đây là điểm rất hay gây mất dữ liệu:\n" +
+        "#   bật appendonly yes lần đầu trên server ĐANG CHẠY -> AOF bắt đầu từ\n" +
+        "#   trạng thái hiện tại (đúng), nhưng nếu SỬA CONFIG FILE rồi restart mà\n" +
+        "#   AOF chưa có -> Redis khởi động với dataset RỖNG.\n" +
+        "# -> Luôn bật bằng CONFIG SET trước, rồi mới ghi vào file config:\n" +
+        "redis-cli CONFIG REWRITE\n" +
+        "\n" +
+        "# RDB-AOF HYBRID (mặc định từ Redis 4, nên bật):\n" +
+        "redis-cli CONFIG SET aof-use-rdb-preamble yes\n" +
+        "# File AOF bắt đầu bằng một RDB nén (khôi phục nhanh) rồi mới tới các lệnh\n" +
+        "# ghi sau đó (mất ít dữ liệu) -> lấy ưu điểm của cả hai.\n" +
+        "\n" +
+        "# CHỌN THEO NHU CẦU:\n" +
+        "#  - cache thuần, mất được -> TẮT cả hai (nhanh nhất)\n" +
+        "#  - chấp nhận mất vài phút, cần khôi phục nhanh -> chỉ RDB\n" +
+        "#  - cần mất ít nhất có thể -> AOF everysec (+ RDB để backup)\n" +
+        "# Và nhớ: cả hai đều KHÔNG thay thế BACKUP RA NGOÀI MÁY.\n" +
+        "redis-cli --rdb /backup/dump-$(date +%F).rdb    # lấy snapshot về máy khác",
+    },
+  ],
 },
 {
   cat: 'Persistence',
@@ -93,6 +188,38 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Câu trả lời trung thực: KHÔNG, ở mức của database giao dịch",
+      code:
+        "# Redis có persistence, nhưng KHÔNG có độ bền như PostgreSQL/MySQL:\n" +
+        "\n" +
+        "# 1) appendfsync everysec (mặc định) -> mất tối đa 1 GIÂY dữ liệu khi mất điện.\n" +
+        "#    Đặt always thì bền hơn nhưng throughput giảm rất mạnh.\n" +
+        "\n" +
+        "# 2) REPLICATION LÀ BẤT ĐỒNG BỘ. Master ack cho client TRƯỚC khi replica\n" +
+        "#    nhận được. Master chết ngay sau đó -> dữ liệu đó MẤT dù có replica.\n" +
+        "redis-cli WAIT 1 100      # chờ ít nhất 1 replica xác nhận, tối đa 100ms\n" +
+        "# WAIT chỉ giảm rủi ro, KHÔNG phải cam kết như 2PC — vẫn có cửa sổ mất.\n" +
+        "\n" +
+        "# 3) Không có transaction có rollback. MULTI/EXEC nguyên tử nhưng lệnh lỗi\n" +
+        "#    giữa chừng thì các lệnh khác vẫn chạy.\n" +
+        "\n" +
+        "# 4) Failover có thể MẤT ghi: replica được bầu làm master chưa chắc đã nhận\n" +
+        "#    hết dữ liệu -> phần chênh lệch biến mất.\n" +
+        "\n" +
+        "# LÀM CHO BỀN HƠN (vẫn không bằng RDBMS):\n" +
+        "redis-cli CONFIG SET appendfsync always\n" +
+        "redis-cli CONFIG SET min-replicas-to-write 1     # từ chối ghi khi không đủ replica\n" +
+        "redis-cli CONFIG SET min-replicas-max-lag 10\n" +
+        "\n" +
+        "# KẾT LUẬN THỰC DỤNG: coi Redis là CACHE và kho dữ liệu tạm/phái sinh.\n" +
+        "# Dữ liệu là NGUỒN SỰ THẬT (tiền, đơn hàng) phải nằm ở database giao dịch;\n" +
+        "# Redis giữ bản sao để đọc nhanh. Muốn Redis bền thật -> cân nhắc MemoryDB\n" +
+        "# (AWS, ghi vào transaction log đa AZ trước khi ack).",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -120,6 +247,36 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Không đặt maxmemory là lỗi cấu hình nghiêm trọng",
+      code:
+        "redis-cli CONFIG SET maxmemory 4gb\n" +
+        "redis-cli CONFIG SET maxmemory-policy allkeys-lru\n" +
+        "# Không đặt maxmemory -> Redis ăn hết RAM -> OS OOM killer giết tiến trình,\n" +
+        "# hoặc tệ hơn là máy bắt đầu SWAP (xem câu riêng về swap).\n" +
+        "# Quy tắc: đặt maxmemory khoảng 60-70% RAM của máy, chừa chỗ cho fork COW.\n" +
+        "\n" +
+        "# TÁM POLICY:\n" +
+        "#  noeviction (MẶC ĐỊNH) — từ chối lệnh GHI khi đầy, đọc vẫn được.\n" +
+        "#    Dùng khi Redis là kho dữ liệu, không phải cache. Ứng dụng PHẢI xử lý lỗi OOM.\n" +
+        "#  allkeys-lru     — bỏ key ít dùng gần đây nhất, xét MỌI key. Cache thuần -> chọn cái này.\n" +
+        "#  allkeys-lfu     — bỏ key ÍT ĐƯỢC DÙNG nhất (theo tần suất). Tốt hơn LRU khi\n" +
+        "#                    có key nóng ổn định lẫn key quét một lần.\n" +
+        "#  allkeys-random  — ngẫu nhiên; rẻ nhất về CPU, hiếm khi là lựa chọn tốt.\n" +
+        "#  volatile-lru / volatile-lfu / volatile-random / volatile-ttl\n" +
+        "#                  — CHỈ xét key CÓ TTL.\n" +
+        "\n" +
+        "# BẪY LỚN với volatile-*: nếu không key nào có TTL, Redis không có gì để bỏ\n" +
+        "# -> hành xử như noeviction -> ghi bị từ chối dù policy là \"volatile-lru\".\n" +
+        "\n" +
+        "redis-cli INFO stats | grep evicted_keys        # có đang phải bỏ key không\n" +
+        "redis-cli INFO memory | grep used_memory_human\n" +
+        "# evicted_keys tăng liên tục = cache quá nhỏ so với working set\n" +
+        "# -> tăng RAM, hoặc giảm dữ liệu, hoặc chấp nhận hit rate thấp hơn.",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -141,6 +298,36 @@ SS.addQuestions('redis', [
       ['Chọn khi', 'traffic đều', 'có traffic quét/one-off lẫn traffic thật'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Gần đây vs thường xuyên",
+      code:
+        "# LRU (Least Recently Used) — bỏ key LÂU NHẤT chưa được dùng.\n" +
+        "# Nhược điểm: một lần quét toàn bộ dữ liệu (job batch, crawler) sẽ ĐẨY hết\n" +
+        "# key nóng ra khỏi cache, dù chúng được dùng hàng nghìn lần.\n" +
+        "redis-cli CONFIG SET maxmemory-policy allkeys-lru\n" +
+        "\n" +
+        "# LFU (Least Frequently Used, Redis 4+) — bỏ key ÍT ĐƯỢC DÙNG NHẤT.\n" +
+        "# Key được truy cập 10.000 lần sẽ sống sót qua một đợt quét một lần.\n" +
+        "redis-cli CONFIG SET maxmemory-policy allkeys-lfu\n" +
+        "redis-cli CONFIG SET lfu-log-factor 10       # counter tăng chậm dần (log)\n" +
+        "redis-cli CONFIG SET lfu-decay-time 1        # counter GIẢM 1 mỗi phút không dùng\n" +
+        "# lfu-decay-time rất quan trọng: không có nó, key từng nóng trong quá khứ\n" +
+        "# sẽ chiếm chỗ vĩnh viễn dù giờ không ai dùng.\n" +
+        "\n" +
+        "# Redis dùng LRU/LFU XẤP XỈ, không phải chính xác: mỗi lần cần bỏ key,\n" +
+        "# nó lấy mẫu ngẫu nhiên rồi chọn cái tệ nhất trong mẫu.\n" +
+        "redis-cli CONFIG SET maxmemory-samples 5     # tăng lên 10 -> chính xác hơn, tốn CPU hơn\n" +
+        "\n" +
+        "redis-cli OBJECT FREQ mykey       # counter LFU (chỉ khi policy là lfu)\n" +
+        "redis-cli OBJECT IDLETIME mykey   # giây không được dùng (chỉ khi policy là lru)\n" +
+        "\n" +
+        "# CHỌN LFU khi: có tập key NÓNG rõ rệt, và có job quét dữ liệu định kỳ.\n" +
+        "# CHỌN LRU khi: mẫu truy cập thay đổi theo thời gian (dữ liệu theo phiên,\n" +
+        "# nội dung mới thay nội dung cũ) — recency phản ánh đúng giá trị hơn.",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -163,6 +350,40 @@ SS.addQuestions('redis', [
       ['Hành động', '—', 'activedefrag yes / restart / MEMORY PURGE', 'CỰC XẤU — latency tăng vọt, xử lý ngay'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Bộ nhớ OS cấp lớn hơn bộ nhớ Redis thật sự dùng",
+      code:
+        "redis-cli INFO memory\n" +
+        "# used_memory                 — Redis nghĩ nó đang dùng bao nhiêu\n" +
+        "# used_memory_rss             — OS thật sự cấp bao nhiêu\n" +
+        "# mem_fragmentation_ratio     — rss / used_memory\n" +
+        "\n" +
+        "# ĐỌC TỈ LỆ NÀY:\n" +
+        "#  ~1.0 - 1.5  -> bình thường, khoẻ mạnh\n" +
+        "#  > 1.5       -> PHÂN MẢNH: cấp phát rồi giải phóng nhiều key kích thước\n" +
+        "#                 khác nhau -> allocator giữ lại các khoảng trống không dùng được\n" +
+        "#  < 1.0       -> NGUY HIỂM: một phần bộ nhớ đã bị SWAP ra đĩa\n" +
+        "\n" +
+        "# NGUYÊN NHÂN: xoá hàng loạt key, key có kích thước rất khác nhau,\n" +
+        "# hoặc jemalloc giữ lại vùng nhớ để tái sử dụng.\n" +
+        "\n" +
+        "# CHỮA 1: defrag chủ động (Redis 4+, cần jemalloc — mặc định trên Linux)\n" +
+        "redis-cli CONFIG SET activedefrag yes\n" +
+        "redis-cli CONFIG SET active-defrag-ignore-bytes 100mb\n" +
+        "redis-cli CONFIG SET active-defrag-threshold-lower 10     # bắt đầu ở 10% phân mảnh\n" +
+        "redis-cli CONFIG SET active-defrag-threshold-upper 100\n" +
+        "redis-cli CONFIG SET active-defrag-cycle-min 5            # % CPU tối đa cho defrag\n" +
+        "redis-cli CONFIG SET active-defrag-cycle-max 25\n" +
+        "\n" +
+        "# CHỮA 2 (triệt để): restart instance. Với replica thì dễ — failover sang\n" +
+        "# replica rồi restart master cũ.\n" +
+        "\n" +
+        "# PHÒNG: giữ kích thước key/value đồng đều hơn, tránh chu kỳ tạo-xoá hàng\n" +
+        "# loạt key lớn, và luôn để maxmemory đủ xa so với RAM vật lý.",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -185,6 +406,40 @@ SS.addQuestions('redis', [
       ['Sửa', 'hash phân mảnh theo userId % 256', 'local cache ở app, hoặc replicate key nhiều bản'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Hai vấn đề khác nhau, hai cách chữa khác nhau",
+      code:
+        "# BIG KEY — một key chứa quá nhiều dữ liệu (list 1 triệu phần tử, hash\n" +
+        "# hàng trăm nghìn field, string vài trăm MB).\n" +
+        "# Hậu quả: mọi thao tác trên nó là O(N) và CHẶN server; xoá nó cũng chặn;\n" +
+        "# trong Cluster nó làm lệch phân bổ dữ liệu và cản trở migrate slot.\n" +
+        "redis-cli --bigkeys                     # quét toàn bộ, an toàn (dùng SCAN)\n" +
+        "redis-cli --memkeys                     # theo bộ nhớ thật\n" +
+        "redis-cli MEMORY USAGE mykey\n" +
+        "redis-cli DEBUG OBJECT mykey            # chỉ dùng ở môi trường test\n" +
+        "\n" +
+        "# CHỮA BIG KEY: chia nhỏ.\n" +
+        "#   user:1:posts (1 triệu phần tử)\n" +
+        "#   -> user:1:posts:0, user:1:posts:1, ... (theo id % 100)\n" +
+        "# Và luôn dùng UNLINK thay DEL để xoá ở thread nền:\n" +
+        "redis-cli UNLINK bigkey\n" +
+        "\n" +
+        "# HOT KEY — một key bị truy cập quá nhiều (ví dụ cấu hình toàn cục,\n" +
+        "# sản phẩm đang flash sale). Nó làm một node/CPU quá tải trong khi\n" +
+        "# phần còn lại rảnh; trong Cluster không cân bằng được bằng cách thêm node.\n" +
+        "redis-cli --hotkeys                     # cần maxmemory-policy là lfu\n" +
+        "redis-cli MONITOR | head -1000 | awk \u0027{print $4}\u0027 | sort | uniq -c | sort -rn | head\n" +
+        "# (MONITOR làm chậm server — chỉ chạy vài giây)\n" +
+        "\n" +
+        "# CHỮA HOT KEY:\n" +
+        "#  1) cache CỤC BỘ ở tầng ứng dụng (L1) với TTL ngắn -> phần lớn request\n" +
+        "#     không chạm Redis nữa\n" +
+        "#  2) NHÂN BẢN key thành N bản (hotkey:0..hotkey:9), client chọn ngẫu nhiên\n" +
+        "#  3) đọc từ replica",
+    },
+  ],
 },
 {
   cat: 'Persistence',
@@ -206,6 +461,37 @@ SS.addQuestions('redis', [
       { to: 4, label: 'fork() mất thời gian tỉ lệ page table (latest_fork_usec). Giải pháp: save "" trên master, để replica làm persistence' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Vì sao BGSAVE có thể làm treo Redis vài trăm mili giây",
+      code:
+        "# BGSAVE/BGREWRITEAOF gọi fork(). Tiến trình con dùng COPY-ON-WRITE: ban đầu\n" +
+        "# chia sẻ bộ nhớ với cha, chỉ sao chép trang nào bị GHI trong lúc lưu.\n" +
+        "\n" +
+        "# HAI VẤN ĐỀ:\n" +
+        "# 1) BẢN THÂN fork() CHẶN — kernel phải sao chép bảng trang. Thời gian tỉ lệ\n" +
+        "#    với kích thước bộ nhớ: ~10-20ms cho mỗi GB (tệ hơn nhiều trên máy ảo).\n" +
+        "redis-cli INFO stats | grep latest_fork_usec       # microsecond\n" +
+        "# Dataset 24GB có thể mất 300-500ms -> mọi request trong khoảng đó bị treo.\n" +
+        "\n" +
+        "# 2) BỘ NHỚ TĂNG VỌT — tỉ lệ ghi càng cao, càng nhiều trang bị sao chép.\n" +
+        "#    Trường hợp xấu nhất tốn GẤP ĐÔI bộ nhớ. Đây là lý do maxmemory nên\n" +
+        "#    để ở mức 60-70% RAM chứ không phải 90%.\n" +
+        "\n" +
+        "# GIẢM THIỂU:\n" +
+        "#  - TẮT transparent huge pages (THP) — với THP, mỗi trang là 2MB thay vì 4KB\n" +
+        "#    -> COW sao chép nhiều gấp 512 lần. Redis cảnh báo về việc này lúc khởi động.\n" +
+        "echo never > /sys/kernel/mm/transparent_hugepage/enabled\n" +
+        "#  - đặt vm.overcommit_memory = 1, nếu không fork có thể thất bại\n" +
+        "sysctl -w vm.overcommit_memory=1\n" +
+        "#  - chia dataset lớn thành nhiều instance nhỏ hơn\n" +
+        "#  - chuyển việc lưu snapshot sang REPLICA, master không lưu gì:\n" +
+        "#      trên master: save \"\" và appendonly no\n" +
+        "#      trên replica: bật RDB/AOF bình thường\n" +
+        "#  - dùng máy vật lý hoặc loại máy ảo có fork nhanh (EC2 Nitro tốt hơn Xen cũ)",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -236,6 +522,38 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đọc bộ nhớ Redis cho đúng",
+      code:
+        "redis-cli INFO memory\n" +
+        "\n" +
+        "# used_memory              — tổng bộ nhớ Redis cấp phát (dữ liệu + overhead)\n" +
+        "# used_memory_rss          — OS thật sự cấp bao nhiêu (đây là con số để so với RAM máy)\n" +
+        "# used_memory_peak         — ĐỈNH từ lúc khởi động. Nếu peak cao hơn hiện tại\n" +
+        "#                            rất nhiều thì phân mảnh có thể do đợt đỉnh đó.\n" +
+        "# used_memory_lua / used_memory_scripts — bộ nhớ cho script Lua\n" +
+        "# used_memory_dataset      — phần THẬT SỰ là dữ liệu (used_memory trừ overhead)\n" +
+        "# mem_fragmentation_ratio  — rss / used_memory (xem câu về phân mảnh)\n" +
+        "# mem_allocator            — jemalloc / libc (jemalloc mới hỗ trợ defrag)\n" +
+        "# maxmemory / maxmemory_policy\n" +
+        "# mem_clients_normal       — buffer của client thường\n" +
+        "# mem_clients_slaves       — buffer gửi cho replica; TĂNG VỌT nghĩa là replica\n" +
+        "#                            đang tụt lại -> sắp bị ngắt kết nối\n" +
+        "# mem_replication_backlog  — vùng đệm cho partial resync\n" +
+        "\n" +
+        "redis-cli MEMORY DOCTOR         # chẩn đoán tự động, gợi ý vấn đề\n" +
+        "redis-cli MEMORY STATS          # chi tiết theo từng thành phần\n" +
+        "redis-cli MEMORY USAGE key      # bộ nhớ của một key cụ thể\n" +
+        "\n" +
+        "# CÁI CẦN CẢNH BÁO:\n" +
+        "#  used_memory / maxmemory > 80%      -> sắp phải evict\n" +
+        "#  mem_fragmentation_ratio > 1.5      -> phân mảnh\n" +
+        "#  mem_fragmentation_ratio < 1.0      -> ĐANG SWAP, xử lý ngay\n" +
+        "#  mem_clients_slaves tăng bất thường -> replica chậm",
+    },
+  ],
 },
 {
   cat: 'Latency',
@@ -267,6 +585,38 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Danh sách nguyên nhân, xếp theo tần suất gặp",
+      code:
+        "# CÔNG CỤ ĐO\n" +
+        "redis-cli --latency                    # độ trễ hiện tại (PING liên tục)\n" +
+        "redis-cli --latency-history            # theo thời gian, thấy được đột biến\n" +
+        "redis-cli --intrinsic-latency 100      # độ trễ NỘI TẠI của máy (không phải Redis)\n" +
+        "redis-cli LATENCY RESET\n" +
+        "redis-cli CONFIG SET latency-monitor-threshold 100    # ghi sự kiện > 100ms\n" +
+        "redis-cli LATENCY LATEST\n" +
+        "redis-cli LATENCY DOCTOR               # phân tích và gợi ý — bắt đầu từ đây\n" +
+        "\n" +
+        "# NGUYÊN NHÂN, theo thứ tự hay gặp:\n" +
+        "# 1) LỆNH CHẬM (O(N) trên collection lớn) — nguyên nhân số một\n" +
+        "redis-cli SLOWLOG GET 10\n" +
+        "# 2) FORK khi BGSAVE/BGREWRITEAOF -> spike vài trăm ms (xem câu về COW)\n" +
+        "redis-cli INFO stats | grep latest_fork_usec\n" +
+        "# 3) SWAP — thảm hoạ, độ trễ nhảy từ micro giây lên mili giây\n" +
+        "redis-cli INFO memory | grep fragmentation      # < 1.0 là dấu hiệu\n" +
+        "# 4) AOF fsync=always, hoặc đĩa chậm\n" +
+        "# 5) HẾT BỘ NHỚ -> evict liên tục, mỗi lần ghi phải bỏ nhiều key\n" +
+        "# 6) XOÁ key lớn đồng bộ (DEL trên collection triệu phần tử) -> dùng UNLINK\n" +
+        "# 7) Hàng loạt key HẾT HẠN cùng lúc -> active expire chạy dồn\n" +
+        "# 8) Mạng: băng thông bão hoà, hoặc client dùng transparent huge pages\n" +
+        "# 9) THIẾU PIPELINE ở client -> độ trễ do round-trip, không phải do Redis\n" +
+        "\n" +
+        "redis-cli INFO commandstats     # usec_per_call của từng lệnh -> tìm lệnh đắt\n" +
+        "redis-cli INFO latencystats     # phân vị độ trễ theo lệnh (Redis 7+)",
+    },
+  ],
 },
 {
   cat: 'Persistence',
@@ -290,6 +640,36 @@ SS.addQuestions('redis', [
       { to: 3, label: 'NGUY HIỂM: master tắt persistence + auto-restart → master rỗng lan sang replica → MẤT SẠCH toàn cụm' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Replica cần RDB để đồng bộ lần đầu",
+      code:
+        "# FULL RESYNC: master chạy BGSAVE tạo file RDB rồi gửi cho replica.\n" +
+        "# -> Master TẮT persistence hoàn toàn vẫn PHẢI fork và tạo RDB khi có\n" +
+        "#    replica đồng bộ lần đầu. Không tránh được chi phí fork.\n" +
+        "\n" +
+        "# DISKLESS REPLICATION — gửi thẳng RDB qua socket, KHÔNG ghi ra đĩa\n" +
+        "redis-cli CONFIG SET repl-diskless-sync yes\n" +
+        "redis-cli CONFIG SET repl-diskless-sync-delay 5     # chờ gom nhiều replica cùng lúc\n" +
+        "# Rất hữu ích khi đĩa chậm (network storage) hoặc không muốn ghi đĩa.\n" +
+        "redis-cli CONFIG SET repl-diskless-load swapdb      # phía replica: nạp thẳng từ socket\n" +
+        "\n" +
+        "# CẢNH BÁO NGUY HIỂM: replica TẮT persistence + có tự động restart\n" +
+        "#   -> replica khởi động lại với dataset RỖNG\n" +
+        "#   -> nó đồng bộ với master và... nếu master cũng vừa restart và đồng bộ\n" +
+        "#      NGƯỢC lại (trong cấu hình Sentinel) thì dữ liệu bị XOÁ SẠCH.\n" +
+        "# -> LUÔN bật ít nhất một dạng persistence, hoặc TẮT auto-restart.\n" +
+        "\n" +
+        "# Backlog cho partial resync — đặt đủ lớn để mạng chớp nháy không gây full resync:\n" +
+        "redis-cli CONFIG SET repl-backlog-size 64mb\n" +
+        "redis-cli CONFIG SET repl-backlog-ttl 3600\n" +
+        "\n" +
+        "# CHIẾN LƯỢC HAY DÙNG: master không lưu gì (save \"\", appendonly no) để tránh\n" +
+        "# fork spike; replica bật đầy đủ RDB + AOF và làm nhiệm vụ backup.\n" +
+        "redis-cli INFO replication",
+    },
+  ],
 },
 {
   cat: 'Latency',
@@ -314,6 +694,38 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Nhật ký lệnh chậm — công cụ chẩn đoán đầu tiên",
+      code:
+        "redis-cli CONFIG SET slowlog-log-slower-than 10000   # microsecond -> 10ms\n" +
+        "redis-cli CONFIG SET slowlog-max-len 256             # giữ 256 mục gần nhất\n" +
+        "redis-cli SLOWLOG GET 10\n" +
+        "# Mỗi mục: id, timestamp, thời gian thực thi (microsecond), lệnh + tham số,\n" +
+        "#          địa chỉ client, tên client\n" +
+        "redis-cli SLOWLOG LEN\n" +
+        "redis-cli SLOWLOG RESET\n" +
+        "\n" +
+        "# ĐIỂM QUAN TRỌNG PHẢI HIỂU: SLOWLOG chỉ đo THỜI GIAN THỰC THI LỆNH.\n" +
+        "# Nó KHÔNG tính:\n" +
+        "#  - thời gian chờ trong hàng đợi (lệnh trước đang chặn)\n" +
+        "#  - thời gian truyền dữ liệu qua mạng\n" +
+        "# -> Client báo chậm 500ms nhưng SLOWLOG trống là chuyện bình thường:\n" +
+        "#    nguyên nhân nằm ở mạng, ở client, hoặc ở một lệnh chậm KHÁC đang chặn.\n" +
+        "\n" +
+        "# Đặt ngưỡng thấp khi đang điều tra (nhớ trả về sau):\n" +
+        "redis-cli CONFIG SET slowlog-log-slower-than 1000    # 1ms\n" +
+        "\n" +
+        "# Xuất ra để theo dõi lâu dài — SLOWLOG là vòng đệm, mục cũ bị đẩy ra:\n" +
+        "redis-cli SLOWLOG GET 128 > /var/log/redis-slowlog-$(date +%s).txt\n" +
+        "\n" +
+        "# Đi kèm SLOWLOG để có bức tranh đầy đủ:\n" +
+        "redis-cli INFO commandstats     # tổng thời gian và usec trung bình MỖI LỆNH\n" +
+        "                                # -> tìm lệnh chậm vừa phải nhưng gọi RẤT NHIỀU\n" +
+        "redis-cli LATENCY DOCTOR",
+    },
+  ],
 },
 {
   cat: 'Sự kiện',
@@ -341,6 +753,36 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Redis phát sự kiện khi key thay đổi",
+      code:
+        "# TẮT mặc định (tốn CPU). Bật bằng chuỗi ký tự chọn loại sự kiện:\n" +
+        "redis-cli CONFIG SET notify-keyspace-events \"KEA\"\n" +
+        "#  K = keyspace event (kênh __keyspace@0__:<key>, payload là TÊN LỆNH)\n" +
+        "#  E = keyevent event (kênh __keyevent@0__:<lệnh>, payload là TÊN KEY)\n" +
+        "#  A = mọi loại sự kiện (tương đương \"g$lshzxet\")\n" +
+        "#  g=generic  $=string  l=list  s=set  h=hash  z=zset  x=expired  e=evicted\n" +
+        "\n" +
+        "redis-cli PSUBSCRIBE \u0027__keyevent@0__:expired\u0027    # nghe key hết hạn\n" +
+        "redis-cli PSUBSCRIBE \u0027__keyspace@0__:user:*\u0027     # nghe thay đổi trên key cụ thể\n" +
+        "\n" +
+        "# LƯU Ý RẤT QUAN TRỌNG — vì sao KHÔNG nên dựa vào cho logic quan trọng:\n" +
+        "# 1) Nó dùng PUB/SUB -> FIRE-AND-FORGET. Consumer offline lúc sự kiện xảy ra\n" +
+        "#    là MẤT vĩnh viễn, không có cách nào lấy lại.\n" +
+        "# 2) Sự kiện \"expired\" phát khi key BỊ XOÁ THẬT (lazy hoặc active expire),\n" +
+        "#    có thể TRỄ HƠN thời điểm hết hạn rất nhiều.\n" +
+        "# 3) Trong Cluster, sự kiện chỉ phát trên node chứa key -> phải subscribe\n" +
+        "#    TẤT CẢ node.\n" +
+        "# 4) Tốn CPU khi keyspace lớn và thay đổi nhiều.\n" +
+        "\n" +
+        "# THAY THẾ ĐÁNG TIN: dùng SORTED SET làm hàng đợi hẹn giờ\n" +
+        "redis-cli ZADD scheduled:jobs 1757030400 \"job-1\"\n" +
+        "redis-cli ZRANGEBYSCORE scheduled:jobs 0 $(date +%s) LIMIT 0 100\n" +
+        "# -> worker chủ động poll, không mất việc khi restart, và phát lại được.",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -363,6 +805,37 @@ SS.addQuestions('redis', [
       { to: 3, label: 'replica bị đóng vì buffer → phải full resync lại. Thà cắt client chậm còn hơn OOM cả server' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Client chậm có thể làm sập Redis",
+      code:
+        "# Redis đẩy dữ liệu vào buffer của từng client. Client đọc chậm -> buffer\n" +
+        "# phình -> ăn hết RAM của server. Giới hạn buffer chính là lá chắn.\n" +
+        "redis-cli CONFIG GET client-output-buffer-limit\n" +
+        "# Định dạng: <loại> <hard limit> <soft limit> <soft seconds>\n" +
+        "#   normal  0 0 0                 -> client thường: KHÔNG giới hạn (mặc định)\n" +
+        "#   replica 256mb 64mb 60         -> vượt 256MB, hoặc trên 64MB liên tục 60s -> NGẮT\n" +
+        "#   pubsub  32mb 8mb 60\n" +
+        "\n" +
+        "redis-cli CONFIG SET client-output-buffer-limit \"pubsub 64mb 16mb 60\"\n" +
+        "\n" +
+        "# BA TÌNH HUỐNG THỰC TẾ:\n" +
+        "# 1) PUB/SUB consumer chậm — publisher bắn nhanh hơn subscriber xử lý.\n" +
+        "#    Buffer đầy -> Redis NGẮT KẾT NỐI subscriber -> nó mất message và\n" +
+        "#    phải subscribe lại. Đây là lý do pub/sub không dùng cho dữ liệu quan trọng.\n" +
+        "# 2) REPLICA chậm — buffer vượt hạn -> ngắt -> replica phải FULL RESYNC ->\n" +
+        "#    master fork lại -> tải tăng thêm -> vòng xoáy tệ hơn.\n" +
+        "#    Triệu chứng: mem_clients_slaves tăng, replica liên tục resync.\n" +
+        "# 3) Client chạy MONITOR hoặc lệnh trả về dữ liệu khổng lồ (KEYS *,\n" +
+        "#    LRANGE 0 -1) mà đọc chậm -> normal không giới hạn -> có thể làm hết RAM.\n" +
+        "#    -> Nên đặt giới hạn cho normal ở hệ thống có client không tin cậy.\n" +
+        "\n" +
+        "redis-cli CLIENT LIST                      # cột omem = bộ nhớ buffer của client\n" +
+        "redis-cli CLIENT LIST | awk \u0027{print $1, $6, $17}\u0027 | sort -k3 -rn | head\n" +
+        "redis-cli CLIENT KILL ID 42                # ngắt client đang gây vấn đề",
+    },
+  ],
 },
 {
   cat: 'Persistence',
@@ -390,6 +863,37 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Tắt để lấy hiệu năng, và cái giá phải trả",
+      code:
+        "redis-cli CONFIG SET save \"\"              # tắt RDB\n" +
+        "redis-cli CONFIG SET appendonly no        # tắt AOF\n" +
+        "\n" +
+        "# TẮT KHI:\n" +
+        "#  1) Redis là CACHE THUẦN — mất dữ liệu chỉ làm cache nguội, dữ liệu gốc\n" +
+        "#     vẫn ở database. Đây là trường hợp phổ biến nhất và hoàn toàn hợp lý.\n" +
+        "#  2) Dữ liệu TÁI TẠO ĐƯỢC nhanh (bảng tra cứu, kết quả tính toán).\n" +
+        "#  3) Session store mà đăng nhập lại được chấp nhận.\n" +
+        "#  4) Cần độ trễ ổn định tuyệt đối — không muốn spike do fork.\n" +
+        "#  5) Master trong cấu hình có replica: master không lưu, REPLICA lo persistence.\n" +
+        "\n" +
+        "# LỢI ÍCH: không fork -> không latency spike, không tốn thêm RAM cho COW,\n" +
+        "# không tốn I/O đĩa, throughput cao hơn.\n" +
+        "\n" +
+        "# CÁI GIÁ VÀ CÁI BẪY CHẾT NGƯỜI:\n" +
+        "#  - restart là MẤT SẠCH -> nếu database phía sau không chịu nổi lượt truy cập\n" +
+        "#    khi cache rỗng thì đây là sự cố dây chuyền (cache avalanche).\n" +
+        "#  - NGUY HIỂM NHẤT: master tắt persistence + auto-restart. Master restart với\n" +
+        "#    dataset RỖNG, replica đồng bộ theo và XOÁ SẠCH dữ liệu của chính nó.\n" +
+        "#    -> Nếu tắt persistence trên master thì PHẢI tắt auto-restart, hoặc\n" +
+        "#       đảm bảo Sentinel promote replica trước khi master cũ quay lại.\n" +
+        "\n" +
+        "# TRUNG DUNG hợp lý: tắt AOF (tốn kém nhất), giữ RDB thưa để có điểm khôi phục:\n" +
+        "redis-cli CONFIG SET save \"900 1\"",
+    },
+  ],
 },
 {
   cat: 'Latency',
@@ -415,6 +919,41 @@ SS.addQuestions('redis', [
       { to: 3, label: 'phòng tránh: RAM vật lý ≥ maxmemory + headroom; vm.swappiness=1; đặt maxmemory để Redis tự evict TRƯỚC khi OS swap' },
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "RAM là micro giây, swap là mili giây — chậm 1000 lần",
+      code:
+        "# Redis giả định MỌI truy cập bộ nhớ là tức thì. Một trang bị swap ra đĩa\n" +
+        "# khiến lệnh đó phải chờ I/O — và vì Redis ĐƠN LUỒNG, cả server đứng chờ theo.\n" +
+        "# Độ trễ nhảy từ ~100 micro giây lên hàng chục mili giây.\n" +
+        "\n" +
+        "# PHÁT HIỆN:\n" +
+        "redis-cli INFO memory | grep fragmentation_ratio    # < 1.0 = đang bị swap\n" +
+        "cat /proc/$(pgrep redis-server)/smaps | grep -i swap | awk \u0027{s+=$2} END {print s\" kB\"}\u0027\n" +
+        "vmstat 1 5        # cột si/so khác 0 = đang swap in/out\n" +
+        "\n" +
+        "# PHÒNG TRÁNH:\n" +
+        "# 1) Đặt maxmemory ở mức 60-70% RAM vật lý — chừa chỗ cho COW lúc fork,\n" +
+        "#    cho buffer client và cho chính OS.\n" +
+        "redis-cli CONFIG SET maxmemory 4gb        # trên máy 8GB\n" +
+        "\n" +
+        "# 2) Giảm xu hướng swap của kernel (KHÔNG nên tắt hẳn swap)\n" +
+        "sysctl -w vm.swappiness=1\n" +
+        "# swappiness=0 có thể khiến OOM killer ra tay sớm hơn -> 1 an toàn hơn.\n" +
+        "\n" +
+        "# 3) vm.overcommit_memory=1 để fork() không thất bại\n" +
+        "sysctl -w vm.overcommit_memory=1\n" +
+        "\n" +
+        "# 4) TẮT transparent huge pages — gây cả latency lẫn tốn bộ nhớ khi COW\n" +
+        "echo never > /sys/kernel/mm/transparent_hugepage/enabled\n" +
+        "\n" +
+        "# 5) Trong container: đặt memory limit và maxmemory KHỚP NHAU, và nhớ rằng\n" +
+        "#    OOM killer của container sẽ giết Redis không báo trước.\n" +
+        "\n" +
+        "# 6) Theo dõi used_memory_rss so với RAM máy, cảnh báo ở 75%.",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -444,6 +983,41 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Đo thật thay vì tính lý thuyết",
+      code:
+        "# CÁCH ĐÁNG TIN NHẤT: nạp một MẪU rồi ngoại suy.\n" +
+        "redis-cli INFO memory | grep used_memory:          # trước khi nạp\n" +
+        "# nạp 10.000 bản ghi thật\n" +
+        "redis-cli INFO memory | grep used_memory:          # sau khi nạp\n" +
+        "# (sau - trước) / 10000 = bộ nhớ mỗi bản ghi, rồi nhân với số lượng thật.\n" +
+        "\n" +
+        "redis-cli MEMORY USAGE user:1                      # bộ nhớ một key cụ thể\n" +
+        "redis-cli --bigkeys                                # phân bố kích thước\n" +
+        "\n" +
+        "# CÁC KHOẢN OVERHEAD hay bị quên:\n" +
+        "#  - TÊN KEY: mỗi key tốn bộ nhớ cho chính chuỗi tên. 10 triệu key với tên\n" +
+        "#    dài 40 byte = 400MB chỉ riêng tên.\n" +
+        "#  - metadata mỗi key: ~50-100 byte (con trỏ dict, robj, TTL...)\n" +
+        "#  - buffer client và replica\n" +
+        "#  - copy-on-write lúc fork: dự phòng thêm 20-50%\n" +
+        "#  - phân mảnh: nhân thêm ~1.2-1.5\n" +
+        "\n" +
+        "# CÔNG THỨC THÔ:\n" +
+        "#   RAM cần = (dữ liệu đo được) x 1.3 (phân mảnh) x 1.5 (COW + buffer)\n" +
+        "#           = khoảng gấp đôi dữ liệu thuần\n" +
+        "# -> dataset 4GB thì nên có máy 8GB và đặt maxmemory 5-6GB.\n" +
+        "\n" +
+        "# GIẢM BỘ NHỚ:\n" +
+        "#  - dùng Hash nhỏ dưới ngưỡng listpack thay vì nhiều String rời\n" +
+        "#  - rút ngắn tên key (app:u:1 thay vì application:user:1)\n" +
+        "#  - nén giá trị lớn ở phía client trước khi lưu\n" +
+        "#  - dùng Bitmap/HyperLogLog cho bài toán đếm\n" +
+        "redis-cli MEMORY DOCTOR",
+    },
+  ],
 },
 {
   cat: 'Bộ nhớ',
@@ -465,6 +1039,36 @@ SS.addQuestions('redis', [
       ['lazyfree-* config', '—', 'bật giải phóng nền tự động cho eviction, expire, FLUSHALL, ghi đè'],
     ],
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Xoá đồng bộ vs xoá ở thread nền",
+      code:
+        "redis-cli DEL bigkey        # giải phóng bộ nhớ NGAY trên thread chính\n" +
+        "# Với key nhỏ thì O(1), không sao. Nhưng với list 10 triệu phần tử thì đây\n" +
+        "# là O(N) và CHẶN toàn bộ server trong lúc giải phóng từng phần tử.\n" +
+        "\n" +
+        "redis-cli UNLINK bigkey     # gỡ key khỏi keyspace NGAY (O(1)), việc giải phóng\n" +
+        "                            # bộ nhớ đẩy sang THREAD NỀN -> không chặn\n" +
+        "# Redis đủ thông minh: key nhỏ thì UNLINK vẫn xoá đồng bộ (rẻ hơn là đẩy\n" +
+        "# sang thread khác). Nên UNLINK không bao giờ tệ hơn DEL.\n" +
+        "# -> Mặc định nên dùng UNLINK.\n" +
+        "\n" +
+        "# LAZY FREEING — áp dụng cùng ý tưởng cho các tình huống xoá khác:\n" +
+        "redis-cli CONFIG SET lazyfree-lazy-eviction yes    # khi evict vì hết bộ nhớ\n" +
+        "redis-cli CONFIG SET lazyfree-lazy-expire yes      # khi key hết hạn\n" +
+        "redis-cli CONFIG SET lazyfree-lazy-server-del yes  # khi lệnh ngầm xoá key cũ\n" +
+        "                                                   # (ví dụ SET đè lên key lớn)\n" +
+        "redis-cli CONFIG SET replica-lazy-flush yes        # khi replica xoá dataset\n" +
+        "                                                   # trước lúc full resync\n" +
+        "# Redis 7 bật sẵn phần lớn các tuỳ chọn này.\n" +
+        "\n" +
+        "# TƯƠNG TỰ với FLUSH:\n" +
+        "redis-cli FLUSHALL ASYNC        # KHÔNG chặn\n" +
+        "redis-cli FLUSHDB ASYNC\n" +
+        "redis-cli FLUSHALL              # đồng bộ — có thể treo server rất lâu",
+    },
+  ],
 },
 {
   cat: 'Sự kiện',
@@ -489,5 +1093,40 @@ SS.addQuestions('redis', [
       ],
     },
   },
+  demo: [
+    {
+      lang: "bash",
+      title: "Chặn client, KHÔNG chặn server",
+      code:
+        "# Điểm quan trọng nhất: lệnh blocking chỉ treo CLIENT gọi nó. Redis đưa\n" +
+        "# client vào danh sách chờ và tiếp tục phục vụ client khác bình thường.\n" +
+        "# Nó KHÔNG mâu thuẫn với mô hình đơn luồng.\n" +
+        "\n" +
+        "redis-cli BLPOP queue:jobs 30          # chờ tối đa 30 giây; 0 = chờ vô hạn\n" +
+        "redis-cli BRPOP queue:jobs 0\n" +
+        "# Thay cho vòng lặp polling (LPOP + sleep) -> độ trễ gần như bằng 0 và\n" +
+        "# không đốt CPU/băng thông cho những lần poll rỗng.\n" +
+        "\n" +
+        "# BLMOVE (thay cho BRPOPLPUSH đã deprecated) — hàng đợi TIN CẬY:\n" +
+        "redis-cli BLMOVE queue:jobs queue:processing RIGHT LEFT 30\n" +
+        "# Lấy job VÀ đặt vào danh sách \"đang xử lý\" trong MỘT thao tác nguyên tử.\n" +
+        "# Consumer chết giữa chừng -> job vẫn nằm ở queue:processing, một job giám\n" +
+        "# sát có thể đưa nó trở lại. Với BLPOP thuần thì job biến mất cùng consumer.\n" +
+        "\n" +
+        "redis-cli BZPOPMIN delayed:jobs 30     # chặn trên Sorted Set\n" +
+        "redis-cli XREAD BLOCK 5000 STREAMS orders \u0027$\u0027   # chặn trên Stream\n" +
+        "\n" +
+        "# WAIT — chờ replica xác nhận đã nhận dữ liệu\n" +
+        "redis-cli WAIT 1 100      # chờ >= 1 replica, tối đa 100ms; trả về số replica đã ack\n" +
+        "# Giảm rủi ro mất dữ liệu khi failover, nhưng KHÔNG phải cam kết bền vững:\n" +
+        "# nó chỉ xác nhận replica ĐÃ NHẬN, không đảm bảo đã ghi xuống đĩa.\n" +
+        "\n" +
+        "# CẠM BẪY:\n" +
+        "#  - trong MULTI/EXEC và Lua, lệnh blocking KHÔNG chặn mà trả về ngay như\n" +
+        "#    khi hết thời gian chờ\n" +
+        "#  - mỗi client blocking chiếm một kết nối -> cần connection pool đủ lớn\n" +
+        "#  - trong Cluster, BLPOP chỉ chặn trên node chứa key đó",
+    },
+  ],
 },
 ]);
